@@ -280,11 +280,25 @@ func TestScrollToEnd(t *testing.T) {
 	if th.list.AtEnd() || !tt.HasText("Scroll to end") {
 		t.Fatalf("scrolled up: at the end %v, with the button %v", th.list.AtEnd(), tt.HasText("Scroll to end"))
 	}
+	from := th.scroll.Y
 	if err := tt.Click("Scroll to end"); err != nil {
 		t.Fatal(err)
 	}
+	// It glides: on its way after a moment, the button gone at once.
+	tt.Advance(50 * time.Millisecond)
+	if th.scroll.Y <= from || th.list.AtEnd() || tt.HasText("Scroll to end") {
+		t.Errorf("50 ms after the click: from %v to %v of %v, at the end %v, with the button %v",
+			from, th.scroll.Y, th.scroll.MaxY, th.list.AtEnd(), tt.HasText("Scroll to end"))
+	}
 	tt.Advance(time.Second)
 	if !th.list.AtEnd() || tt.HasText("Scroll to end") {
-		t.Errorf("after the click: at the end %v, with the button %v", th.list.AtEnd(), tt.HasText("Scroll to end"))
+		t.Errorf("after the glide: at the end %v, with the button %v", th.list.AtEnd(), tt.HasText("Scroll to end"))
+	}
+	// There, it follows the end again.
+	tt.Type("One more")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	if !th.list.AtEnd() {
+		t.Errorf("not following the end after a new reply")
 	}
 }

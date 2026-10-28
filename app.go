@@ -41,6 +41,9 @@ type thread struct {
 	Model    string     `json:"model,omitempty"` // the model asked last
 	Messages []*message `json:"messages"`
 	list     ui.ListState
+	// scroll is where list is scrolled, which the button bringing the end
+	// back into view glides.
+	scroll ui.ScrollState
 }
 
 // turns returns the conversation for the provider: the messages with text,

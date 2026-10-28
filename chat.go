@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -99,8 +100,9 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 			ui.Row(c).Justify(ui.Center).Children(func() {
 				ui.Column(c).Grow(1).MaxWidth(maxWidth).Children(func() { a.message(c, th.Messages[i]) })
 			})
-		}).Grow(1).Padding(20, 24, 24, 24).Gap(24)
-		if !th.list.AtEnd() {
+		}).Grow(1).Padding(20, 24, 24, 24).Gap(24).TrackScroll(&th.scroll)
+		// Gone at once as it is clicked, as the list glides to its end.
+		if !th.list.AtEnd() && !th.scroll.Scrolling() {
 			a.scrollToEnd(c, th)
 		}
 	})
@@ -109,7 +111,8 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 // scrollToEnd builds the button that brings th's end back into view, which
 // shows while the user has scrolled away from it, above the composer, as
 // hyperai-next's agent does: round, on bg, lifted by a shadow, and a
-// little more under the pointer.
+// little more under the pointer. A click glides the list to its end, as a
+// browser's smooth scroll does, where it follows the reply again.
 func (a *app) scrollToEnd(c *ui.Context, th *thread) {
 	const size = 32
 	t := c.Theme()
@@ -124,7 +127,7 @@ func (a *app) scrollToEnd(c *ui.Context, th *thread) {
 	}
 	b.Children(func() { ui.Icon(c, arrowDownIcon).Size(16, 16) })
 	if b.Clicked() {
-		th.list.ScrollToEnd()
+		th.scroll.ScrollTo(0, math.MaxFloat32, ui.Smooth)
 	}
 }
 

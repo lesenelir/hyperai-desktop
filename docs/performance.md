@@ -24,7 +24,7 @@ nothing. What asks for one:
 | --- | --- | --- |
 | Input | one frame per event (a pointer move over a hover target, a key) | the user |
 | `Window.Update(fn)` | runs `fn` on the main thread, then one frame. Updates asked between two frames **coalesce into one frame**, but each still runs its `fn` | goroutines publishing results: the reply stream's commits |
-| Animations | a frame per display refresh (120 Hz on ProMotion) for as long as something moves | `ui.Spinner` while thinking, the sidebar slide (220 ms), `markdown.Stream`'s fade-in |
+| Animations | a frame per display refresh (120 Hz on ProMotion) for as long as something moves | `ui.Spinner` while thinking, the sidebar slide (220 ms), the glide of **Scroll to end** (once, on a click), `markdown.Stream`'s fade-in |
 
 `markdown.Stream` reveals the reply a word at a time
 (`markdown.DefaultReveal`), lets text wait at most 250 ms, and fades each
