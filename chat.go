@@ -105,15 +105,17 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 			th.list.ScrollToEnd()
 		}
 	}
-	rows := n
-	if room > 0 {
-		rows++ // the room after the last row
-	}
+	// A row after the messages: the room that holds the question at the
+	// top, or room for the composer, which floats over the list's end.
+	rows := n + 1
 	th.list.Key = func(i int) any {
-		if i == n {
+		switch {
+		case i < n:
+			return th.Messages[i].ID
+		case q >= 0:
 			return "room"
 		}
-		return th.Messages[i].ID
+		return "composer"
 	}
 	// It jumps to the end rather than gliding: a reply grows all the time
 	// it streams, so a glide never ends, and draws every refresh for the
@@ -125,11 +127,18 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 		clear(th.boxes)
 		// A list per chat, so that each keeps where it is scrolled. The list
 		// is as wide as the pane, so that it scrolls wherever the pointer is,
-		// and runs down to its bottom, under the composer, past whose height
-		// its end scrolls.
+		// and runs down to its bottom, under the composer, past which its
+		// last row scrolls its end; the gap before that row is the room under
+		// the messages.
 		list := ui.List(c.Key(th.ID), &th.list, rows, func(i int) {
 			if i == n {
-				ui.Box(c).Height(room)
+				if q >= 0 {
+					// As far as the list's bottom, under the composer too, so
+					// that the question stays as the composer changes.
+					ui.Box(c).Height(room + listPadBottom + a.footer)
+				} else {
+					a.composerRoom(c)
+				}
 				return
 			}
 			row := ui.Row(c).Justify(ui.Center)
@@ -142,7 +151,7 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 				hover := col.Hovered()
 				col.Children(func() { a.message(c, th.Messages[i], hover, i == n-1) })
 			})
-		}).Grow(1).Padding(listPadTop, 24, listPadBottom+a.footer, 24).Gap(listGap).TrackScroll(&th.scroll)
+		}).Grow(1).Padding(listPadTop, 24, 0, 24).Gap(listGap).TrackScroll(&th.scroll)
 		th.listBox = list.Bounds()
 		// What shows of the area: above the composer.
 		shows := area.Bounds()
@@ -353,6 +362,26 @@ func (a *app) composer(c *ui.Context, th *thread) {
 	outer.Children(func() { a.composerColumn(c, th, ready) })
 }
 
+// composerRoom builds, at the end of a conversation, room as tall as the
+// composer floating over it, in the layout of the frame the composer is
+// laid out in: the field's text laid out again, as the field lays it out,
+// and the rest as tall as it was laid out last, which the text does not
+// change. So the end of the conversation moves with the field as it grows
+// or shrinks, rather than a frame after, which showed an empty band as tall
+// as the lines just deleted.
+func (a *app) composerRoom(c *ui.Context) {
+	const pad = 14 + 6 // the field's padding over and under its text
+	text := a.draft
+	if text == "" || strings.HasSuffix(text, "\n") {
+		text += "\u200b" // the line the caret is on, empty
+	}
+	lines := a.field.H - pad
+	ui.Column(c).Padding(0, 0, max(0, a.footer-lines), 0).Children(func() {
+		ui.Text(c, text).Width(max(0, a.field.W-32)).FontSize(bodySize).LineHeight(bodyLineHeight).
+			MaxLines(10).Opacity(0)
+	})
+}
+
 // composerColumn builds the composer's column: the field and its buttons,
 // and the status under them.
 func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
@@ -390,6 +419,9 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 					}
 					return true
 				})
+			if b := draft.Bounds(); !empty(b) {
+				a.field = b
+			}
 			// Back to writing after choosing a chat.
 			if a.focusDraft {
 				draft.Focus()

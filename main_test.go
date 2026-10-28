@@ -559,3 +559,65 @@ func TestComposerKeepsFocusAsChatStarts(t *testing.T) {
 		t.Errorf("draft %q after the first message, want %q", a.draft, "again")
 	}
 }
+
+// TestComposerResizes checks every frame as the composer grows and shrinks:
+// the conversation's end moves with it in the frame it changes, rather than
+// a frame after, which left an empty band (or hid the last lines) for a
+// frame; and a question pinned to the top stays there.
+func TestComposerResizes(t *testing.T) {
+	edit := func(tt *ui.Tester, check func(string)) {
+		for i := 0; i < 15; i++ {
+			tt.Type("line")
+			tt.Key(ui.Shift, ui.KeyEnter)
+			check("growing")
+		}
+		tt.Key(ui.Cmd, ui.KeyA)
+		tt.Key(0, ui.KeyBackspace)
+		check("all deleted")
+		tt.Type(strings.Repeat("wrap me ", 60))
+		check("a long line")
+		tt.Key(ui.Cmd, ui.KeyA)
+		tt.Type(strings.Repeat("中文换行测试，", 40))
+		check("a long line of Chinese")
+		tt.Key(ui.Shift, ui.KeyEnter)
+		check("a new line")
+		tt.Key(ui.Cmd, ui.KeyA)
+		tt.Key(0, ui.KeyBackspace)
+		check("all deleted again")
+	}
+
+	a, tt := newTester()
+	for _, s := range suggestions {
+		tt.Type(s.prompt)
+		tt.Key(0, ui.KeyEnter)
+	}
+	tt.Advance(time.Second)
+	th := a.current()
+	th.pin = pin{}
+	th.list.ScrollToEnd()
+	tt.Advance(time.Second)
+	edit(tt, func(when string) {
+		// The layout of the frame the edit drew, as the next one reads it.
+		tt.Frame()
+		last := th.box(len(th.Messages) - 1)
+		if gap := 760 - a.footer - (last.Y + last.H); gap < listPadBottom-0.5 || gap > listPadBottom+0.5 {
+			t.Errorf("%s: %v between the last message and the composer, want %v", when, gap, listPadBottom)
+		}
+	})
+
+	a, tt = newTester()
+	tt.SetSize(1120, 1100) // room for the reply and the composer at its tallest
+	tt.Type("Hi")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	th = a.current()
+	if th.pin.id == 0 {
+		t.Fatal("the question is not pinned")
+	}
+	edit(tt, func(when string) {
+		tt.Frame()
+		if y := th.box(0).Y - th.listBox.Y; y < listPadTop-0.5 || y > listPadTop+0.5 {
+			t.Errorf("%s: the question %v below the top, want %v", when, y, listPadTop)
+		}
+	})
+}

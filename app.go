@@ -85,8 +85,9 @@ type app struct {
 	// cardHeight is how tall the outline's card was laid out.
 	cardHeight float32
 	// footer is how tall the composer was laid out, which floats over the
-	// conversation's bottom.
+	// conversation's bottom, and field where its field was.
 	footer float32
+	field  ui.Rect
 	// copied is the message last copied, which shows a check until
 	// copiedUntil.
 	copied      int
