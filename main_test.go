@@ -507,3 +507,55 @@ func TestCopyMessage(t *testing.T) {
 		t.Errorf("check still shows after %v", copiedDuration)
 	}
 }
+
+func TestComposerFloats(t *testing.T) {
+	a, tt := newTester()
+	for _, s := range suggestions {
+		tt.Type(s.prompt)
+		tt.Key(0, ui.KeyEnter)
+	}
+	tt.Advance(time.Second)
+	th := a.current()
+	const h = 760 // newTester's window
+	// The conversation runs down to the window's bottom, under the
+	// composer, and its end shows above the composer.
+	if bottom := th.listBox.Y + th.listBox.H; bottom < h-0.5 {
+		t.Errorf("list ends at %v, want the window's bottom %v", bottom, h)
+	}
+	last := th.box(len(th.Messages) - 1)
+	if top := h - a.footer; a.footer < 100 || last.Y+last.H > top-listPadBottom+0.5 {
+		t.Errorf("last row ends at %v, the composer (%v tall) starts at %v", last.Y+last.H, a.footer, top)
+	}
+	// Scrolling over the composer scrolls the conversation.
+	field, ok := tt.Find("Message")
+	if !ok {
+		t.Fatalf("no composer in %q", tt.Texts())
+	}
+	from := th.scroll.Y
+	tt.Scroll(field.X+40, field.Y+10, 0, -300)
+	tt.Advance(time.Second)
+	if th.scroll.Y >= from || th.list.AtEnd() {
+		t.Errorf("scrolling over the composer: from %v to %v, at the end %v", from, th.scroll.Y, th.list.AtEnd())
+	}
+	// It still sends.
+	n := len(th.Messages)
+	tt.Type("One more")
+	if err := tt.Click("Send"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if len(th.Messages) != n+2 {
+		t.Errorf("%d messages after Send, want %d", len(th.Messages), n+2)
+	}
+}
+
+func TestComposerKeepsFocusAsChatStarts(t *testing.T) {
+	a, tt := newTester()
+	tt.Type("Hi")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	tt.Type("again")
+	if a.draft != "again" {
+		t.Errorf("draft %q after the first message, want %q", a.draft, "again")
+	}
+}

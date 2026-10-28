@@ -84,6 +84,9 @@ type app struct {
 	focusDraft bool // gives the composer the focus in the next frame
 	// cardHeight is how tall the outline's card was laid out.
 	cardHeight float32
+	// footer is how tall the composer was laid out, which floats over the
+	// conversation's bottom.
+	footer float32
 	// copied is the message last copied, which shows a check until
 	// copiedUntil.
 	copied      int
@@ -453,12 +456,17 @@ func groupByDay(threads []*thread, now time.Time) []group {
 // iconButton creates a small square button showing an icon, described by
 // label.
 func iconButton(c *ui.Context, svg *ui.SVG, label string) ui.Element {
+	return iconButtonSized(c, svg, label, 16)
+}
+
+// iconButtonSized is iconButton with an icon size DIPs square.
+func iconButtonSized(c *ui.Context, svg *ui.SVG, label string, size float32) ui.Element {
 	t := c.Theme()
 	b := ui.ButtonBase(c).Size(30, 28).Radius(6).TextColor(t.TextMuted).Label(label).Tooltip(label)
 	if b.Hovered() {
 		b.Background(t.Text.Alpha(0.06)).TextColor(t.Text)
 	}
-	b.Children(func() { ui.Icon(c, svg).Size(16, 16) })
+	b.Children(func() { ui.Icon(c, svg).Size(size, size) })
 	return b
 }
 

@@ -51,10 +51,11 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 		})
 		if th == nil || len(th.Messages) == 0 {
 			a.welcome(c)
+			a.composer(c, nil)
 		} else {
 			a.conversation(c, th)
+			a.composer(c, th)
 		}
-		a.composer(c)
 	})
 }
 
@@ -97,7 +98,7 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 	room, outgrown := float32(0), false
 	if q >= 0 {
 		_, h := c.Size()
-		room, outgrown = th.measure(q, th.scroll.Y, h, th.listBox)
+		room, outgrown = th.measure(q, th.scroll.Y, h, th.listBox, listPadBottom+a.footer)
 		if outgrown {
 			// The reply no longer fits under the question: follow its end.
 			th.pin, q = pin{}, -1
@@ -123,7 +124,9 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 		th.boxes = slices.Grow(th.boxes[:0], n)[:n]
 		clear(th.boxes)
 		// A list per chat, so that each keeps where it is scrolled. The list
-		// is as wide as the pane, so that it scrolls wherever the pointer is.
+		// is as wide as the pane, so that it scrolls wherever the pointer is,
+		// and runs down to its bottom, under the composer, past whose height
+		// its end scrolls.
 		list := ui.List(c.Key(th.ID), &th.list, rows, func(i int) {
 			if i == n {
 				ui.Box(c).Height(room)
@@ -139,9 +142,12 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 				hover := col.Hovered()
 				col.Children(func() { a.message(c, th.Messages[i], hover, i == n-1) })
 			})
-		}).Grow(1).Padding(listPadTop, 24, listPadBottom, 24).Gap(listGap).TrackScroll(&th.scroll)
+		}).Grow(1).Padding(listPadTop, 24, listPadBottom+a.footer, 24).Gap(listGap).TrackScroll(&th.scroll)
 		th.listBox = list.Bounds()
-		a.outline(c, th, area.Bounds())
+		// What shows of the area: above the composer.
+		shows := area.Bounds()
+		shows.H = max(0, shows.H-a.footer)
+		a.outline(c, th, shows)
 		// Not while the question is held at the top, which is the end as far
 		// as the user sees, nor as the list goes to its end as the reply
 		// outgrows it; gone at once as it is clicked, as the list glides.
@@ -162,7 +168,7 @@ func (a *app) scrollToEnd(c *ui.Context, th *thread) {
 	b := ui.ButtonBase(c.Key("scroll to end")).Size(size, size).Radius(size/2).
 		Background(a.pal.composer).Border(1, t.Border).TextColor(t.Text).
 		Label("Scroll to end").Tooltip("Scroll to end").
-		Absolute().LeftPercent(50).Bottom(16)
+		Absolute().LeftPercent(50).Bottom(a.footer + 16)
 	if b.Hovered() {
 		b.Translate(-size/2, -4).Shadow(0, 8, 16, -4, a.pal.shadow(0.22))
 	} else {
@@ -255,7 +261,8 @@ func (a *app) copyButton(c *ui.Context, m *message) {
 		svg, label = checkIcon, "Copied"
 		c.After(left) // a frame as the check goes
 	}
-	b := iconButton(c, svg, label)
+	// A size under the other buttons', as it shows on every message.
+	b := iconButtonSized(c, svg, label, 14)
 	if copied {
 		b.TextColor(c.Theme().Success)
 	}
@@ -323,10 +330,50 @@ func seconds(s float64) string {
 
 // composer builds the field to write in, with the model to ask and the
 // button that sends, or stops the reply.
-func (a *app) composer(c *ui.Context) {
-	t := c.Theme()
+//
+// Over th's conversation (nil for none), it floats over the pane's bottom,
+// as hyperai-next's sticky footer does: the conversation runs down to the
+// window's bottom, its scrollbar with it, and scrolls under the composer,
+// which hides it on bg, faded out above. It stays the same element either
+// way, so that it keeps what is typed and the focus as a chat starts.
+func (a *app) composer(c *ui.Context, th *thread) {
 	ready := strings.TrimSpace(a.draft) != ""
-	ui.Column(c).Shrink(0).AlignItems(ui.Center).Padding(0, 24, 14, 24).Gap(8).Children(func() {
+	outer := ui.Column(c).Shrink(0).AlignItems(ui.Center).Padding(0, 24)
+	if th != nil {
+		// Only the column takes the pointer: beside it, the pointer reaches
+		// the conversation and its scrollbar.
+		outer.Absolute().Left(0).Right(0).Bottom(0).PassThrough()
+	}
+	// The conversation leaves the room it takes at its end; measured the
+	// frame before, so the first frame it changes asks for another.
+	if h := outer.Bounds().H; h != a.footer {
+		a.footer = h
+		c.After(0)
+	}
+	outer.Children(func() { a.composerColumn(c, th, ready) })
+}
+
+// composerColumn builds the composer's column: the field and its buttons,
+// and the status under them.
+func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
+	t := c.Theme()
+	col := ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Gap(8).Padding(0, 0, 14, 0)
+	if th != nil {
+		col.Padding(8, 0, 14, 0).Background(t.Background).HandleInput(func(ev ui.InputEvent) bool {
+			// Scrolling over it scrolls the conversation, as over
+			// hyperai-next's footer, which is in the conversation.
+			if ev.Kind != ui.InputScroll || ev.DY == 0 {
+				return false
+			}
+			th.scroll.Y = max(0, min(th.scroll.Y+ev.DY, th.scroll.MaxY))
+			return true
+		})
+	}
+	col.Children(func() {
+		if th != nil {
+			ui.Box(c).Absolute().Left(0).Right(0).Top(-16).Height(16).PassThrough().
+				LinearGradient(ui.LinearGradient{From: t.Background.Alpha(0), To: t.Background, Angle: 180})
+		}
 		box := ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Radius(16).Border(1, t.Border).
 			Background(a.pal.composer).Shadow(0, 4, 16, -4, a.pal.shadow(0.12))
 		box.Children(func() {

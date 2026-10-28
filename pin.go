@@ -2,7 +2,8 @@ package main
 
 import "github.com/egoist/mygo/ui"
 
-// The conversation list's room around its rows, which the pin measures with.
+// The conversation list's room around its rows, which the pin measures
+// with; the composer's height adds to its bottom.
 const (
 	listPadTop    = 20
 	listPadBottom = 24
@@ -50,9 +51,9 @@ func (p *pin) held(y float32) bool {
 // measure returns the room the list leaves after its last row this frame,
 // and whether the reply outgrew it, from what the last frame laid out: the
 // list's height, less what the question q and the rows after it take. The
-// list is scrolled y and is in box, empty before it was laid out; the
-// window is h tall.
-func (th *thread) measure(q int, y, h float32, box ui.Rect) (room float32, outgrown bool) {
+// list is scrolled y and is in box, empty before it was laid out, with
+// padding bottom under its last row; the window is h tall.
+func (th *thread) measure(q int, y, h float32, box ui.Rect, bottom float32) (room float32, outgrown bool) {
 	p := &th.pin
 	n := len(th.Messages)
 	question, last := th.box(q), th.box(n-1)
@@ -73,7 +74,7 @@ func (th *thread) measure(q int, y, h float32, box ui.Rect) (room float32, outgr
 		return 0, true
 	}
 	below := last.Y + last.H - question.Y
-	p.room = box.H - listPadTop - below - listGap - listPadBottom
+	p.room = box.H - listPadTop - below - listGap - bottom
 	if p.room <= 0 {
 		return 0, true
 	}
