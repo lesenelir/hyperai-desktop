@@ -16,6 +16,7 @@ var (
 	arrowDownIcon = icon(`<path d="M12 5l0 14"/><path d="M18 13l-6 6"/><path d="M6 13l6 6"/>`)
 	stopIcon      = icon(`<rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/>`)
 	copyIcon      = icon(`<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>`)
+	checkIcon     = icon(`<path d="M20 6 9 17l-5-5"/>`)
 	chevronIcon   = icon(`<path d="m6 9 6 6 6-6"/>`)
 	moreIcon      = icon(`<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>`)
 	messageIcon   = icon(`<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>`)

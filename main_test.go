@@ -456,3 +456,52 @@ func TestOutlineFarTurn(t *testing.T) {
 		t.Errorf("first question %v below the top, want %v", y, listPadTop)
 	}
 }
+
+func TestFormatTime(t *testing.T) {
+	now := time.Date(2026, 10, 29, 14, 30, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		t     time.Time
+		short string
+	}{
+		{time.Date(2026, 10, 29, 2, 21, 0, 0, time.UTC), "2:21 AM"},
+		{time.Date(2026, 10, 28, 23, 5, 0, 0, time.UTC), "Oct 28, 11:05 PM"},
+		{time.Date(2025, 10, 29, 9, 0, 0, 0, time.UTC), "Oct 29, 2025, 9:00 AM"},
+	} {
+		short, full := formatTime(tc.t, now)
+		if short != tc.short {
+			t.Errorf("formatTime(%v) = %q, want %q", tc.t, short, tc.short)
+		}
+		if want := tc.t.Format("January 2, 2006 at 3:04 PM"); full != want {
+			t.Errorf("formatTime(%v) full = %q, want %q", tc.t, full, want)
+		}
+	}
+}
+
+func TestCopyMessage(t *testing.T) {
+	a, tt := newTester()
+	tt.Type("How do I cache?")
+	tt.Key(0, ui.KeyEnter)
+	th := a.threads[0]
+	question, reply := th.Messages[0], th.Messages[1]
+	if question.Time.IsZero() || reply.Time.IsZero() {
+		t.Fatalf("times %v, %v", question.Time, reply.Time)
+	}
+	short, _ := formatTime(reply.Time, tt.Now())
+	if !tt.HasText(short) {
+		t.Fatalf("no time %q in %q", short, tt.Texts())
+	}
+	// The question's button is first, beside its bubble.
+	if err := tt.Click("Copy"); err != nil {
+		t.Fatal(err)
+	}
+	if tt.Clipboard() != question.Text {
+		t.Errorf("clipboard %q, want the question", tt.Clipboard())
+	}
+	if _, ok := tt.Find("Copied"); !ok {
+		t.Errorf("no check after copying")
+	}
+	tt.Advance(copiedDuration + 100*time.Millisecond)
+	if _, ok := tt.Find("Copied"); ok {
+		t.Errorf("check still shows after %v", copiedDuration)
+	}
+}

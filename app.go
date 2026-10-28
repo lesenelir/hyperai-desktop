@@ -28,7 +28,10 @@ type message struct {
 	Text  string `json:"text"`
 	Error string `json:"error,omitempty"`
 	// Elapsed is how many seconds the reply took to write.
-	Elapsed   float64 `json:"elapsed,omitempty"`
+	Elapsed float64 `json:"elapsed,omitempty"`
+	// Time is when the question was sent, or the reply ended; zero in
+	// chats saved before messages kept it.
+	Time      time.Time `json:"time,omitzero"`
 	streaming bool
 	started   time.Time
 	preview   string  // the outline's preview of Text, once it is complete
@@ -81,6 +84,12 @@ type app struct {
 	focusDraft bool // gives the composer the focus in the next frame
 	// cardHeight is how tall the outline's card was laid out.
 	cardHeight float32
+	// copied is the message last copied, which shows a check until
+	// copiedUntil.
+	copied      int
+	copiedUntil time.Time
+	// lineHeight is how tall a line of text is, measured once.
+	lineHeight float32
 	pal        *palette // the frame's colors
 	md         markdown.Options
 	// busy is the reply streaming in, nil when none, and cancel stops it.
@@ -134,7 +143,7 @@ func (a *app) send(text string) {
 		a.selected = strconv.Itoa(th.ID)
 	}
 	a.next++
-	th.Messages = append(th.Messages, &message{ID: a.next, Role: "user", Text: text})
+	th.Messages = append(th.Messages, &message{ID: a.next, Role: "user", Text: text, Time: time.Now()})
 	turns := th.turns()
 	// The question goes to the top of the conversation, the reply coming
 	// in under it.
@@ -191,10 +200,11 @@ func (a *app) send(text string) {
 	}()
 }
 
-// end ends m streaming in, noting how long it took.
+// end ends m streaming in, noting when, and how long it took.
 func (m *message) end() {
 	m.streaming = false
-	m.Elapsed = time.Since(m.started).Seconds()
+	m.Time = time.Now()
+	m.Elapsed = m.Time.Sub(m.started).Seconds()
 }
 
 // stop stops the reply streaming in, keeping what came.

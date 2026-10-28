@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
@@ -133,7 +134,10 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 				th.boxes[i], th.Messages[i].height = b, b.H
 			}
 			row.Children(func() {
-				ui.Column(c).Grow(1).MaxWidth(maxWidth).Children(func() { a.message(c, th.Messages[i]) })
+				col := ui.Column(c).Grow(1).MaxWidth(maxWidth)
+				// The pointer over the message, or beside it, shows its actions.
+				hover := col.Hovered()
+				col.Children(func() { a.message(c, th.Messages[i], hover, i == n-1) })
 			})
 		}).Grow(1).Padding(listPadTop, 24, listPadBottom, 24).Gap(listGap).TrackScroll(&th.scroll)
 		th.listBox = list.Bounds()
@@ -171,13 +175,26 @@ func (a *app) scrollToEnd(c *ui.Context, th *thread) {
 }
 
 // message builds a message: the user's in a bubble on the right, the
-// assistant's as Markdown across the column, with its actions once done.
-func (a *app) message(c *ui.Context, m *message) {
+// assistant's as Markdown across the column, with its actions once done,
+// shown while hover, and always for the last reply.
+func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 	t := c.Theme()
 	if m.Role == "user" {
-		ui.Row(c).Children(func() {
+		ui.Row(c).AlignItems(ui.Start).Gap(4).Children(func() {
 			ui.Spacer(c)
-			ui.Text(c, m.Text).Selectable().Padding(9, 14).Radius(14).Background(a.pal.raised).MaxWidth(560)
+			// Beside the bubble, centered on its first line, over the
+			// bubble's padding: the time, then the button next to the bubble.
+			if a.lineHeight == 0 {
+				_, a.lineHeight = c.MeasureText(0, ui.Span{Text: "M", Size: t.FontSize})
+			}
+			actions := ui.Row(c).Height(actionsHeight).Margin(bubblePadY+a.lineHeight/2-actionsHeight/2, 0, 0, 0).
+				Gap(4).AlignItems(ui.Center)
+			actions.Opacity(actions.Animate("opacity", shown(hover), revealDuration))
+			actions.Children(func() {
+				a.messageTime(c, m)
+				a.copyButton(c, m)
+			})
+			ui.Text(c, m.Text).Selectable().Padding(bubblePadY, 14).Radius(14).Background(a.pal.raised).MaxWidth(560)
 		})
 		return
 	}
@@ -195,15 +212,84 @@ func (a *app) message(c *ui.Context, m *message) {
 		if m.Error != "" {
 			ui.Text(c, m.Error).FontSize(13).TextColor(t.Danger).Selectable()
 		}
+		// Under the reply: the button on the text's edge, the time at the
+		// far end.
 		if !m.streaming && m.Text != "" {
-			ui.Row(c).Margin(-4, 0, 0, -6).Children(func() {
-				if iconButton(c, copyIcon, "Copy").Clicked() {
-					c.Services().WriteClipboard(m.Text)
-					c.Toast("Copied")
-				}
+			actions := ui.Row(c).Margin(-4, 0, 0, -6).AlignItems(ui.Center)
+			actions.Opacity(actions.Animate("opacity", shown(hover || last), revealDuration))
+			actions.Children(func() {
+				a.copyButton(c, m)
+				ui.Spacer(c)
+				a.messageTime(c, m)
 			})
 		}
 	})
+}
+
+const (
+	bubblePadY    = 9  // a question's bubble's padding over and under its text
+	actionsHeight = 28 // a message's actions' height: an iconButton's
+)
+
+// revealDuration is how long a message's actions take to fade in or out.
+const revealDuration = 150 * time.Millisecond
+
+// shown is the opacity of what shows while show is true.
+func shown(show bool) float32 {
+	if show {
+		return 1
+	}
+	return 0
+}
+
+// copyButton builds the button that copies m's text, which shows a check
+// for a moment after.
+func (a *app) copyButton(c *ui.Context, m *message) {
+	left := a.copiedUntil.Sub(c.Now())
+	copied := a.copied == m.ID && left > 0
+	svg, label := copyIcon, "Copy"
+	if copied {
+		svg, label = checkIcon, "Copied"
+		c.After(left) // a frame as the check goes
+	}
+	b := iconButton(c, svg, label)
+	if copied {
+		b.TextColor(c.Theme().Success)
+	}
+	if b.Clicked() {
+		c.Services().WriteClipboard(m.Text)
+		a.copied, a.copiedUntil = m.ID, c.Now().Add(copiedDuration)
+		c.After(0)
+	}
+}
+
+// copiedDuration is how long a copy button shows its check.
+const copiedDuration = 1500 * time.Millisecond
+
+// messageTime builds when m was, shortly, with the long form in its
+// tooltip; nothing for a message that does not know.
+func (a *app) messageTime(c *ui.Context, m *message) {
+	if m.Time.IsZero() {
+		return
+	}
+	short, full := formatTime(m.Time, c.Now())
+	ui.Text(c, short).FontSize(12).TextColor(c.Theme().TextMuted).FontFeatures("tnum").SingleLine().Tooltip(full)
+}
+
+// formatTime returns t shortly — the clock today, the day too before
+// that, and the year outside this one — and in full, as hyperai-next's
+// messages show it; now is the time now, in the zone t shows in.
+func formatTime(t, now time.Time) (short, full string) {
+	t = t.In(now.Location())
+	switch {
+	case t.Year() != now.Year():
+		short = t.Format("Jan 2, 2006, 3:04 PM")
+	case t.YearDay() != now.YearDay():
+		short = t.Format("Jan 2, 3:04 PM")
+	default:
+		short = t.Format("3:04 PM")
+	}
+	return short, t.Format("January 2, 2006 at 3:04 PM")
 }
 
 // worked builds the rule over a reply, as Waku's: while it is written,
