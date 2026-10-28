@@ -299,7 +299,7 @@ func (a *app) view(c *ui.Context) {
 	if a.collapsed {
 		label = "Show sidebar"
 	}
-	toggle := iconButton(c.Key("toggle"), sidebarIcon, label+" ("+shortcutText("⇧⌘S", "Ctrl+Shift+S")+")").
+	toggle := iconButtonSized(c.Key("toggle"), sidebarIcon, label+" ("+shortcutText("⇧⌘S", "Ctrl+Shift+S")+")", titleIconSize).
 		Absolute().Left(bar.Left + 8).Top((titleBarHeight - 28) / 2)
 	if toggle.Clicked() {
 		a.collapsed = !a.collapsed

@@ -117,7 +117,7 @@ func (a *app) historyButtons(c *ui.Context, x float32) {
 		{arrowLeftIcon, "Back", shortcutText("⌘[", "Alt+Left"), len(a.nav.back) > 0, a.goBack},
 		{arrowRightIcon, "Forward", shortcutText("⌘]", "Alt+Right"), len(a.nav.forward) > 0, a.goForward},
 	} {
-		btn := iconButton(c.Key(b.label), b.svg, b.label+" ("+b.shortcut+")").
+		btn := iconButtonSized(c.Key(b.label), b.svg, b.label+" ("+b.shortcut+")", titleIconSize).
 			Absolute().Left(x + float32(i)*(30+2)).Top((titleBarHeight - 28) / 2).Disabled(!b.can)
 		if !b.can {
 			btn.Opacity(0.35)
