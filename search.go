@@ -417,7 +417,7 @@ func (a *app) searchPalette(c *ui.Context) {
 // matched, the words around the match.
 func (a *app) searchRow(c *ui.Context, it searchItem, chosen bool) bool {
 	t := c.Theme()
-	row := ui.ButtonBase(c.Key(it.key)).Margin(0, barClear, 0, 8).Padding(7, 12).Gap(10).Radius(8).
+	row := ui.ButtonBase(c.Key(it.key)).Margin(rowGap/2, barClear, rowGap/2, 8).Padding(7, 12).Gap(10).Radius(8).
 		Justify(ui.Start).AlignItems(ui.Center).Label(it.title)
 	if chosen {
 		row.Background(a.pal.fg.Alpha(0.06))
