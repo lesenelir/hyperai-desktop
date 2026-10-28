@@ -22,6 +22,9 @@ const (
 	// list's right, for its wash to clear the scroll bar over it: MyGo's
 	// is 6 DIPs wide, 3 in from the edge.
 	barClear = 12
+	// sidebarTint is how much of the sidebar's own color lies over the
+	// desktop's material, where it shows.
+	sidebarTint = 0.6
 	// rowGap is the room between two rows of such a list, for the washes of
 	// one chosen and one under the pointer not to run together.
 	rowGap = 2
@@ -307,9 +310,14 @@ func (a *app) view(c *ui.Context) {
 		w := sidebarWidth * shown
 		ui.Row(c).Width(w).Shrink(0).AlignItems(ui.Stretch).Clip().Children(func() {
 			side := ui.Column(c).Width(sidebarWidth).Shrink(0).Margin(0, 0, 0, w-sidebarWidth)
-			if !vibrant {
-				side.Background(a.pal.fg.Alpha(0.035).Over(t.Background))
+			// Over the material, its own color, warm as the canvas beside it,
+			// lets the material through but tints it: the desktop's grey,
+			// cool by itself, sat apart from the canvas.
+			fill := a.pal.fg.Alpha(0.035).Over(t.Background)
+			if vibrant {
+				fill = fill.Alpha(sidebarTint)
 			}
+			side.Background(fill)
 			side.Children(func() { a.sidebar(c) })
 		})
 		if w > 0 {
