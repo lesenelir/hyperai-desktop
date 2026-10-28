@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -231,4 +232,33 @@ type failTransport struct{ http.RoundTripper }
 func (f failTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r.URL.RawQuery = "fail"
 	return f.RoundTripper.RoundTrip(r)
+}
+
+func TestBatcher(t *testing.T) {
+	var mu sync.Mutex
+	var commits []string
+	b := newBatcher(func(s string) {
+		mu.Lock()
+		commits = append(commits, s)
+		mu.Unlock()
+	})
+	// The first chunk commits at once; those coming within commitInterval
+	// of it wait and commit together.
+	b.add("a")
+	time.Sleep(commitInterval / 5)
+	for _, s := range []string{"b", "c", "d"} {
+		b.add(s)
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(2 * commitInterval)
+	b.add("e")
+	b.add("f")
+	b.close() // commits what is left at once
+	b.add("g")
+	time.Sleep(2 * commitInterval)
+	mu.Lock()
+	defer mu.Unlock()
+	if got := strings.Join(commits, "|"); got != "a|bcd|ef" {
+		t.Errorf("commits %q, want a|bcd|ef", got)
+	}
 }

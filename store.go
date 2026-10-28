@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/egoist/mygo"
 )
@@ -25,10 +27,13 @@ func (a *app) load() {
 			a.next = max(a.next, m.ID)
 		}
 	}
+	a.rev++
 }
 
 // save writes the chats, where the app has a place for them (not in
-// tests). It replaces the file at once, so that a crash leaves the old one.
+// tests). It encodes them here, on the main thread, where they are safe
+// to read, and leaves writing them to a goroutine, so that a frame never
+// waits for the disk.
 func (a *app) save() {
 	if a.path == "" {
 		return
@@ -37,8 +42,53 @@ func (a *app) save() {
 	if err != nil {
 		return
 	}
-	tmp := a.path + ".tmp"
-	if os.WriteFile(tmp, b, 0o600) == nil {
-		os.Rename(tmp, a.path)
+	a.saver.save(a.path, b)
+}
+
+// saver writes files on a goroutine, one at a time: a save asked while one
+// is written waits, and only the latest of those waiting is written.
+type saver struct {
+	mu      sync.Mutex
+	path    string
+	pending []byte // what to write next, nil when nothing waits
+	writing bool
+	done    sync.WaitGroup
+}
+
+func (s *saver) save(path string, b []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.path, s.pending = path, b
+	if !s.writing {
+		s.writing = true
+		s.done.Add(1)
+		go s.write()
 	}
 }
+
+func (s *saver) write() {
+	defer s.done.Done()
+	for {
+		s.mu.Lock()
+		path, b := s.path, s.pending
+		s.pending = nil
+		if b == nil {
+			s.writing = false
+			s.mu.Unlock()
+			return
+		}
+		s.mu.Unlock()
+		// Replaced at once, so that a crash leaves the old file.
+		tmp := path + ".tmp"
+		err := os.WriteFile(tmp, b, 0o600)
+		if err == nil {
+			err = os.Rename(tmp, path)
+		}
+		if err != nil {
+			log.Printf("saving the chats: %v", err)
+		}
+	}
+}
+
+// wait returns once what was saved is written, as the app quits.
+func (s *saver) wait() { s.done.Wait() }

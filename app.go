@@ -72,7 +72,17 @@ type app struct {
 	// busy is the reply streaming in, nil when none, and cancel stops it.
 	busy   *message
 	cancel context.CancelFunc
-	path   string // where the chats are saved, "" in tests
+	// onFinish, when set, runs once as the reply ends (HYPERAI_BENCH).
+	onFinish func()
+	path     string // where the chats are saved, "" in tests
+	saver    saver
+	// rev counts the changes to the chats that move them in the sidebar:
+	// one made, updated or removed. rows are the sidebar's rows as of
+	// rowsRev and rowsDay, so that a frame builds them only when they move.
+	rev, rowsRev int
+	rowsDay      time.Time
+	rows         []chatRow
+	chatList     ui.ListState
 }
 
 func newApp(p provider) *app {
@@ -116,6 +126,7 @@ func (a *app) send(text string) {
 	reply := &message{ID: a.next, Role: "assistant", streaming: true, started: time.Now()}
 	th.Messages = append(th.Messages, reply)
 	th.Updated, th.Model = time.Now(), a.model
+	a.rev++
 	a.draft = ""
 	a.busy = reply
 	ctx, cancel := context.WithCancel(context.Background())
@@ -130,7 +141,12 @@ func (a *app) send(text string) {
 		}
 		a.busy, a.cancel = nil, nil
 		th.Updated = time.Now()
+		a.rev++
 		a.save()
+		if f := a.onFinish; f != nil {
+			a.onFinish = nil
+			f()
+		}
 	}
 	model := a.model
 	if a.win == nil {
@@ -138,15 +154,18 @@ func (a *app) send(text string) {
 		return
 	}
 	// The model streams on a goroutine of its own, and the view shows what
-	// came through Window.Update, which runs on the main thread in order.
+	// came through Window.Update, which runs on the main thread in order:
+	// in batches, so that tens of chunks a second commit some 20 times.
 	go func() {
-		err := a.prov.Stream(ctx, model, turns, func(s string) {
+		batch := newBatcher(func(s string) {
 			a.win.Update(func() {
 				if reply.streaming {
 					reply.Text += s
 				}
 			})
 		})
+		err := a.prov.Stream(ctx, model, turns, batch.add)
+		batch.close()
 		a.win.Update(func() {
 			if reply.streaming {
 				finish(err)
@@ -182,6 +201,7 @@ func (a *app) remove(th *thread) {
 		a.stop()
 	}
 	a.threads = slices.DeleteFunc(a.threads, func(t *thread) bool { return t == th })
+	a.rev++
 	if a.selected == strconv.Itoa(th.ID) {
 		a.selected = ""
 	}
@@ -261,17 +281,50 @@ func (a *app) sidebar(c *ui.Context) {
 	}
 	if len(a.threads) == 0 {
 		ui.Text(c, "Your chats show here.").FontSize(13).TextColor(t.TextMuted).Padding(16, 20).Grow(1)
-	} else {
-		now := time.Now()
-		ui.Scroll(c.Key("chats")).Grow(1).Padding(6, 0, 12, 0).Label("Chats").Children(func() {
-			for _, g := range groupByDay(a.threads, now) {
-				ui.Text(c, g.title).FontSize(12).TextColor(t.TextMuted).Padding(14, 20, 6, 20)
-				for _, th := range g.threads {
-					a.threadRow(c, th, now)
-				}
-			}
-		})
+		return
 	}
+	// A list, so that a frame builds only the rows that show: every frame of
+	// a streaming reply builds the sidebar too.
+	now := time.Now()
+	rows := a.chatRows(now)
+	a.chatList.Key = func(i int) any {
+		if th := rows[i].th; th != nil {
+			return th.ID
+		}
+		return "group " + rows[i].group
+	}
+	ui.List(c.Key("chats"), &a.chatList, len(rows), func(i int) {
+		if th := rows[i].th; th != nil {
+			a.threadRow(c, th, now)
+		} else {
+			ui.Text(c, rows[i].group).FontSize(12).TextColor(t.TextMuted).Padding(14, 20, 6, 20)
+		}
+	}).Grow(1).Padding(6, 0, 12, 0).Label("Chats")
+}
+
+// chatRow is a row of the sidebar: a chat, or the title of a group of them
+// when th is nil.
+type chatRow struct {
+	group string
+	th    *thread
+}
+
+// chatRows returns the sidebar's rows as of now, grouping the chats by day
+// again only when they changed, or the day did.
+func (a *app) chatRows(now time.Time) []chatRow {
+	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if a.rows != nil && a.rowsRev == a.rev && a.rowsDay.Equal(day) {
+		return a.rows
+	}
+	rows := make([]chatRow, 0, len(a.threads)+5)
+	for _, g := range groupByDay(a.threads, now) {
+		rows = append(rows, chatRow{group: g.title})
+		for _, th := range g.threads {
+			rows = append(rows, chatRow{th: th})
+		}
+	}
+	a.rows, a.rowsRev, a.rowsDay = rows, a.rev, day
+	return rows
 }
 
 // navRow creates a row of the sidebar's that does something: an icon, its

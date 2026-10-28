@@ -132,6 +132,16 @@ func (p *openRouter) Stream(ctx context.Context, model string, turns []turn, del
 type demo struct {
 	paced   bool
 	replies int
+	// rng paces the tokens; the global source when nil. A seeded one
+	// streams the same every time (HYPERAI_BENCH).
+	rng *rand.Rand
+}
+
+func (p *demo) intN(n int) int {
+	if p.rng != nil {
+		return p.rng.IntN(n)
+	}
+	return rand.IntN(n)
 }
 
 func (p *demo) Name() string     { return "Demo" }
@@ -149,11 +159,11 @@ func (p *demo) Stream(ctx context.Context, model string, turns []turn, delta fun
 	}
 	for i := 0; i < len(src); {
 		// Tokens of a few bytes, never splitting a UTF-8 sequence.
-		n := min(len(src)-i, 2+rand.IntN(7))
+		n := min(len(src)-i, 2+p.intN(7))
 		for n < len(src)-i && src[i+n]&0xC0 == 0x80 {
 			n++
 		}
-		if err := sleep(ctx, time.Duration(8+rand.IntN(30))*time.Millisecond); err != nil {
+		if err := sleep(ctx, time.Duration(8+p.intN(30))*time.Millisecond); err != nil {
 			return err
 		}
 		delta(src[i : i+n])

@@ -6,6 +6,7 @@ package main
 
 import (
 	"log"
+	"math/rand/v2"
 	"path/filepath"
 
 	"github.com/egoist/mygo"
@@ -23,8 +24,16 @@ func main() {
 			envFiles = append(envFiles, filepath.Join(dir, ".env"))
 		}
 		loadEnv(envFiles...)
-		a := newApp(newProvider())
-		a.load()
+		bench := benchReplies()
+		var a *app
+		if bench > 0 {
+			// Measured against the demo, paced the same every time, without
+			// the user's chats.
+			a = newApp(&demo{paced: true, rng: rand.New(rand.NewPCG(1, 2))})
+		} else {
+			a = newApp(newProvider())
+			a.load()
+		}
 		a.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:     "HyperAI",
 			Width:     1120,
@@ -43,6 +52,11 @@ func main() {
 			Vibrancy: mygo.VibrancySidebar,
 			Content:  ui.View(a.view),
 		})
+		if bench > 0 {
+			go a.bench(bench)
+		}
+		// The chats are written on a goroutine: let the last write end.
+		mygo.App.OnQuit(a.saver.wait)
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

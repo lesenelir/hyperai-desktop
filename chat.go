@@ -88,8 +88,10 @@ func (a *app) welcome(c *ui.Context) {
 // the reply grows until the user scrolls up.
 func (a *app) conversation(c *ui.Context, th *thread) {
 	th.list.Key = func(i int) any { return th.Messages[i].ID }
+	// It jumps to the end rather than gliding: a reply grows all the time
+	// it streams, so a glide never ends, and draws every refresh for the
+	// whole reply (docs/performance.md).
 	th.list.FollowEnd = true
-	th.list.FollowAnimation = &ui.Smooth
 	// A list per chat, so that each keeps where it is scrolled. The list is
 	// as wide as the pane, so that it scrolls wherever the pointer is.
 	ui.List(c.Key(th.ID), &th.list, len(th.Messages), func(i int) {
