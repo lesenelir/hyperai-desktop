@@ -106,11 +106,27 @@ type app struct {
 	saver    saver
 	// rev counts the changes to the chats that move them in the sidebar:
 	// one made, updated or removed. rows are the sidebar's rows as of
-	// rowsRev and rowsDay, so that a frame builds them only when they move.
+	// rowsRev, rowsDay and rowsQuery, so that a frame builds them only when
+	// they move.
 	rev, rowsRev int
 	rowsDay      time.Time
 	rows         []chatRow
 	chatList     ui.ListState
+	// searching shows the search (search.go), for query on searchTab: hits
+	// are the chats it found, as of hitsQuery and hitsRev; searchSel is the
+	// row chosen, as of the query searchQuery, and searchHover the one under
+	// the pointer, -1 for none.
+	searching   bool
+	query       string
+	searchTab   searchTab
+	searchQuery string
+	focusSearch bool // gives the search's field the focus in the next frame
+	hits        []searchHit
+	hitsQuery   string
+	hitsRev     int
+	searchSel   int
+	searchHover int
+	searchMoved bool // the keys chose a hit, which comes into view
 }
 
 func newApp(p provider) *app {
@@ -263,6 +279,9 @@ func (a *app) view(c *ui.Context) {
 	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyS) {
 		a.collapsed = !a.collapsed
 	}
+	if c.Shortcut(ui.Cmd, ui.KeyF) {
+		a.toggleSearch()
+	}
 	a.historyKeys(c)
 	if a.busy != nil && c.Shortcut(0, ui.KeyEscape) {
 		a.stop()
@@ -305,16 +324,20 @@ func (a *app) view(c *ui.Context) {
 		a.collapsed = !a.collapsed
 	}
 	a.historyButtons(c, bar.Left+8+30+6)
+	a.searchPalette(c)
 }
 
-// sidebar builds, as Waku's does, New chat over the chats by when they
-// were last updated, each with its model and age.
+// sidebar builds, as Waku's does, New chat and Search over the chats by
+// when they were last updated, each with its model and age.
 func (a *app) sidebar(c *ui.Context) {
 	t := c.Theme()
 	ui.Box(c).Height(titleBarHeight).Shrink(0).DragWindow()
 
 	if a.navRow(c, "new", newChatIcon, "New chat", shortcutText("⌘N", "Ctrl+N")).Clicked() {
 		a.newChat()
+	}
+	if a.navRow(c, "search", searchIcon, "Search", shortcutText("⌘F", "Ctrl+F")).Clicked() {
+		a.toggleSearch()
 	}
 	if len(a.threads) == 0 {
 		ui.Text(c, "Your chats show here.").FontSize(13).TextColor(t.TextMuted).Padding(16, 20).Grow(1)

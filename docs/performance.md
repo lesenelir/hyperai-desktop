@@ -76,6 +76,9 @@ word is coming in.
   chats grouped by day — are computed by `chatRows` only when `app.rev`
   changes (a chat made, updated or removed) or the day does. Anything that
   changes a chat's place in the sidebar must bump `rev`.
+- The search ([search.go](../search.go)) looks through every message of
+  every chat, so it does so once per change of its query (or of `rev`),
+  not once per frame, and lists 50 chats at most (12 on All).
   `BenchmarkFrame` ([bench_test.go](../bench_test.go)) measures this: with
   500 chats a frame took 1.74 ms when the sidebar built every row and
   grouped them each frame, and takes 0.18 ms now, near the 0.11 ms of 5

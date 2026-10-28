@@ -804,3 +804,183 @@ func TestBackForward(t *testing.T) {
 		t.Errorf("back %q after deleting the chat before", a.nav.back)
 	}
 }
+
+func TestSearch(t *testing.T) {
+	a, tt := newTester()
+	for _, s := range suggestions[:3] {
+		if err := tt.Click(s.title); err != nil {
+			t.Fatal(err)
+		}
+		if err := tt.Click("New chat"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lru, stream, sched := a.threads[0], a.threads[1], a.threads[2]
+	// The rows the search lists, by title.
+	lists := func(want ...string) {
+		t.Helper()
+		var got []string
+		for _, s := range a.searchSections() {
+			for _, it := range s.items {
+				got = append(got, it.title)
+			}
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("lists %q, want %q", got, want)
+		}
+	}
+
+	// ⌘F opens it over the window, the field focused, on All: the chats
+	// used last, and what to do.
+	tt.Key(ui.Cmd, ui.KeyF)
+	if !a.searching || !tt.HasText("Recents") || !tt.HasText("Actions") || !tt.HasText("Artifacts") {
+		t.Fatalf("searching %v, texts %q", a.searching, tt.Texts())
+	}
+	lists(sched.Title, stream.Title, lru.Title, "New chat")
+
+	// By the title, in any case, and by what the messages say, with the
+	// words around it.
+	tt.Type("STREAMING")
+	lists(stream.Title, "New chat")
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Type("container/list")
+	lists(lru.Title, "New chat")
+	if h := a.searchSections()[0].items[0].hit; h.who != "HyperAI" || h.match != "container/list" ||
+		!strings.HasPrefix(h.after, " keeps the order of use") || !strings.HasPrefix(h.before, "…") {
+		t.Errorf("hit %q said %q … %q … %q", h.who, h.before, h.match, h.after)
+	}
+	// Settings match too.
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Type("sidebar")
+	lists("Hide sidebar", "New chat")
+
+	// Up and Down choose, around the ends, and Enter does it.
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Type("go")
+	n := 0
+	for _, s := range a.searchSections() {
+		n += len(s.items)
+	}
+	if n < 3 || a.searchSel != 0 {
+		t.Fatalf("%d rows, chosen %d", n, a.searchSel)
+	}
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyUp)
+	if a.searchSel != 1 {
+		t.Errorf("chosen %d after Down, Down, Up, want 1", a.searchSel)
+	}
+	tt.Key(0, ui.KeyUp)
+	tt.Key(0, ui.KeyUp)
+	if a.searchSel != n-1 {
+		t.Errorf("chosen %d after going up past the top, want the last, %d", a.searchSel, n-1)
+	}
+	tt.Key(0, ui.KeyUp)
+	chosen := a.searchSections()[0].items[a.searchSel].hit.th
+	tt.Key(0, ui.KeyEnter)
+	if a.searching || a.current() != chosen {
+		t.Errorf("after Enter: searching %v, showing %v, want %q", a.searching, a.current(), chosen.Title)
+	}
+
+	// Left and Right change the tab while there is no query, around the
+	// ends; with one, they move in it.
+	tt.Key(ui.Cmd, ui.KeyF)
+	tt.Key(0, ui.KeyRight)
+	if a.searchTab != tabChats {
+		t.Errorf("tab %v after Right, want Chats", a.searchTab)
+	}
+	lists(sched.Title, stream.Title, lru.Title)
+	tt.Key(0, ui.KeyLeft)
+	tt.Key(0, ui.KeyLeft)
+	if a.searchTab != tabSettings {
+		t.Errorf("tab %v after Left, Left, want Settings", a.searchTab)
+	}
+	tt.Type("x")
+	tt.Key(0, ui.KeyLeft)
+	if a.searchTab != tabSettings || a.query != "x" {
+		t.Errorf("Left in a query: tab %v, query %q", a.searchTab, a.query)
+	}
+	// Settings do what they say: here, choose the model.
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Key(0, ui.KeyBackspace)
+	models := a.prov.Models()
+	if len(models) > 1 {
+		tt.Key(0, ui.KeyDown)
+		tt.Key(0, ui.KeyEnter)
+		if a.model != models[1] || a.searching {
+			t.Errorf("model %q, searching %v after choosing %q", a.model, a.searching, models[1])
+		}
+		tt.Key(ui.Cmd, ui.KeyF)
+		tt.Key(0, ui.KeyLeft)
+	} else {
+		tt.Key(0, ui.KeyRight)
+		tt.Key(0, ui.KeyRight)
+	}
+
+	// Projects and artifacts are not yet; a query of nothing finds nothing.
+	for _, tab := range []struct {
+		tab  searchTab
+		text string
+	}{{tabProjects, "No projects yet"}, {tabArtifacts, "No artifacts yet"}} {
+		a.setSearchTab(tab.tab)
+		tt.Frame()
+		if !tt.HasText(tab.text) {
+			t.Errorf("no %q in %q", tab.text, tt.Texts())
+		}
+	}
+	a.setSearchTab(tabChats)
+	tt.Type("nothing says this")
+	if !tt.HasText("No results for “nothing says this”") {
+		t.Errorf("no word of no match in %q", tt.Texts())
+	}
+
+	// Tab writes the query in a new chat.
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Type("Tell me more")
+	tt.Key(0, ui.KeyTab)
+	tt.Frame()
+	if a.searching || a.selected != "" || a.draft != "Tell me more" {
+		t.Errorf("after Tab: searching %v, showing %q, draft %q", a.searching, a.selected, a.draft)
+	}
+
+	// Escape closes it, as do its button and a click beside it.
+	tt.Key(ui.Cmd, ui.KeyF)
+	tt.Type("streaming")
+	tt.Key(0, ui.KeyEscape)
+	if a.searching {
+		t.Errorf("still searching after Escape")
+	}
+	tt.Key(ui.Cmd, ui.KeyF)
+	if err := tt.Click("Close"); err != nil {
+		t.Fatal(err)
+	}
+	if a.searching {
+		t.Errorf("still searching after Close")
+	}
+	if err := tt.Click("Search"); err != nil {
+		t.Fatal(err)
+	}
+	tt.ClickAt(5, 740)
+	if a.searching {
+		t.Errorf("still searching after a click beside it")
+	}
+
+	// A click on a row does it: the first under Recents, the chat used
+	// last.
+	tt.Key(ui.Cmd, ui.KeyF)
+	r, ok := tt.Find("Recents")
+	if !ok {
+		t.Fatalf("no Recents in %q", tt.Texts())
+	}
+	tt.ClickAt(r.X+40, r.Y+r.H+6+19)
+	if a.searching || a.current() != sched {
+		t.Errorf("after a click on the first row: searching %v, showing %v, want %q", a.searching, a.current(), sched.Title)
+	}
+
+	// ⌘F shows the sidebar too, for what it chooses.
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyS)
+	tt.Key(ui.Cmd, ui.KeyF)
+	if a.collapsed || !a.searching {
+		t.Errorf("⌘F with the sidebar hidden: collapsed %v, searching %v", a.collapsed, a.searching)
+	}
+}
