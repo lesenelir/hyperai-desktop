@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -85,24 +86,62 @@ func (a *app) welcome(c *ui.Context) {
 	})
 }
 
-// conversation builds th's messages down the middle, following the end as
-// the reply grows until the user scrolls up.
+// conversation builds th's messages down the middle, the question last
+// sent at the top while its reply fits under it (pin), and following the
+// end otherwise until the user scrolls up.
 func (a *app) conversation(c *ui.Context, th *thread) {
-	th.list.Key = func(i int) any { return th.Messages[i].ID }
+	th.settle()
+	n := len(th.Messages)
+	q := th.pin.row(th.Messages)
+	room, outgrown := float32(0), false
+	if q >= 0 {
+		_, h := c.Size()
+		room, outgrown = th.measure(q, th.scroll.Y, h, th.listBox)
+		if outgrown {
+			// The reply no longer fits under the question: follow its end.
+			th.pin, q = pin{}, -1
+			th.list.ScrollToEnd()
+		}
+	}
+	rows := n
+	if room > 0 {
+		rows++ // the room after the last row
+	}
+	th.list.Key = func(i int) any {
+		if i == n {
+			return "room"
+		}
+		return th.Messages[i].ID
+	}
 	// It jumps to the end rather than gliding: a reply grows all the time
 	// it streams, so a glide never ends, and draws every refresh for the
 	// whole reply (docs/performance.md).
-	th.list.FollowEnd = true
-	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+	th.list.FollowEnd = q < 0
+	area := ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch)
+	area.Children(func() {
+		th.boxes = slices.Grow(th.boxes[:0], n)[:n]
+		clear(th.boxes)
 		// A list per chat, so that each keeps where it is scrolled. The list
 		// is as wide as the pane, so that it scrolls wherever the pointer is.
-		ui.List(c.Key(th.ID), &th.list, len(th.Messages), func(i int) {
-			ui.Row(c).Justify(ui.Center).Children(func() {
+		list := ui.List(c.Key(th.ID), &th.list, rows, func(i int) {
+			if i == n {
+				ui.Box(c).Height(room)
+				return
+			}
+			row := ui.Row(c).Justify(ui.Center)
+			if b := row.Bounds(); !empty(b) {
+				th.boxes[i], th.Messages[i].height = b, b.H
+			}
+			row.Children(func() {
 				ui.Column(c).Grow(1).MaxWidth(maxWidth).Children(func() { a.message(c, th.Messages[i]) })
 			})
-		}).Grow(1).Padding(20, 24, 24, 24).Gap(24).TrackScroll(&th.scroll)
-		// Gone at once as it is clicked, as the list glides to its end.
-		if !th.list.AtEnd() && !th.scroll.Scrolling() {
+		}).Grow(1).Padding(listPadTop, 24, listPadBottom, 24).Gap(listGap).TrackScroll(&th.scroll)
+		th.listBox = list.Bounds()
+		a.outline(c, th, area.Bounds())
+		// Not while the question is held at the top, which is the end as far
+		// as the user sees, nor as the list goes to its end as the reply
+		// outgrows it; gone at once as it is clicked, as the list glides.
+		if !th.list.AtEnd() && !th.scroll.Scrolling() && !outgrown && !(q >= 0 && th.pin.held(th.scroll.Y)) {
 			a.scrollToEnd(c, th)
 		}
 	})

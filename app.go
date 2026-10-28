@@ -31,6 +31,8 @@ type message struct {
 	Elapsed   float64 `json:"elapsed,omitempty"`
 	streaming bool
 	started   time.Time
+	preview   string  // the outline's preview of Text, once it is complete
+	height    float32 // how tall its row was laid out last
 }
 
 // thread is a chat: its messages, and where its list is scrolled.
@@ -44,6 +46,13 @@ type thread struct {
 	// scroll is where list is scrolled, which the button bringing the end
 	// back into view glides.
 	scroll ui.ScrollState
+	pin    pin
+	// boxes are where the last frame laid out the rows, empty for those it
+	// did not build, and listBox the list; seek is the row a glide goes
+	// to, plus one, 0 for none.
+	boxes   []ui.Rect
+	listBox ui.Rect
+	seek    int
 }
 
 // turns returns the conversation for the provider: the messages with text,
@@ -69,7 +78,9 @@ type app struct {
 	model    string
 	// collapsed hides the sidebar.
 	collapsed  bool
-	focusDraft bool     // gives the composer the focus in the next frame
+	focusDraft bool // gives the composer the focus in the next frame
+	// cardHeight is how tall the outline's card was laid out.
+	cardHeight float32
 	pal        *palette // the frame's colors
 	md         markdown.Options
 	// busy is the reply streaming in, nil when none, and cancel stops it.
@@ -125,6 +136,9 @@ func (a *app) send(text string) {
 	a.next++
 	th.Messages = append(th.Messages, &message{ID: a.next, Role: "user", Text: text})
 	turns := th.turns()
+	// The question goes to the top of the conversation, the reply coming
+	// in under it.
+	th.pinTop(len(th.Messages) - 1)
 	a.next++
 	reply := &message{ID: a.next, Role: "assistant", streaming: true, started: time.Now()}
 	th.Messages = append(th.Messages, reply)

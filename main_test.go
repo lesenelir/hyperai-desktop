@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -300,5 +301,158 @@ func TestScrollToEnd(t *testing.T) {
 	tt.Advance(time.Second)
 	if !th.list.AtEnd() {
 		t.Errorf("not following the end after a new reply")
+	}
+}
+
+// atTop reports whether the question text shows at the top of the
+// conversation, under the title bar, and where it shows.
+func atTop(t *testing.T, tt *ui.Tester, text string) (bool, float32) {
+	t.Helper()
+	r, ok := tt.Find(text)
+	if !ok {
+		t.Fatalf("no %q in %q", text, tt.Texts())
+	}
+	y := r.Y - titleBarHeight
+	return y > listPadTop-0.5 && y < listPadTop+0.5, y
+}
+
+func TestPinQuestionToTop(t *testing.T) {
+	a, tt := newTester()
+	for _, s := range suggestions[:3] {
+		tt.Type(s.prompt)
+		tt.Key(0, ui.KeyEnter)
+		tt.Advance(time.Second)
+		// The question just sent shows at the top, its reply under it.
+		if ok, y := atTop(t, tt, s.prompt); !ok {
+			t.Errorf("%q %v below the top, want %v", s.prompt, y, listPadTop)
+		}
+	}
+	// The last reply is short: room after it holds the question up, and the
+	// list shows its end there.
+	th := a.current()
+	if th.pin.room <= 0 || !th.list.AtEnd() || tt.HasText("Scroll to end") {
+		t.Errorf("room %v, at the end %v, with the button %v", th.pin.room, th.list.AtEnd(), tt.HasText("Scroll to end"))
+	}
+}
+
+func TestPinOutgrown(t *testing.T) {
+	// A window short enough that the first reply outgrows its room.
+	a := newApp(&demo{})
+	tt := ui.NewTester(a.view, 1120, 520)
+	tt.Type("Hi")
+	tt.Key(0, ui.KeyEnter)
+	tt.Type(suggestions[0].prompt)
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	// The question lets go, and the list follows the reply's end.
+	th := a.current()
+	if th.pin.id != 0 || !th.list.AtEnd() || !th.list.FollowEnd || tt.HasText("Scroll to end") {
+		t.Errorf("pinned %v, at the end %v, following %v, with the button %v",
+			th.pin.id, th.list.AtEnd(), th.list.FollowEnd, tt.HasText("Scroll to end"))
+	}
+}
+
+func TestPinStreaming(t *testing.T) {
+	// A first question from a new chat, whose reply streams in, and outgrows
+	// a short window.
+	a := newApp(&demo{})
+	tt := ui.NewTester(a.view, 1120, 520)
+	tt.Type("Hi")
+	tt.Key(0, ui.KeyEnter)
+	th := a.current()
+	reply := th.Messages[1]
+	full := reply.Text
+	reply.Text, reply.streaming, reply.Elapsed = "", true, 0
+	th.pinTop(0)
+	followed := false
+	for i := 0; i < len(full); i += 24 {
+		// A commit, and the one frame it makes, as the window draws.
+		reply.Text = full[:min(i+24, len(full))]
+		tt.Frame()
+		// The button never shows while the reply streams.
+		if tt.HasText("Scroll to end") {
+			t.Fatalf("the button shows with %d of %d bytes: pinned %v, room %v, at the end %v",
+				len(reply.Text), len(full), th.pin.id, th.pin.room, th.list.AtEnd())
+		}
+		if th.pin.id == 0 {
+			followed = true
+			if !th.list.AtEnd() {
+				t.Fatalf("not at the end with %d of %d bytes, once the reply outgrew its room", len(reply.Text), len(full))
+			}
+		}
+	}
+	if !followed {
+		t.Error("the reply never outgrew its room")
+	}
+}
+
+func TestOutline(t *testing.T) {
+	a, tt := newTester()
+	tt.Type(suggestions[0].prompt)
+	tt.Key(0, ui.KeyEnter)
+	if _, ok := tt.Find("Message 1: " + suggestions[0].prompt); ok {
+		t.Error("an outline for one turn")
+	}
+	for _, s := range suggestions[1:3] {
+		tt.Type(s.prompt)
+		tt.Key(0, ui.KeyEnter)
+	}
+	tt.Advance(time.Second)
+	th := a.current()
+	turns := outlineTurns(th.Messages)
+	if len(turns) != 3 {
+		t.Fatalf("%d turns", len(turns))
+	}
+	tick, ok := tt.Find("Message 1: " + suggestions[0].prompt)
+	if !ok {
+		t.Fatalf("no tick for the first turn in %q", tt.Texts())
+	}
+	// On the left of the conversation, beside the sidebar.
+	if tick.X > sidebarWidth+60 {
+		t.Errorf("tick at %v, not on the left", tick.X)
+	}
+	// The pointer on a tick shows the card of its turn.
+	tt.Move(tick.X+4, tick.Y+tick.H/2)
+	tt.Advance(time.Second)
+	if !tt.HasText(turns[0].reply) {
+		t.Errorf("no card with %q", turns[0].reply)
+	}
+	// A click glides to its question: on its way after a moment.
+	from := th.scroll.Y
+	tt.ClickAt(tick.X+4, tick.Y+tick.H/2)
+	tt.Advance(50 * time.Millisecond)
+	if !th.scroll.Scrolling() || th.scroll.Y >= from {
+		t.Errorf("50 ms after the click: scrolling %v, from %v to %v", th.scroll.Scrolling(), from, th.scroll.Y)
+	}
+	tt.Advance(time.Second)
+	if ok, y := atTop(t, tt, suggestions[0].prompt); !ok {
+		t.Errorf("first question %v below the top after the click, want %v", y, listPadTop)
+	}
+}
+
+func TestOutlineFarTurn(t *testing.T) {
+	// Many turns in a short window: the first question was never laid out,
+	// so the glide goes by estimated heights, and the list puts it at the
+	// top as it ends.
+	a := newApp(&demo{})
+	a.next++
+	th := &thread{ID: a.next, Title: "Long"}
+	for i := range 12 {
+		a.next++
+		th.Messages = append(th.Messages, &message{ID: a.next, Role: "user", Text: "Question " + strconv.Itoa(i+1)})
+		a.next++
+		th.Messages = append(th.Messages, &message{ID: a.next, Role: "assistant", Text: demoReplies[i%len(demoReplies)]})
+	}
+	a.threads, a.selected = []*thread{th}, strconv.Itoa(th.ID)
+	tt := ui.NewTester(a.view, 1120, 520)
+	tt.Advance(time.Second)
+	tick, ok := tt.Find("Message 1: Question 1")
+	if !ok {
+		t.Fatalf("no tick in %q", tt.Texts())
+	}
+	tt.ClickAt(tick.X+4, tick.Y+tick.H/2)
+	tt.Advance(2 * time.Second)
+	if ok, y := atTop(t, tt, "Question 1"); !ok {
+		t.Errorf("first question %v below the top, want %v", y, listPadTop)
 	}
 }

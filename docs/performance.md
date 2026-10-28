@@ -80,6 +80,9 @@ word is coming in.
   500 chats a frame took 1.74 ms when the sidebar built every row and
   grouped them each frame, and takes 0.18 ms now, near the 0.11 ms of 5
   chats.
+- The outline beside the conversation ([outline.go](../outline.go)) shows
+  at most 20 ticks, and keeps each message's preview once the message is
+  complete, rather than collapsing every reply's text every frame.
 - `view` reads state; it never does I/O. No file reads, no network, no
   `os.Getenv` in a frame.
 
