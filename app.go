@@ -18,6 +18,10 @@ const (
 	titleBarHeight = 52  // the height of the hidden title bar's room
 	sidebarWidth   = 272 // the sidebar's width while it shows
 	maxWidth       = 780 // the conversation's and the composer's width at most
+	// barClear is how far a row of a list that scrolls stays from the
+	// list's right, for its wash to clear the scroll bar over it: MyGo's
+	// is 6 DIPs wide, 3 in from the edge.
+	barClear = 12
 )
 
 // message is one of a chat's: the user's, or the assistant's reply, which
@@ -391,7 +395,7 @@ func (a *app) chatRows(now time.Time) []chatRow {
 // label, and the shortcut that does it too.
 func (a *app) navRow(c *ui.Context, key string, svg *ui.SVG, label, shortcut string) ui.Element {
 	t := c.Theme()
-	b := ui.ButtonBase(c.Key(key)).Margin(0, 8).Padding(7, 12).Gap(10).Radius(8).Justify(ui.Start).Label(label)
+	b := ui.ButtonBase(c.Key(key)).Margin(0, barClear, 0, 8).Padding(7, 12).Gap(10).Radius(8).Justify(ui.Start).Label(label)
 	if b.Hovered() {
 		b.Background(a.pal.fg.Alpha(0.05))
 	}
@@ -410,7 +414,7 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 	t := c.Theme()
 	id := strconv.Itoa(th.ID)
 	selected := id == a.selected
-	row := ui.ButtonBase(c.Key(th.ID)).Margin(0, 8).Padding(8, 12).Radius(8).Justify(ui.Start).Label(th.Title)
+	row := ui.ButtonBase(c.Key(th.ID)).Margin(0, barClear, 0, 8).Padding(8, 12).Radius(8).Justify(ui.Start).Label(th.Title)
 	switch {
 	case selected:
 		row.Background(a.pal.fg.Alpha(0.07))
