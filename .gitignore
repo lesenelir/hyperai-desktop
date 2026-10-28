@@ -4,3 +4,6 @@ mygo_windows_*.syso
 
 .idea
 /hyperai-desktop
+
+# Secrets: copy .env.example to .env
+.env

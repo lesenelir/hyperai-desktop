@@ -1,54 +1,47 @@
+// HyperAI is an AI chat client in native UI: chats in a sidebar, replies
+// streamed in as Markdown, and a composer that asks the model chosen. It
+// talks to models through OpenRouter when OPENROUTER_API_KEY is set, in
+// the environment or a .env file, and to a pretend model otherwise.
 package main
 
 import (
-	_ "embed"
 	"log"
+	"path/filepath"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
-// The Dock icon follows the appearance while the app runs; Finder and the
-// disk image show resources/icon.png, the light one.
-var (
-	//go:embed resources/icon-light.png
-	iconLight []byte
-	//go:embed resources/icon-dark.png
-	iconDark []byte
-)
-
-func updateIcon() {
-	icon := iconLight
-	if mygo.Theme.IsDark() {
-		icon = iconDark
-	}
-	if err := mygo.App.Dock.SetIcon(icon); err != nil {
-		log.Print("dock icon: ", err)
-	}
-}
-
-// view builds the interface on the main thread whenever the window needs a
-// frame.
-func view(c *ui.Context) {
-	ui.Column(c).Fill().Center().Children(func() {
-		ui.Text(c, "Hello, world!").FontSize(26).Bold()
-	})
-}
-
 func main() {
 	mygo.App.WhenReady(func() {
-		updateIcon()
-		mygo.Theme.OnUpdated(updateIcon)
-		mygo.NewWindow(mygo.WindowOptions{
-			Title:     "hyperai-desktop",
-			Width:     480,
-			Height:    360,
-			MinWidth:  320,
-			MinHeight: 280,
+		// .env files set what the environment leaves unset: the project's,
+		// where `mygo dev` runs the app, then the one in the user data
+		// directory, which an app opened from the Finder, without the
+		// shell's environment, reads too.
+		envFiles := []string{".env"}
+		if dir, err := mygo.App.Path(mygo.PathUserData); err == nil {
+			envFiles = append(envFiles, filepath.Join(dir, ".env"))
+		}
+		loadEnv(envFiles...)
+		a := newApp(newProvider())
+		a.load()
+		a.win = mygo.NewWindow(mygo.WindowOptions{
+			Title:     "HyperAI",
+			Width:     1120,
+			Height:    760,
+			MinWidth:  720,
+			MinHeight: 480,
 			// Opens where the user left it last time.
 			StateKey: "main",
-			// The window shows the interface MyGo draws, not a web page.
-			Content: ui.View(view),
+			// Hide the title bar and inset the traffic lights over the
+			// sidebar (macOS); elsewhere the window controls sit in the
+			// view's title bar.
+			TitleBarStyle:  mygo.TitleBarHiddenInset,
+			TitleBarHeight: titleBarHeight,
+			// The sidebar shows the desktop's material where it can (macOS,
+			// Windows 11), and draws a background of its own elsewhere.
+			Vibrancy: mygo.VibrancySidebar,
+			Content:  ui.View(a.view),
 		})
 	})
 	if err := mygo.App.Run(); err != nil {
