@@ -210,7 +210,10 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 		})
 		return
 	}
-	ui.Column(c).Gap(10).AlignItems(ui.Stretch).Children(func() {
+	// A little further from its question than the list's gap, which the
+	// rule over it sits too close to; still closer than to the next question,
+	// with its actions between.
+	ui.Column(c).Gap(10).AlignItems(ui.Stretch).Padding(replyGap, 0, 0, 0).Children(func() {
 		if m.streaming || m.Elapsed > 0 {
 			worked(c, m)
 		}
@@ -245,6 +248,7 @@ const (
 	bodySize       = 15
 	bodyLineHeight = 1.6
 
+	replyGap      = 8  // a reply's room over it, past the list's gap
 	bubblePadY    = 9  // a question's bubble's padding over and under its text
 	actionsHeight = 28 // a message's actions' height: an iconButton's
 )
