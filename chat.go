@@ -390,10 +390,10 @@ func (a *app) composerRoom(c *ui.Context) {
 // and the status under them.
 func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 	t := c.Theme()
-	col := ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Gap(8).Padding(0, 0, 14, 0)
+	col := ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Padding(0, 0, 16, 0)
 	if th != nil {
 		box := col.Bounds()
-		col.Padding(8, 0, 14, 0).Background(t.Background).HandleInput(func(ev ui.InputEvent) bool {
+		col.Padding(8, 0, 16, 0).Background(t.Background).HandleInput(func(ev ui.InputEvent) bool {
 			// Scrolling over it scrolls the conversation, as over
 			// hyperai-next's footer, which is in the conversation; but over
 			// the field with more text than it shows, the field, to its
@@ -421,7 +421,7 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 			// Enter sends, Shift+Enter breaks the line.
 			draft := ui.TextAreaBase(c.Key("draft"), &a.draft).Lines(1, 10).FontSize(bodySize).LineHeight(bodyLineHeight).Padding(14, 16, 6, 16).
 				TrackScroll(&a.fieldScroll).
-				Placeholder("Ask anything…").Label("Message").AutoFocus().
+				Label("Message").AutoFocus().
 				OnTextKey(func(k ui.TextKey) bool {
 					if k.Key != ui.KeyEnter || k.Mods != 0 {
 						return false
@@ -432,6 +432,7 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 					}
 					return true
 				})
+			a.placeholder(c, "Ask anything…", a.draft == "" && !draft.Composing(), 14, 16, bodySize, bodyLineHeight)
 			if b := draft.Bounds(); !empty(b) {
 				a.field = b
 			}
@@ -469,24 +470,6 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 				}
 			})
 		})
-		a.status(c)
-	})
-}
-
-// status builds the row under the composer: where replies come from, and
-// how to send.
-func (a *app) status(c *ui.Context) {
-	t := c.Theme()
-	ui.Row(c).WidthPercent(100).MaxWidth(maxWidth).Gap(8).AlignItems(ui.Center).Padding(0, 8).Children(func() {
-		dot, name := t.Success, a.prov.Name()
-		if _, ok := a.prov.(*demo); ok {
-			dot, name = t.Warning, "Demo · set OPENROUTER_API_KEY for real replies"
-		}
-		ui.Box(c).Size(7, 7).Radius(3.5).Background(dot)
-		ui.Text(c, name).FontSize(12).TextColor(t.TextMuted).SingleLine().Shrink(1)
-		ui.Spacer(c)
-		ui.Text(c, shortcutText("⏎ send  ·  ⇧⏎ new line", "Enter to send · Shift+Enter for a new line")).
-			FontSize(12).TextColor(t.TextMuted).SingleLine()
 	})
 }
 

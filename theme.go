@@ -16,8 +16,11 @@ type palette struct {
 	// composer is the face of the composer and the cards, raised off the
 	// canvas; raised that of the user's messages.
 	composer, raised ui.Color
-	theme            *ui.Theme
-	md               *markdown.Theme
+	// scrim dims the window under a dialog: fg, darker than the canvas, in
+	// the light theme; in the dark one, where fg is light, bg darkened.
+	scrim ui.Color
+	theme *ui.Theme
+	md    *markdown.Theme
 }
 
 var lightPalette, darkPalette = newPalette(false), newPalette(true)
@@ -51,6 +54,10 @@ func newPalette(dark bool) *palette {
 		canvas, composer = p.bg, fg(0.045)
 	}
 	p.composer, p.raised = composer, p.fg.Alpha(0.07).Over(canvas)
+	p.scrim = p.fg.Alpha(0.16)
+	if dark {
+		p.scrim = cssOklch(0.10, 0.01, 4.45).Alpha(0.5)
+	}
 	on := func(a float32) ui.Color { return p.fg.Alpha(a).Over(canvas) }
 
 	t := ui.LightTheme()

@@ -679,10 +679,10 @@ func TestScrollOverComposer(t *testing.T) {
 			a.fieldScroll.Y, from, th.scroll.Y)
 	}
 
-	// Beside the field, under it: the conversation.
-	status, ok := tt.Find("⏎ send  ·  ⇧⏎ new line")
+	// Beside the field, by the model: the conversation.
+	status, ok := tt.Find("Model")
 	if !ok {
-		status, _ = tt.Find("Enter to send · Shift+Enter for a new line")
+		t.Fatalf("no model picker in %q", tt.Texts())
 	}
 	scroll(status.X+10, status.Y+status.H/2, -200)
 	if th.scroll.Y >= from {
@@ -982,5 +982,32 @@ func TestSearch(t *testing.T) {
 	tt.Key(ui.Cmd, ui.KeyF)
 	if a.collapsed || !a.searching {
 		t.Errorf("⌘F with the sidebar hidden: collapsed %v, searching %v", a.collapsed, a.searching)
+	}
+}
+
+// TestPlaceholder checks the composer's hint: shown while it is empty, and
+// gone as soon as anything is in it, Pinyin composing included.
+func TestPlaceholder(t *testing.T) {
+	a, tt := newTester()
+	const hint = "Ask anything…"
+	if !tt.HasText(hint) {
+		t.Fatalf("no hint in an empty composer: %q", tt.Texts())
+	}
+	tt.Type("hi")
+	if tt.HasText(hint) {
+		t.Errorf("hint over %q", a.draft)
+	}
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Key(0, ui.KeyBackspace)
+	if !tt.HasText(hint) {
+		t.Errorf("no hint once emptied")
+	}
+	tt.Compose("ni", 2)
+	if tt.HasText(hint) || a.draft != "" {
+		t.Errorf("hint over Pinyin composing, draft %q", a.draft)
+	}
+	tt.Compose("", 0)
+	if !tt.HasText(hint) {
+		t.Errorf("no hint once the composing is gone")
 	}
 }

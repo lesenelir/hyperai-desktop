@@ -299,11 +299,7 @@ func (a *app) searchPalette(c *ui.Context) {
 		t := c.Theme()
 		_, h := c.Size()
 		top := max(48, min(h*0.09, 72))
-		shade := float32(0.14)
-		if t.Dark {
-			shade = 0.3
-		}
-		back.Background(ui.Hex("#000000").Alpha(shade)).Justify(ui.Start).Padding(top, 24, 24, 24)
+		back.Background(a.pal.scrim).Justify(ui.Start).Padding(top, 24, 24, 24)
 		panel.WidthPercent(100).MaxWidth(searchWidth).MaxHeight(min(h-top-24, searchHeight)).Radius(16).
 			Background(a.pal.composer).Border(1, t.Border).Shadow(0, 16, 40, -12, a.pal.shadow(0.28)).
 			Clip().Label("Search")
@@ -322,34 +318,37 @@ func (a *app) searchPalette(c *ui.Context) {
 		ui.Column(c).Shrink(0).Padding(8, 8, 10, 8).Gap(6).Children(func() {
 			ui.Row(c).Height(40).Padding(0, 0, 0, 12).Gap(10).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, searchIcon).Size(16, 16).TextColor(t.TextMuted)
-				field := ui.TextInputBase(c.Key("query"), &a.query).Grow(1).FontSize(14).
-					Placeholder("Search").Label("Search").FocusRing(false).
-					OnTextKey(func(k ui.TextKey) bool {
-						empty := k.Text() == ""
-						switch {
-						case k.Key == ui.KeyDown && k.Mods == 0, k.Key == ui.KeyN && k.Mods == ui.Ctrl:
-							a.moveSearch(1, len(rows))
-						case k.Key == ui.KeyUp && k.Mods == 0, k.Key == ui.KeyP && k.Mods == ui.Ctrl:
-							a.moveSearch(-1, len(rows))
-						case k.Key == ui.KeyEnter && k.Mods == 0:
-							if a.searchSel < len(rows) {
-								a.runSearch(rows[a.searchSel])
+				ui.Box(c).Grow(1).MinWidth(0).Children(func() {
+					field := ui.TextInputBase(c.Key("query"), &a.query).WidthPercent(100).FontSize(14).
+						Label("Search").FocusRing(false).
+						OnTextKey(func(k ui.TextKey) bool {
+							empty := k.Text() == ""
+							switch {
+							case k.Key == ui.KeyDown && k.Mods == 0, k.Key == ui.KeyN && k.Mods == ui.Ctrl:
+								a.moveSearch(1, len(rows))
+							case k.Key == ui.KeyUp && k.Mods == 0, k.Key == ui.KeyP && k.Mods == ui.Ctrl:
+								a.moveSearch(-1, len(rows))
+							case k.Key == ui.KeyEnter && k.Mods == 0:
+								if a.searchSel < len(rows) {
+									a.runSearch(rows[a.searchSel])
+								}
+							case k.Key == ui.KeyTab && k.Mods == 0:
+								a.compose()
+							case k.Key == ui.KeyLeft && k.Mods == 0 && empty:
+								a.setSearchTab(a.searchTab - 1)
+							case k.Key == ui.KeyRight && k.Mods == 0 && empty:
+								a.setSearchTab(a.searchTab + 1)
+							default:
+								return false
 							}
-						case k.Key == ui.KeyTab && k.Mods == 0:
-							a.compose()
-						case k.Key == ui.KeyLeft && k.Mods == 0 && empty:
-							a.setSearchTab(a.searchTab - 1)
-						case k.Key == ui.KeyRight && k.Mods == 0 && empty:
-							a.setSearchTab(a.searchTab + 1)
-						default:
-							return false
-						}
-						return true
-					})
-				if a.focusSearch {
-					field.Focus()
-					a.focusSearch = false
-				}
+							return true
+						})
+					a.placeholder(c, "Search", a.query == "" && !field.Composing(), 0, 0, 14, 0)
+					if a.focusSearch {
+						field.Focus()
+						a.focusSearch = false
+					}
+				})
 				if iconButton(c.Key("close"), closeIcon, "Close").Clicked() {
 					a.searching = false
 				}

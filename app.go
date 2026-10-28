@@ -500,6 +500,22 @@ func groupByDay(threads []*thread, now time.Time) []group {
 	return groups
 }
 
+// placeholder builds s over the empty field built just before it, at top,
+// left in their parent, in its size and line height (none for the font's):
+// in fg at 40%, as hyperai-next's inputs show theirs (docs/design.md),
+// where MyGo's own takes the muted text's 70%, which reads as text. It
+// shows while show: the field empty, and no input method composing in it.
+func (a *app) placeholder(c *ui.Context, s string, show bool, top, left, size, lineHeight float32) {
+	if !show {
+		return
+	}
+	p := ui.Text(c, s).Absolute().Top(top).Left(left).FontSize(size).TextColor(a.pal.fg.Alpha(0.4)).
+		SingleLine().PassThrough()
+	if lineHeight > 0 {
+		p.LineHeight(lineHeight)
+	}
+}
+
 // iconButton creates a small square button showing an icon, described by
 // label.
 func iconButton(c *ui.Context, svg *ui.SVG, label string) ui.Element {
