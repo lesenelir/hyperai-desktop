@@ -92,13 +92,40 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 	// it streams, so a glide never ends, and draws every refresh for the
 	// whole reply (docs/performance.md).
 	th.list.FollowEnd = true
-	// A list per chat, so that each keeps where it is scrolled. The list is
-	// as wide as the pane, so that it scrolls wherever the pointer is.
-	ui.List(c.Key(th.ID), &th.list, len(th.Messages), func(i int) {
-		ui.Row(c).Justify(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).MaxWidth(maxWidth).Children(func() { a.message(c, th.Messages[i]) })
-		})
-	}).Grow(1).Padding(20, 24, 24, 24).Gap(24)
+	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+		// A list per chat, so that each keeps where it is scrolled. The list
+		// is as wide as the pane, so that it scrolls wherever the pointer is.
+		ui.List(c.Key(th.ID), &th.list, len(th.Messages), func(i int) {
+			ui.Row(c).Justify(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).MaxWidth(maxWidth).Children(func() { a.message(c, th.Messages[i]) })
+			})
+		}).Grow(1).Padding(20, 24, 24, 24).Gap(24)
+		if !th.list.AtEnd() {
+			a.scrollToEnd(c, th)
+		}
+	})
+}
+
+// scrollToEnd builds the button that brings th's end back into view, which
+// shows while the user has scrolled away from it, above the composer, as
+// hyperai-next's agent does: round, on bg, lifted by a shadow, and a
+// little more under the pointer.
+func (a *app) scrollToEnd(c *ui.Context, th *thread) {
+	const size = 32
+	t := c.Theme()
+	b := ui.ButtonBase(c.Key("scroll to end")).Size(size, size).Radius(size/2).
+		Background(a.pal.composer).Border(1, t.Border).TextColor(t.Text).
+		Label("Scroll to end").Tooltip("Scroll to end").
+		Absolute().LeftPercent(50).Bottom(16)
+	if b.Hovered() {
+		b.Translate(-size/2, -4).Shadow(0, 8, 16, -4, a.pal.shadow(0.22))
+	} else {
+		b.Translate(-size/2, 0).Shadow(0, 4, 6, -1, a.pal.shadow(0.16))
+	}
+	b.Children(func() { ui.Icon(c, arrowDownIcon).Size(16, 16) })
+	if b.Clicked() {
+		th.list.ScrollToEnd()
+	}
 }
 
 // message builds a message: the user's in a bubble on the right, the

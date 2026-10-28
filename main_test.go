@@ -262,3 +262,29 @@ func TestBatcher(t *testing.T) {
 		t.Errorf("commits %q, want a|bcd|ef", got)
 	}
 }
+
+func TestScrollToEnd(t *testing.T) {
+	a, tt := newTester()
+	// Enough replies to scroll.
+	for _, s := range suggestions {
+		tt.Type(s.prompt)
+		tt.Key(0, ui.KeyEnter)
+	}
+	tt.Advance(time.Second)
+	th := a.current()
+	if !th.list.AtEnd() || tt.HasText("Scroll to end") {
+		t.Fatalf("at the end %v, with the button %v", th.list.AtEnd(), tt.HasText("Scroll to end"))
+	}
+	tt.Scroll(700, 300, 0, -2000)
+	tt.Advance(time.Second)
+	if th.list.AtEnd() || !tt.HasText("Scroll to end") {
+		t.Fatalf("scrolled up: at the end %v, with the button %v", th.list.AtEnd(), tt.HasText("Scroll to end"))
+	}
+	if err := tt.Click("Scroll to end"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if !th.list.AtEnd() || tt.HasText("Scroll to end") {
+		t.Errorf("after the click: at the end %v, with the button %v", th.list.AtEnd(), tt.HasText("Scroll to end"))
+	}
+}
