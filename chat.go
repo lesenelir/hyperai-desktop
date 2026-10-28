@@ -388,10 +388,18 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 	t := c.Theme()
 	col := ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Gap(8).Padding(0, 0, 14, 0)
 	if th != nil {
+		box := col.Bounds()
 		col.Padding(8, 0, 14, 0).Background(t.Background).HandleInput(func(ev ui.InputEvent) bool {
 			// Scrolling over it scrolls the conversation, as over
-			// hyperai-next's footer, which is in the conversation.
+			// hyperai-next's footer, which is in the conversation; but over
+			// the field with more text than it shows, the field, to its
+			// ends and no further, as a browser's text area does.
 			if ev.Kind != ui.InputScroll || ev.DY == 0 {
+				return false
+			}
+			x, y := box.X+ev.X, box.Y+ev.Y
+			f := a.field
+			if a.fieldScroll.MaxY > 0 && x >= f.X && x < f.X+f.W && y >= f.Y && y < f.Y+f.H {
 				return false
 			}
 			th.scroll.Y = max(0, min(th.scroll.Y+ev.DY, th.scroll.MaxY))
@@ -408,6 +416,7 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 		box.Children(func() {
 			// Enter sends, Shift+Enter breaks the line.
 			draft := ui.TextAreaBase(c.Key("draft"), &a.draft).Lines(1, 10).FontSize(bodySize).LineHeight(bodyLineHeight).Padding(14, 16, 6, 16).
+				TrackScroll(&a.fieldScroll).
 				Placeholder("Ask anything…").Label("Message").AutoFocus().
 				OnTextKey(func(k ui.TextKey) bool {
 					if k.Key != ui.KeyEnter || k.Mods != 0 {

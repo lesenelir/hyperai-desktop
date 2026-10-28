@@ -621,3 +621,69 @@ func TestComposerResizes(t *testing.T) {
 		}
 	})
 }
+
+// TestScrollOverComposer checks what the wheel scrolls over the composer:
+// the field while it has more lines than it shows, to its ends and no
+// further; the conversation over the field when it shows all its text, and
+// beside the field.
+func TestScrollOverComposer(t *testing.T) {
+	a, tt := newTester()
+	for _, s := range suggestions {
+		tt.Type(s.prompt)
+		tt.Key(0, ui.KeyEnter)
+	}
+	tt.Advance(time.Second)
+	th := a.current()
+	f := a.field
+	scroll := func(x, y, dy float32) {
+		tt.Scroll(x, y, 0, dy)
+		tt.Advance(time.Second)
+	}
+
+	// A field that shows all its text: the conversation.
+	from := th.scroll.Y
+	scroll(f.X+40, f.Y+f.H/2, -200)
+	if th.scroll.Y >= from {
+		t.Errorf("over a short field: the conversation from %v to %v, want up", from, th.scroll.Y)
+	}
+	th.list.ScrollToEnd()
+	tt.Advance(time.Second)
+
+	// More lines than the field shows: the field, up and down.
+	for i := 0; i < 20; i++ {
+		tt.Type("line")
+		tt.Key(ui.Shift, ui.KeyEnter)
+	}
+	tt.Advance(time.Second)
+	f = a.field
+	if a.fieldScroll.MaxY <= 0 {
+		t.Fatalf("the field does not scroll: %+v", a.fieldScroll)
+	}
+	from, fieldFrom := th.scroll.Y, a.fieldScroll.Y
+	scroll(f.X+40, f.Y+f.H/2, -100)
+	if a.fieldScroll.Y >= fieldFrom || th.scroll.Y != from {
+		t.Errorf("over a long field, up: the field from %v to %v, the conversation from %v to %v",
+			fieldFrom, a.fieldScroll.Y, from, th.scroll.Y)
+	}
+	// At its top, no further: the conversation stays.
+	scroll(f.X+40, f.Y+f.H/2, -5000)
+	if a.fieldScroll.Y != 0 || th.scroll.Y != from {
+		t.Errorf("over a long field, past its top: the field at %v, the conversation from %v to %v",
+			a.fieldScroll.Y, from, th.scroll.Y)
+	}
+	scroll(f.X+40, f.Y+f.H/2, 100)
+	if a.fieldScroll.Y <= 0 || th.scroll.Y != from {
+		t.Errorf("over a long field, down: the field at %v, the conversation from %v to %v",
+			a.fieldScroll.Y, from, th.scroll.Y)
+	}
+
+	// Beside the field, under it: the conversation.
+	status, ok := tt.Find("⏎ send  ·  ⇧⏎ new line")
+	if !ok {
+		status, _ = tt.Find("Enter to send · Shift+Enter for a new line")
+	}
+	scroll(status.X+10, status.Y+status.H/2, -200)
+	if th.scroll.Y >= from {
+		t.Errorf("over the status: the conversation from %v to %v, want up", from, th.scroll.Y)
+	}
+}
