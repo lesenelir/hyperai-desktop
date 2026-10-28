@@ -318,6 +318,7 @@ func atTop(t *testing.T, tt *ui.Tester, text string) (bool, float32) {
 
 func TestPinQuestionToTop(t *testing.T) {
 	a, tt := newTester()
+	tt.SetSize(1120, 1000) // tall enough for each reply under its question
 	for _, s := range suggestions[:3] {
 		tt.Type(s.prompt)
 		tt.Key(0, ui.KeyEnter)
@@ -479,6 +480,7 @@ func TestFormatTime(t *testing.T) {
 
 func TestCopyMessage(t *testing.T) {
 	a, tt := newTester()
+	tt.SetSize(1120, 1600) // the question and its whole reply show
 	tt.Type("How do I cache?")
 	tt.Key(0, ui.KeyEnter)
 	th := a.threads[0]

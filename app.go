@@ -88,10 +88,8 @@ type app struct {
 	// copiedUntil.
 	copied      int
 	copiedUntil time.Time
-	// lineHeight is how tall a line of text is, measured once.
-	lineHeight float32
-	pal        *palette // the frame's colors
-	md         markdown.Options
+	pal         *palette // the frame's colors
+	md          markdown.Options
 	// busy is the reply streaming in, nil when none, and cancel stops it.
 	busy   *message
 	cancel context.CancelFunc

@@ -77,6 +77,7 @@ func newPalette(dark bool) *palette {
 	md.CodeBlockBackground, md.CodeBlockBorder = composer, on(0.10)
 	md.QuoteBar, md.Rule, md.TableBorder = on(0.2), on(0.12), on(0.12)
 	md.TableHeader = p.fg.Alpha(0.03)
+	md.FontSize, md.LineHeight = bodySize, bodyLineHeight
 	p.md = md
 	return p
 }

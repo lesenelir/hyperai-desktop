@@ -151,8 +151,8 @@ func (a *app) outlineCard(c *ui.Context, turn outlineTurn, box, area ui.Rect) {
 		if prompt == "" {
 			prompt = "Message"
 		}
-		ui.Text(c, prompt).FontWeight(600).SingleLine()
-		ui.Text(c, turn.reply).FontSize(12.5).LineHeight(1.6).TextColor(t.TextMuted).MaxLines(3)
+		ui.Text(c, prompt).FontSize(14).FontWeight(600).SingleLine()
+		ui.Text(c, turn.reply).FontSize(14).LineHeight(1.6).TextColor(t.TextMuted).MaxLines(3)
 	})
 	if h := card.Bounds().H; h != a.cardHeight {
 		a.cardHeight = h

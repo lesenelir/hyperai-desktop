@@ -75,8 +75,8 @@ func (a *app) welcome(c *ui.Context) {
 				}
 				card.Children(func() {
 					ui.Column(c).Gap(4).MinWidth(0).Children(func() {
-						ui.Text(c, s.title).FontSize(13).FontWeight(600)
-						ui.Text(c, s.prompt).FontSize(12).TextColor(t.TextMuted).MaxLines(2)
+						ui.Text(c, s.title).FontSize(14).FontWeight(600)
+						ui.Text(c, s.prompt).FontSize(13).TextColor(t.TextMuted).MaxLines(2)
 					})
 				})
 				if card.Clicked() {
@@ -184,17 +184,14 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 			ui.Spacer(c)
 			// Beside the bubble, centered on its first line, over the
 			// bubble's padding: the time, then the button next to the bubble.
-			if a.lineHeight == 0 {
-				_, a.lineHeight = c.MeasureText(0, ui.Span{Text: "M", Size: t.FontSize})
-			}
-			actions := ui.Row(c).Height(actionsHeight).Margin(bubblePadY+a.lineHeight/2-actionsHeight/2, 0, 0, 0).
+			actions := ui.Row(c).Height(actionsHeight).Margin(bubblePadY+bodySize*bodyLineHeight/2-actionsHeight/2, 0, 0, 0).
 				Gap(4).AlignItems(ui.Center)
 			actions.Opacity(actions.Animate("opacity", shown(hover), revealDuration))
 			actions.Children(func() {
 				a.messageTime(c, m)
 				a.copyButton(c, m)
 			})
-			ui.Text(c, m.Text).Selectable().Padding(bubblePadY, 14).Radius(14).Background(a.pal.raised).MaxWidth(560)
+			ui.Text(c, m.Text).FontSize(bodySize).LineHeight(bodyLineHeight).Selectable().Padding(bubblePadY, 14).Radius(14).Background(a.pal.raised).MaxWidth(560)
 		})
 		return
 	}
@@ -210,7 +207,7 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 			markdown.View(c, m.Text, &a.md)
 		}
 		if m.Error != "" {
-			ui.Text(c, m.Error).FontSize(13).TextColor(t.Danger).Selectable()
+			ui.Text(c, m.Error).FontSize(14).TextColor(t.Danger).Selectable()
 		}
 		// Under the reply: the button on the text's edge, the time at the
 		// far end.
@@ -227,6 +224,12 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 }
 
 const (
+	// The conversation's text — questions, replies, and the composer —
+	// is 15 DIPs on lines of 1.6, as hyperai-next's (text-[15px],
+	// leading-relaxed); the rest of the window keeps the theme's size.
+	bodySize       = 15
+	bodyLineHeight = 1.6
+
 	bubblePadY    = 9  // a question's bubble's padding over and under its text
 	actionsHeight = 28 // a message's actions' height: an iconButton's
 )
@@ -328,7 +331,7 @@ func (a *app) composer(c *ui.Context) {
 			Background(a.pal.composer).Shadow(0, 4, 16, -4, a.pal.shadow(0.12))
 		box.Children(func() {
 			// Enter sends, Shift+Enter breaks the line.
-			draft := ui.TextAreaBase(c.Key("draft"), &a.draft).Lines(1, 10).Padding(14, 16, 6, 16).
+			draft := ui.TextAreaBase(c.Key("draft"), &a.draft).Lines(1, 10).FontSize(bodySize).LineHeight(bodyLineHeight).Padding(14, 16, 6, 16).
 				Placeholder("Ask anything…").Label("Message").AutoFocus().
 				OnTextKey(func(k ui.TextKey) bool {
 					if k.Key != ui.KeyEnter || k.Mods != 0 {
