@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -685,5 +687,120 @@ func TestScrollOverComposer(t *testing.T) {
 	scroll(status.X+10, status.Y+status.H/2, -200)
 	if th.scroll.Y >= from {
 		t.Errorf("over the status: the conversation from %v to %v, want up", from, th.scroll.Y)
+	}
+}
+
+// TestHistory is Waku's session_navigation tests, on chat IDs.
+func TestHistory(t *testing.T) {
+	var h history
+	h.visit("1", "2")
+	h.visit("2", "3")
+	step := func(got string, ok bool, want string) {
+		t.Helper()
+		if !ok && want != "" || ok && got != want {
+			t.Errorf("went to %q (%v), want %q", got, ok, want)
+		}
+	}
+	got, ok := h.goBack("3")
+	step(got, ok, "2")
+	got, ok = h.goBack("2")
+	step(got, ok, "1")
+	got, ok = h.goForward("1")
+	step(got, ok, "2")
+	// A new branch drops what was forward.
+	h.visit("2", "4")
+	got, ok = h.goForward("4")
+	step(got, ok, "")
+	got, ok = h.goBack("4")
+	step(got, ok, "2")
+
+	// Deleted chats are gone from it, and the steps they leave to nowhere.
+	h = history{}
+	h.visit("1", "2")
+	h.visit("2", "3")
+	got, ok = h.goBack("3")
+	step(got, ok, "2")
+	h.remove("1", "2")
+	h.remove("3", "2")
+	if len(h.back) != 0 || len(h.forward) != 0 {
+		t.Errorf("back %q, forward %q after removing both sides", h.back, h.forward)
+	}
+	h = history{}
+	h.visit("1", "2")
+	h.visit("2", "1")
+	h.visit("1", "3")
+	h.remove("2", "3") // back was 1, 2, 1: one step to 1
+	if !slices.Equal(h.back, []string{"1"}) {
+		t.Errorf("back %q, want [1]", h.back)
+	}
+}
+
+func TestBackForward(t *testing.T) {
+	a, tt := newTester()
+	back := "Back (" + shortcutText("⌘[", "Alt+Left") + ")"
+	forward := "Forward (" + shortcutText("⌘]", "Alt+Right") + ")"
+	backKey, forwardKey := func() { tt.Key(ui.Super, ui.KeyBracketLeft) }, func() { tt.Key(ui.Super, ui.KeyBracketRight) }
+	if runtime.GOOS != "darwin" {
+		backKey, forwardKey = func() { tt.Key(ui.Alt, ui.KeyLeft) }, func() { tt.Key(ui.Alt, ui.KeyRight) }
+	}
+	send := func(s string) string {
+		tt.Type(s)
+		tt.Key(0, ui.KeyEnter)
+		tt.Advance(time.Second)
+		return a.selected
+	}
+	at := func(want string) {
+		t.Helper()
+		if a.selected != want {
+			t.Errorf("showing %q, want %q", a.selected, want)
+		}
+	}
+
+	// A chat started from a new one takes its place: nothing to go back to.
+	first := send("first")
+	if err := tt.Click(back); err != nil {
+		t.Fatal(err)
+	}
+	at(first)
+	tt.Key(ui.Cmd, ui.KeyN)
+	second := send("second")
+
+	// The buttons, the keys (with the composer focused), and the mouse's.
+	if err := tt.Click(back); err != nil {
+		t.Fatal(err)
+	}
+	at(first)
+	forwardKey()
+	at(second)
+	backKey()
+	at(first)
+	tt.Key(0, ui.KeyForward)
+	at(second)
+	tt.Key(0, ui.KeyBack)
+	at(first)
+	// Choosing a chat drops what was forward.
+	tt.Key(ui.Cmd, ui.KeyN)
+	at("")
+	forwardKey()
+	at("")
+	backKey()
+	at(first)
+
+	// A chat deleted is gone from the history.
+	if err := tt.Click(forward); err != nil {
+		t.Fatal(err)
+	}
+	at("")
+	if err := tt.Click(a.threads[1].Title); err != nil {
+		t.Fatal(err)
+	}
+	at(second)
+	a.remove(a.threads[0]) // first
+	backKey()
+	at("")
+	backKey()
+	at("")
+	if len(a.nav.back) != 0 {
+		t.Errorf("back %q after deleting the chat before", a.nav.back)
 	}
 }

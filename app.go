@@ -81,7 +81,8 @@ type app struct {
 	model    string
 	// collapsed hides the sidebar.
 	collapsed  bool
-	focusDraft bool // gives the composer the focus in the next frame
+	focusDraft bool    // gives the composer the focus in the next frame
+	nav        history // the chats shown before and after the one shown
 	// cardHeight is how tall the outline's card was laid out.
 	cardHeight float32
 	// footer is how tall the composer was laid out, which floats over the
@@ -129,7 +130,7 @@ func (a *app) current() *thread {
 // newChat shows an empty chat, which becomes one once its first message is
 // sent.
 func (a *app) newChat() {
-	a.selected, a.focusDraft = "", true
+	a.open("")
 }
 
 // send sends text in the chat shown, starting one when it is new, and
@@ -233,9 +234,11 @@ func (a *app) remove(th *thread) {
 	}
 	a.threads = slices.DeleteFunc(a.threads, func(t *thread) bool { return t == th })
 	a.rev++
-	if a.selected == strconv.Itoa(th.ID) {
+	id := strconv.Itoa(th.ID)
+	if a.selected == id {
 		a.selected = ""
 	}
+	a.nav.remove(id, a.selected)
 	a.save()
 }
 
@@ -260,6 +263,7 @@ func (a *app) view(c *ui.Context) {
 	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyS) {
 		a.collapsed = !a.collapsed
 	}
+	a.historyKeys(c)
 	if a.busy != nil && c.Shortcut(0, ui.KeyEscape) {
 		a.stop()
 	}
@@ -285,7 +289,8 @@ func (a *app) view(c *ui.Context) {
 		if w > 0 {
 			ui.Box(c).Width(1).Background(t.Border)
 		}
-		a.pane(c, 20+(1-shown)*(bar.Left+40))
+		// Clear of the toggle, Back and Forward as the sidebar hides.
+		a.pane(c, 20+(1-shown)*(bar.Left+108))
 	})
 
 	// The sidebar's toggle, beside the window controls whether the sidebar
@@ -299,6 +304,7 @@ func (a *app) view(c *ui.Context) {
 	if toggle.Clicked() {
 		a.collapsed = !a.collapsed
 	}
+	a.historyButtons(c, bar.Left+8+30+6)
 }
 
 // sidebar builds, as Waku's does, New chat over the chats by when they
@@ -411,7 +417,7 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 		}
 	})
 	if row.Clicked() {
-		a.selected, a.focusDraft = id, true
+		a.open(id)
 	}
 }
 
