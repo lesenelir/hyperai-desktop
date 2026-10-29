@@ -1502,7 +1502,7 @@ func TestCodeTheme(t *testing.T) {
 	// with a light and a dark side.
 	about := "The colors of code, in the app's light or dark as the app is."
 	toggle(t, tt, "Code theme", about)
-	want := []string{"Default", "-", "VS Code", "Xcode", "One", "-", "Catppuccin", "Everforest", "Gruvbox", "Rosé Pine", "Solarized", "Tokyo Night"}
+	want := []string{"Default", "-", "VS Code", "Xcode", "One", "-", "Gruvbox", "Kanagawa", "Night Owl", "Tokyo Night", "Vitesse"}
 	if got := tt.Menu(); !slices.Equal(got, want) {
 		t.Fatalf("menu %q, want %q", got, want)
 	}
@@ -1548,6 +1548,50 @@ func TestCodeTheme(t *testing.T) {
 	tt.Advance(time.Second)
 	if a.codeTheme != "" || a.md.Theme.CodeColors != darkPalette.md.CodeColors {
 		t.Errorf("theme %q, colors not MyGo's", a.codeTheme)
+	}
+}
+
+// TestCodeThemesRead holds every code theme to what docs/code-themes.md
+// asks of them, on the app's own code surfaces, light and dark: text at
+// 4.5:1 at least, as WCAG's AA asks of text; keywords, strings, functions,
+// types and numbers at 3:1; comments, faint by design, at 2.3:1.
+func TestCodeThemesRead(t *testing.T) {
+	luminance := func(c ui.Color) float64 {
+		f := func(v uint8) float64 {
+			x := float64(v) / 255
+			if x <= 0.04045 {
+				return x / 12.92
+			}
+			return math.Pow((x+0.055)/1.055, 2.4)
+		}
+		return 0.2126*f(c.R) + 0.7152*f(c.G) + 0.0722*f(c.B)
+	}
+	contrast := func(a, b ui.Color) float64 {
+		la, lb := luminance(a), luminance(b)
+		return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+	}
+	floors := []struct {
+		kind  editor.TokenKind
+		floor float64
+	}{
+		{editor.TokenText, 4.5},
+		{editor.TokenKeyword, 3}, {editor.TokenString, 3}, {editor.TokenFunction, 3},
+		{editor.TokenType, 3}, {editor.TokenNumber, 3},
+		{editor.TokenComment, 2.3},
+	}
+	for _, ct := range codeThemes[1:] {
+		for _, p := range []*palette{lightPalette, darkPalette} {
+			if ct.light == nil || ct.dark == nil {
+				t.Fatalf("%s has no light side or no dark one", ct.title)
+			}
+			et := ct.colors(p.theme.Dark).editorTheme(p.theme)
+			surface := p.md.CodeBlockBackground
+			for _, f := range floors {
+				if r := contrast(et.TokenColor(f.kind), surface); r < f.floor {
+					t.Errorf("%s (dark %v): token %d at %.2f:1, under %.1f:1", ct.title, p.theme.Dark, f.kind, r, f.floor)
+				}
+			}
+		}
 	}
 }
 
