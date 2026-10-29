@@ -68,20 +68,55 @@ func (h *history) remove(id, cur string) {
 // open shows the chat id ("" for a new one), which Back then returns from.
 func (a *app) open(id string) {
 	a.nav.visit(a.selected, id)
-	a.selected, a.focusDraft, a.settings = id, true, false
+	a.show(id)
+	a.focusDraft, a.settings = true, false
 }
 
 // goBack shows the chat shown before, if any.
 func (a *app) goBack() {
 	if id, ok := a.nav.goBack(a.selected); ok {
-		a.selected, a.focusDraft, a.settings = id, true, false
+		a.show(id)
+		a.focusDraft, a.settings = true, false
 	}
 }
 
 // goForward shows again the chat gone back from, if any.
 func (a *app) goForward() {
 	if id, ok := a.nav.goForward(a.selected); ok {
-		a.selected, a.focusDraft, a.settings = id, true, false
+		a.show(id)
+		a.focusDraft, a.settings = true, false
+	}
+}
+
+// show makes id the chat shown ("" for a new one), with the draft its
+// composer held: what the composer holds stays with the chat it was
+// written in, at once, so that what is written next goes to the chat
+// shown, as the search's query does.
+func (a *app) show(id string) {
+	if id == a.selected {
+		return
+	}
+	a.keepDraft()
+	a.selected = id
+	a.draft = a.newDraft
+	if th := a.current(); th != nil {
+		a.draft = th.Draft
+	}
+	// From its first line.
+	a.fieldScroll = ui.ScrollState{}
+}
+
+// keepDraft keeps what the composer holds with the chat shown, saving the
+// chats where a chat's changed: a new chat's is not kept past the app.
+func (a *app) keepDraft() {
+	th := a.current()
+	if th == nil {
+		a.newDraft = a.draft
+		return
+	}
+	if th.Draft != a.draft {
+		th.Draft = a.draft
+		a.save()
 	}
 }
 

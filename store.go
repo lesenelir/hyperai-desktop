@@ -26,7 +26,7 @@ func (a *app) loadFrom(dir string) {
 	a.loadConf(dir)
 	defer func() {
 		if a.onLaunch == launchLast && a.thread(a.keptChat) != nil {
-			a.selected = a.keptChat
+			a.show(a.keptChat)
 		}
 	}()
 	a.path = filepath.Join(dir, "chats.json")

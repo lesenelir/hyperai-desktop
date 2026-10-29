@@ -97,6 +97,113 @@ func TestSuggestionAndNewChat(t *testing.T) {
 	}
 }
 
+func TestDrafts(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&demo{})
+	a.loadFrom(dir)
+	tt := ui.NewTester(a.view, 1120, 760)
+	send := func(text string) string {
+		t.Helper()
+		tt.Type(text)
+		tt.Key(0, ui.KeyEnter)
+		tt.Frame()
+		return a.selected
+	}
+	chatA := send("First question")
+	chatB := (func() string { a.newChat(); tt.Frame(); return send("Second question") })()
+
+	// What the composer holds stays with the chat it was written in.
+	tt.Type("Draft of B")
+	a.open(chatA)
+	tt.Frame()
+	if a.draft != "" {
+		t.Fatalf("chat A shows B's draft %q", a.draft)
+	}
+	tt.Type("Draft of A")
+	a.newChat()
+	tt.Frame()
+	if a.draft != "" {
+		t.Fatalf("a new chat shows %q", a.draft)
+	}
+	tt.Type("Draft of a new chat")
+	a.open(chatB)
+	tt.Frame()
+	// The field holds it as the composer does: what is typed goes after it.
+	tt.Type(", more")
+	if a.draft != "Draft of B, more" {
+		t.Errorf("chat B's draft %q", a.draft)
+	}
+	for _, c := range []struct{ id, want string }{{chatA, "Draft of A"}, {"", "Draft of a new chat"}, {chatB, "Draft of B, more"}} {
+		a.open(c.id)
+		tt.Frame()
+		if a.draft != c.want {
+			t.Errorf("chat %q shows %q, want %q", c.id, a.draft, c.want)
+		}
+	}
+	// Back and Forward too.
+	a.goBack()
+	tt.Frame()
+	if a.draft != "Draft of a new chat" {
+		t.Errorf("Back shows %q", a.draft)
+	}
+	a.goForward()
+	tt.Frame()
+	if a.draft != "Draft of B, more" {
+		t.Errorf("Forward shows %q", a.draft)
+	}
+
+	// Sending empties the chat's draft; the others stay.
+	tt.Key(ui.Cmd, ui.KeyA)
+	send("Third question")
+	if a.draft != "" || a.thread(chatB).Draft != "" {
+		t.Errorf("after sending: draft %q, kept %q", a.draft, a.thread(chatB).Draft)
+	}
+	a.open(chatA)
+	tt.Frame()
+	if a.draft != "Draft of A" {
+		t.Errorf("chat A's draft %q after B sent", a.draft)
+	}
+
+	// A chat's draft is kept with the chats, for the next start.
+	a.open(chatB)
+	tt.Frame()
+	a.saver.wait()
+	b := newApp(&demo{})
+	b.loadFrom(dir)
+	if th := b.thread(chatA); th == nil || th.Draft != "Draft of A" {
+		t.Errorf("after a restart, chat A keeps %+v", th)
+	}
+
+	// The new chat's draft, sent, is gone.
+	a.newChat()
+	tt.Frame()
+	send(", sent")
+	a.newChat()
+	tt.Frame()
+	if a.draft != "" {
+		t.Errorf("a new chat shows %q after its draft was sent", a.draft)
+	}
+
+	// The search's new chat holds its query, and A keeps its draft.
+	a.open(chatA)
+	tt.Frame()
+	a.query = "From the search"
+	a.compose()
+	tt.Frame()
+	if a.draft != "From the search" || a.thread(chatA).Draft != "Draft of A" {
+		t.Errorf("composed %q, A keeps %q", a.draft, a.thread(chatA).Draft)
+	}
+
+	// A chat deleted while shown takes its draft with it.
+	a.open(chatA)
+	tt.Frame()
+	a.remove(a.thread(chatA))
+	tt.Frame()
+	if a.selected != "" || a.draft != "From the search" {
+		t.Errorf("after deleting the chat shown: chat %q, draft %q", a.selected, a.draft)
+	}
+}
+
 func TestRemove(t *testing.T) {
 	a, tt := newTester()
 	tt.Type("Hello")

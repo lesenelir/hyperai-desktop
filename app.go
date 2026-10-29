@@ -67,6 +67,7 @@ type thread struct {
 	Updated  time.Time  `json:"updated"`
 	Model    string     `json:"model,omitempty"`    // the model asked last
 	Provider string     `json:"provider,omitempty"` // Model's, "" in chats kept before it
+	Draft    string     `json:"draft,omitempty"`    // what its composer held as it was left
 	Messages []*message `json:"messages"`
 	list     ui.ListState
 	// scroll is where list is scrolled, which the button bringing the end
@@ -99,7 +100,8 @@ type app struct {
 	threads  []*thread
 	selected string // the ID of the chat shown, "" for a new chat
 	next     int    // the last ID given to a chat or a message
-	draft    string // what the composer holds
+	draft    string // what the composer holds, of the chat shown (nav.go)
+	newDraft string // what a new chat's composer held as it was left
 	model    string // the model asked, of prov
 	// provs are the providers the composer offers the models of, those
 	// with an API key and a model (providers.go), or fallback where none
@@ -314,9 +316,10 @@ func (a *app) send(text string) {
 		a.next++
 		th = &thread{ID: a.next, Title: title(text)}
 		a.threads = append(a.threads, th)
-		// The chat asks the model chosen for it while it was new.
+		// The chat asks the model chosen for it while it was new, and the
+		// new chat's draft is what was sent.
 		a.selected = strconv.Itoa(th.ID)
-		a.modelFor = a.selected
+		a.modelFor, a.newDraft = a.selected, ""
 	}
 	a.next++
 	th.Messages = append(th.Messages, &message{ID: a.next, Role: "user", Text: text, Time: time.Now()})
@@ -329,7 +332,7 @@ func (a *app) send(text string) {
 	th.Messages = append(th.Messages, reply)
 	th.Updated, th.Model, th.Provider = time.Now(), a.model, a.prov.ID()
 	a.rev++
-	a.draft = ""
+	a.draft, th.Draft = "", ""
 	a.busy = reply
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
@@ -450,6 +453,9 @@ func (a *app) deleteAlert(c *ui.Context) {
 // removeAll deletes every chat, stopping the reply.
 func (a *app) removeAll() {
 	a.stop()
+	if a.selected != "" {
+		a.draft = a.newDraft
+	}
 	a.threads, a.selected = nil, ""
 	a.nav = history{}
 	a.rev++
@@ -465,7 +471,8 @@ func (a *app) remove(th *thread) {
 	a.rev++
 	id := strconv.Itoa(th.ID)
 	if a.selected == id {
-		a.selected = ""
+		// Its draft goes with it.
+		a.selected, a.draft = "", a.newDraft
 	}
 	a.nav.remove(id, a.selected)
 	a.save()

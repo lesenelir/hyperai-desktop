@@ -74,6 +74,8 @@ func main() {
 		}
 		// The chats are written on a goroutine: let the last write end.
 		mygo.App.OnQuit(func() {
+			// The draft of the chat shown, kept with it.
+			a.keepDraft()
 			a.saver.wait()
 			a.layoutSaver.wait()
 			a.confSaver.wait()
