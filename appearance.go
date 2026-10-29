@@ -239,13 +239,13 @@ func (a *app) fontButton(c *ui.Context, label string, font *string, code bool) {
 }
 
 // codeThemeButton builds the pop-up button that chooses the code theme:
-// Default, then the others, the one chosen checked.
+// its groups apart, the one chosen checked.
 func (a *app) codeThemeButton(c *ui.Context) {
 	shown := codeThemeNamed(a.codeTheme)
 	a.popUpButton(c, "Code theme", shown.title, func(m *ui.Menu) {
 		for i, ct := range codeThemes {
-			if i == 1 {
-				m.Separator() // after Default
+			if i > 0 && ct.group != codeThemes[i-1].group {
+				m.Separator()
 			}
 			if m.Item(ct.title).Checked(ct.key == a.codeTheme).Chosen() && ct.key != a.codeTheme {
 				a.codeTheme = ct.key

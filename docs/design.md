@@ -216,13 +216,16 @@ A small button that floats over the conversation (scroll to end) rests at
   as macOS's font settings — System, a separator, then every family
   installed, the one chosen checked; for code, the monospaced families,
   and the rest under Other Fonts. Under them, code's theme, as the
-  fonts': Default (MyGo's GitHub colors), One, Solarized, Catppuccin,
-  Gruvbox, Tokyo Night. A theme colors the tokens and nothing else: a
+  fonts': Default (MyGo's GitHub colors); the editors' own, VS Code,
+  Xcode and One; then by name Catppuccin, Everforest, Gruvbox, Rosé Pine,
+  Solarized and Tokyo Night, each group apart in the menu. A theme colors
+  the tokens and nothing else: a
   block keeps the app's surface, hairline and header, and the theme's
   light side or dark one as the app is, so that code sits with the
   conversation rather than as a patch of another app's window. A theme
   with no light side (Nord, Dracula) has no place: its colors, made for
-  its dark background, do not read on the light app's. Code in a line
+  its dark background, do not read on the light app's; nor one whose
+  light side is too faint (Ayu: most tokens under 2.5:1). Code in a line
   keeps the accent. No sample cards: the preview under them, a question
   and a reply with code in a line and in a block, shows all of it.
 - **Search**: a card near the window's top over a scrim, its field over

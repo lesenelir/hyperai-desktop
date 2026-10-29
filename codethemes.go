@@ -21,17 +21,51 @@ type codeColors struct {
 // codeTheme is a theme the settings offer for code: its light side and
 // its dark one, for the app's appearances. A theme with no light side, as
 // Nord and Dracula, has no place here: its colors, made for its dark
-// background, do not read on the light app's.
+// background, do not read on the light app's; nor one whose light side
+// is too faint to read, as Ayu's, most of whose tokens are under 2.5:1.
 type codeTheme struct {
 	key, title  string
+	group       int
 	light, dark *codeColors
 }
 
-// codeThemes are the code themes, in their menu's order: Default, MyGo's
-// GitHub colors, then the others.
+// The groups of codeThemes, which their menu draws a line between: MyGo's
+// Default; the editors' own themes; and the themes people made for many
+// editors.
+const (
+	defaultTheme = iota
+	editorThemes
+	communityThemes
+)
+
+// codeThemes are the code themes, in their menu's order, by group:
+// Default, MyGo's GitHub colors; VS Code's, Xcode's and Atom's One; then
+// the others, by name.
 var codeThemes = []codeTheme{
 	{key: "", title: "Default"},
-	{"one", "One", &codeColors{
+	{"vscode", "VS Code", editorThemes, &codeColors{ // Light+
+		text: "#000000", comment: "#008000",
+		keyword: "#0000ff", str: "#a31515", number: "#098658", function: "#795e26",
+		typ: "#267f99", property: "#001080", tag: "#800000", operator: "#000000",
+		deleted: "#a31515", inserted: "#098658",
+	}, &codeColors{ // Dark+
+		text: "#d4d4d4", comment: "#6a9955",
+		keyword: "#569cd6", str: "#ce9178", number: "#b5cea8", function: "#dcdcaa",
+		typ: "#4ec9b0", property: "#9cdcfe", tag: "#569cd6", operator: "#d4d4d4",
+		deleted: "#f44747", inserted: "#b5cea8",
+	}},
+	{"xcode", "Xcode", editorThemes, &codeColors{ // Default (Light)
+		text: "#262626", comment: "#5d6c79",
+		keyword: "#9b2393", str: "#c41a16", number: "#1c00cf", function: "#326d74",
+		typ: "#0b4f79", property: "#326d74", tag: "#9b2393", operator: "#262626",
+		deleted: "#c41a16", inserted: "#326d74",
+	}, &codeColors{ // Default (Dark)
+		text: "#dfdfe0", comment: "#6c7986",
+		keyword: "#fc5fa3", str: "#fc6a5d", number: "#d0bf69", function: "#67b7a4",
+		typ: "#5dd8ff", property: "#67b7a4", tag: "#fc5fa3", operator: "#dfdfe0",
+		deleted: "#fc6a5d", inserted: "#67b7a4",
+	}},
+	{"one", "One", editorThemes, &codeColors{
 		text: "#383a42", comment: "#a0a1a7",
 		keyword: "#a626a4", str: "#50a14f", number: "#986801", function: "#4078f2",
 		typ: "#c18401", property: "#e45649", tag: "#e45649", operator: "#0184bc",
@@ -42,18 +76,7 @@ var codeThemes = []codeTheme{
 		typ: "#e5c07b", property: "#e06c75", tag: "#e06c75", operator: "#56b6c2",
 		deleted: "#e06c75", inserted: "#98c379",
 	}},
-	{"solarized", "Solarized", &codeColors{
-		text: "#657b83", comment: "#93a1a1",
-		keyword: "#859900", str: "#2aa198", number: "#d33682", function: "#268bd2",
-		typ: "#b58900", property: "#268bd2", tag: "#268bd2", operator: "#859900",
-		deleted: "#dc322f", inserted: "#859900",
-	}, &codeColors{
-		text: "#839496", comment: "#586e75",
-		keyword: "#859900", str: "#2aa198", number: "#d33682", function: "#268bd2",
-		typ: "#b58900", property: "#268bd2", tag: "#268bd2", operator: "#859900",
-		deleted: "#dc322f", inserted: "#859900",
-	}},
-	{"catppuccin", "Catppuccin", &codeColors{ // Latte
+	{"catppuccin", "Catppuccin", communityThemes, &codeColors{ // Latte
 		text: "#4c4f69", comment: "#7c7f93",
 		keyword: "#8839ef", str: "#40a02b", number: "#fe640b", function: "#1e66f5",
 		typ: "#df8e1d", property: "#7287fd", tag: "#1e66f5", operator: "#04a5e5",
@@ -64,7 +87,18 @@ var codeThemes = []codeTheme{
 		typ: "#f9e2af", property: "#b4befe", tag: "#89b4fa", operator: "#89dceb",
 		deleted: "#f38ba8", inserted: "#a6e3a1",
 	}},
-	{"gruvbox", "Gruvbox", &codeColors{
+	{"everforest", "Everforest", communityThemes, &codeColors{ // Light
+		text: "#5c6a72", comment: "#939f91",
+		keyword: "#f85552", str: "#35a77c", number: "#df69ba", function: "#8da101",
+		typ: "#dfa000", property: "#3a94c5", tag: "#f57d26", operator: "#f57d26",
+		deleted: "#f85552", inserted: "#8da101",
+	}, &codeColors{ // Dark
+		text: "#d3c6aa", comment: "#859289",
+		keyword: "#e67e80", str: "#83c092", number: "#d699b6", function: "#a7c080",
+		typ: "#dbbc7f", property: "#7fbbb3", tag: "#e69875", operator: "#e69875",
+		deleted: "#e67e80", inserted: "#a7c080",
+	}},
+	{"gruvbox", "Gruvbox", communityThemes, &codeColors{
 		text: "#3c3836", comment: "#928374",
 		keyword: "#9d0006", str: "#79740e", number: "#8f3f71", function: "#427b58",
 		typ: "#b57614", property: "#076678", tag: "#9d0006", operator: "#af3a03",
@@ -75,7 +109,29 @@ var codeThemes = []codeTheme{
 		typ: "#fabd2f", property: "#83a598", tag: "#fb4934", operator: "#fe8019",
 		deleted: "#fb4934", inserted: "#b8bb26",
 	}},
-	{"tokyo-night", "Tokyo Night", &codeColors{ // Day
+	{"rose-pine", "Rosé Pine", communityThemes, &codeColors{ // Dawn
+		text: "#575279", comment: "#9893a5",
+		keyword: "#286983", str: "#ea9d34", number: "#907aa9", function: "#d7827e",
+		typ: "#56949f", property: "#56949f", tag: "#56949f", operator: "#797593",
+		deleted: "#b4637a", inserted: "#286983",
+	}, &codeColors{ // Main
+		text: "#e0def4", comment: "#6e6a86",
+		keyword: "#31748f", str: "#f6c177", number: "#c4a7e7", function: "#ebbcba",
+		typ: "#9ccfd8", property: "#9ccfd8", tag: "#9ccfd8", operator: "#908caa",
+		deleted: "#eb6f92", inserted: "#31748f",
+	}},
+	{"solarized", "Solarized", communityThemes, &codeColors{
+		text: "#657b83", comment: "#93a1a1",
+		keyword: "#859900", str: "#2aa198", number: "#d33682", function: "#268bd2",
+		typ: "#b58900", property: "#268bd2", tag: "#268bd2", operator: "#859900",
+		deleted: "#dc322f", inserted: "#859900",
+	}, &codeColors{
+		text: "#839496", comment: "#586e75",
+		keyword: "#859900", str: "#2aa198", number: "#d33682", function: "#268bd2",
+		typ: "#b58900", property: "#268bd2", tag: "#268bd2", operator: "#859900",
+		deleted: "#dc322f", inserted: "#859900",
+	}},
+	{"tokyo-night", "Tokyo Night", communityThemes, &codeColors{ // Day
 		text: "#3760bf", comment: "#848cb5",
 		keyword: "#9854f1", str: "#587539", number: "#b15c00", function: "#2e7de9",
 		typ: "#007197", property: "#387068", tag: "#f52a65", operator: "#006a83",

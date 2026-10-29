@@ -1498,10 +1498,11 @@ func TestCodeTheme(t *testing.T) {
 	tt.Frame()
 	keyword := func() ui.Color { return a.md.Theme.CodeColors.Tokens[editor.TokenKeyword].Color }
 
-	// The menu: Default, then the themes with a light and a dark side.
+	// The menu: Default, the editors' themes, then the others by name, all
+	// with a light and a dark side.
 	about := "The colors of code, in the app's light or dark as the app is."
 	toggle(t, tt, "Code theme", about)
-	want := []string{"Default", "-", "One", "Solarized", "Catppuccin", "Gruvbox", "Tokyo Night"}
+	want := []string{"Default", "-", "VS Code", "Xcode", "One", "-", "Catppuccin", "Everforest", "Gruvbox", "Rosé Pine", "Solarized", "Tokyo Night"}
 	if got := tt.Menu(); !slices.Equal(got, want) {
 		t.Fatalf("menu %q, want %q", got, want)
 	}
