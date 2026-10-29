@@ -199,6 +199,9 @@ type app struct {
 	winTheme       *ui.Theme
 	winOf          *palette
 	popUpWidths    map[string]float32 // popUpWidth's, by button, font and what it shows
+	// version is the app's, as it was packaged, "" for a development build
+	// (about.go).
+	version string
 	// The General page's (general.go): the language chosen, of languages,
 	// "" for the system's, which applyLanguage gives the app (nil in
 	// tests); whether the app opens at login, as

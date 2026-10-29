@@ -62,7 +62,7 @@ func settingsSections() []settingsSection {
 		{"shortcuts", personal, locales.PageShortcuts(), keyboardIcon, locales.PageShortcutsAbout(), (*app).shortcutsPage, (*app).shortcutTerms},
 		{"providers", models, locales.PageProviders(), plugIcon, locales.PageProvidersAbout(), nil, nil},
 		{"model", models, locales.PageModel(), logoIcon, locales.PageModelAbout(), nil, nil},
-		{"about", locales.GroupApp(), locales.PageAbout(), infoIcon, locales.PageAboutAbout(), nil, nil},
+		{"about", locales.GroupApp(), locales.PageAbout(), infoIcon, locales.PageAboutAbout(), (*app).aboutPage, (*app).aboutTerms},
 	}
 }
 

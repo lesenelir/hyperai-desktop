@@ -2196,3 +2196,34 @@ func TestCatalogsWhole(t *testing.T) {
 		}
 	}
 }
+
+// TestAbout shows HyperAI's version over what hyper.ai's About page says
+// HyperAI is, and opens its links.
+func TestAbout(t *testing.T) {
+	a := newApp(&demo{})
+	tt := ui.NewTester(a.view, 1120, 1400)
+	a.openSettings()
+	a.settingsPage = "about"
+	tt.Frame()
+	if !tt.HasText("Development build") {
+		t.Errorf("an unpackaged build shows no version: %q", tt.Texts())
+	}
+	a.version = "0.1.0"
+	tt.Frame()
+	for _, s := range []string{"HyperAI", "Version 0.1.0", "Community", locales.AboutIntro(), locales.AboutContent(), locales.AboutResources()} {
+		if !tt.HasText(s) {
+			t.Errorf("no %q in %q", s, tt.Texts())
+		}
+	}
+	toggle(t, tt, "Website", "hyper.ai")
+	toggle(t, tt, ai4sTitle, locales.AboutAI4S())
+	if got, want := tt.OpenedURLs(), []string{websiteURL, ai4sURL}; !slices.Equal(got, want) {
+		t.Errorf("opened %q, want %q", got, want)
+	}
+	// The field finds the page by what it holds.
+	a.settingsQuery = "GitHub"
+	tt.Frame()
+	if m := a.settingsMatches(); len(m) != 1 || m[0].key != "about" {
+		t.Errorf("GitHub finds %+v", m)
+	}
+}

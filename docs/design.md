@@ -268,6 +268,15 @@ A small button that floats over the conversation (scroll to end) rests at
   Show in Finder, the folder before any is written; Delete All…, faded
   where there are none). A setting's button is a pop-up button's box
   without its arrow (`settingButton`).
+- **About** says what HyperAI is: a card of its own with the mark, 40 in
+  the accent, beside "HyperAI" at 16/500 over its version at 12 `fg/70`
+  ("Development build" where it was not packaged); Community, the three
+  paragraphs of hyper.ai's About page (hyperai-next's `/about`, page 237
+  of its CMS) at 14 on lines of 1.6, selectable, in each language; and
+  Links, the website and Awesome AI for Science on GitHub, each opened
+  by a setting's button. The CMS's translations were taken with their
+  slips mended: the project's name stays a name in every language, and
+  no sentence is said twice.
 - **Deleting asks first**: a chat (Delete Chat…, its ellipsis saying it
   asks) or all of them, in MyGo's alert over a scrim, in the theme's
   colors: what goes, "This can't be undone.", Cancel and Delete, Delete

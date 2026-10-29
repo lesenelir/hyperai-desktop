@@ -40,6 +40,7 @@ func main() {
 			// The language chosen MyGo keeps itself, and shows from the
 			// start: the app only changes it.
 			a.applyLanguage = mygo.App.SetLocale
+			a.version = mygo.App.Version()
 			a.openAtLogin, a.setOpenAtLogin = mygo.App.OpenAtLogin, mygo.App.SetOpenAtLogin
 			a.reveal = mygo.Shell.ShowItemInFolder
 		}

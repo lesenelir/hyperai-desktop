@@ -1468,13 +1468,13 @@ func (msgs Messages) PageAbout() string {
 	return Catalog.Format(msgs.locale, "pageAbout", nil)
 }
 
-// PageAboutAbout says "HyperAI's version, and what changed in it."
+// PageAboutAbout says "HyperAI's version, and the community behind it."
 // in the language the app shows.
 //
 // Under the About page's title.
 func PageAboutAbout() string { return In(i18n.Locale()).PageAboutAbout() }
 
-// PageAboutAbout says "HyperAI's version, and what changed in it."
+// PageAboutAbout says "HyperAI's version, and the community behind it."
 // in the language of msgs.
 //
 // Under the About page's title.
@@ -2476,6 +2476,198 @@ func ReduceMotionTerms() string { return In(i18n.Locale()).ReduceMotionTerms() }
 // separated by commas.
 func (msgs Messages) ReduceMotionTerms() string {
 	return Catalog.Format(msgs.locale, "reduceMotionTerms", nil)
+}
+
+// AboutVersionTitle says "Version"
+// in the language the app shows.
+//
+// Names the version in the settings' search.
+func AboutVersionTitle() string { return In(i18n.Locale()).AboutVersionTitle() }
+
+// AboutVersionTitle says "Version"
+// in the language of msgs.
+//
+// Names the version in the settings' search.
+func (msgs Messages) AboutVersionTitle() string {
+	return Catalog.Format(msgs.locale, "aboutVersionTitle", nil)
+}
+
+// AboutVersion says "Version {version}"
+// in the language the app shows.
+//
+// Under HyperAI's name on the About page: its version.
+func AboutVersion(version string) string { return In(i18n.Locale()).AboutVersion(version) }
+
+// AboutVersion says "Version {version}"
+// in the language of msgs.
+//
+// Under HyperAI's name on the About page: its version.
+func (msgs Messages) AboutVersion(version string) string {
+	return Catalog.Format(msgs.locale, "aboutVersion", map[string]any{"version": version})
+}
+
+// AboutDevBuild says "Development build"
+// in the language the app shows.
+//
+// Under HyperAI's name on the About page, in a build that was not packaged,
+// which has no version.
+func AboutDevBuild() string { return In(i18n.Locale()).AboutDevBuild() }
+
+// AboutDevBuild says "Development build"
+// in the language of msgs.
+//
+// Under HyperAI's name on the About page, in a build that was not packaged,
+// which has no version.
+func (msgs Messages) AboutDevBuild() string {
+	return Catalog.Format(msgs.locale, "aboutDevBuild", nil)
+}
+
+// AboutVersionTerms says "Version, Build, Release"
+// in the language the app shows.
+//
+// Words the settings' field finds HyperAI's version by, separated by
+// commas.
+func AboutVersionTerms() string { return In(i18n.Locale()).AboutVersionTerms() }
+
+// AboutVersionTerms says "Version, Build, Release"
+// in the language of msgs.
+//
+// Words the settings' field finds HyperAI's version by, separated by
+// commas.
+func (msgs Messages) AboutVersionTerms() string {
+	return Catalog.Format(msgs.locale, "aboutVersionTerms", nil)
+}
+
+// AboutCommunity says "Community"
+// in the language the app shows.
+//
+// A group of the About page: what HyperAI is, as hyper.ai's About page says
+// it.
+func AboutCommunity() string { return In(i18n.Locale()).AboutCommunity() }
+
+// AboutCommunity says "Community"
+// in the language of msgs.
+//
+// A group of the About page: what HyperAI is, as hyper.ai's About page says
+// it.
+func (msgs Messages) AboutCommunity() string {
+	return Catalog.Format(msgs.locale, "aboutCommunity", nil)
+}
+
+// AboutCommunityTerms says "About, HyperAI, Community, AI for Science"
+// in the language the app shows.
+//
+// Words the settings' field finds what HyperAI is by, separated by commas.
+func AboutCommunityTerms() string { return In(i18n.Locale()).AboutCommunityTerms() }
+
+// AboutCommunityTerms says "About, HyperAI, Community, AI for Science"
+// in the language of msgs.
+//
+// Words the settings' field finds what HyperAI is by, separated by commas.
+func (msgs Messages) AboutCommunityTerms() string {
+	return Catalog.Format(msgs.locale, "aboutCommunityTerms", nil)
+}
+
+// AboutIntro says "As a premier global community in artificial intelligence and high-performance computing, HyperAI (hyper.ai) is commit…"
+// in the language the app shows.
+//
+// The first paragraph of what HyperAI is, from hyper.ai's About page.
+func AboutIntro() string { return In(i18n.Locale()).AboutIntro() }
+
+// AboutIntro says "As a premier global community in artificial intelligence and high-performance computing, HyperAI (hyper.ai) is commit…"
+// in the language of msgs.
+//
+// The first paragraph of what HyperAI is, from hyper.ai's About page.
+func (msgs Messages) AboutIntro() string {
+	return Catalog.Format(msgs.locale, "aboutIntro", nil)
+}
+
+// AboutContent says "In terms of platform content, HyperAI not only provides real-time coverage of trending topics in the global artificia…"
+// in the language the app shows.
+//
+// The second paragraph of what HyperAI is: its content. Awesome AI for
+// Science is the name of a project, and stays as it is.
+func AboutContent() string { return In(i18n.Locale()).AboutContent() }
+
+// AboutContent says "In terms of platform content, HyperAI not only provides real-time coverage of trending topics in the global artificia…"
+// in the language of msgs.
+//
+// The second paragraph of what HyperAI is: its content. Awesome AI for
+// Science is the name of a project, and stays as it is.
+func (msgs Messages) AboutContent() string {
+	return Catalog.Format(msgs.locale, "aboutContent", nil)
+}
+
+// AboutResources says "In terms of resources, HyperAI integrates high-quality datasets and open-source projects from around the world to pro…"
+// in the language the app shows.
+//
+// The third paragraph of what HyperAI is: its resources.
+func AboutResources() string { return In(i18n.Locale()).AboutResources() }
+
+// AboutResources says "In terms of resources, HyperAI integrates high-quality datasets and open-source projects from around the world to pro…"
+// in the language of msgs.
+//
+// The third paragraph of what HyperAI is: its resources.
+func (msgs Messages) AboutResources() string {
+	return Catalog.Format(msgs.locale, "aboutResources", nil)
+}
+
+// AboutLinks says "Links"
+// in the language the app shows.
+//
+// A group of the About page: where to read more.
+func AboutLinks() string { return In(i18n.Locale()).AboutLinks() }
+
+// AboutLinks says "Links"
+// in the language of msgs.
+//
+// A group of the About page: where to read more.
+func (msgs Messages) AboutLinks() string {
+	return Catalog.Format(msgs.locale, "aboutLinks", nil)
+}
+
+// AboutWebsite says "Website"
+// in the language the app shows.
+//
+// The About page's row that opens hyper.ai.
+func AboutWebsite() string { return In(i18n.Locale()).AboutWebsite() }
+
+// AboutWebsite says "Website"
+// in the language of msgs.
+//
+// The About page's row that opens hyper.ai.
+func (msgs Messages) AboutWebsite() string {
+	return Catalog.Format(msgs.locale, "aboutWebsite", nil)
+}
+
+// AboutAI4S says "In-depth readings of AI for Science research, on GitHub."
+// in the language the app shows.
+//
+// Under Awesome AI for Science, the About page's row that opens it on
+// GitHub.
+func AboutAI4S() string { return In(i18n.Locale()).AboutAI4S() }
+
+// AboutAI4S says "In-depth readings of AI for Science research, on GitHub."
+// in the language of msgs.
+//
+// Under Awesome AI for Science, the About page's row that opens it on
+// GitHub.
+func (msgs Messages) AboutAI4S() string {
+	return Catalog.Format(msgs.locale, "aboutAI4S", nil)
+}
+
+// AboutOpen says "Open"
+// in the language the app shows.
+//
+// The button of a row of the About page that opens its link in the browser.
+func AboutOpen() string { return In(i18n.Locale()).AboutOpen() }
+
+// AboutOpen says "Open"
+// in the language of msgs.
+//
+// The button of a row of the About page that opens its link in the browser.
+func (msgs Messages) AboutOpen() string {
+	return Catalog.Format(msgs.locale, "aboutOpen", nil)
 }
 
 // KeysBackForth says "Going back and forth"
