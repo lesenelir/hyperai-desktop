@@ -223,8 +223,8 @@ func (a *app) scrollToEnd(c *ui.Context, th *thread) {
 	t := c.Theme()
 	b := ui.ButtonBase(c.Key("scroll to end")).Size(size, size).Radius(size/2).
 		Background(a.pal.composer).Border(1, t.Border).TextColor(t.Text).
-		Label(locales.ScrollToEnd()).Tooltip(locales.ScrollToEnd()).
-		Absolute().LeftPercent(50).Bottom(a.footer + 16)
+		Label(locales.ScrollToEnd()).Absolute().LeftPercent(50).Bottom(a.footer + 16)
+	tooltip(c, b, locales.ScrollToEnd())
 	if b.Hovered() {
 		b.Translate(-size/2, -4).Shadow(0, 8, 16, -4, a.pal.shadow(0.22))
 	} else {
@@ -422,7 +422,7 @@ func (a *app) messageTime(c *ui.Context, m *message) {
 		return
 	}
 	short, full := formatTime(m.Time, c.Now())
-	ui.Text(c, short).FontSize(12).TextColor(c.Theme().TextMuted).FontFeatures("tnum").SingleLine().Tooltip(full)
+	tooltip(c, ui.Text(c, short).FontSize(12).TextColor(c.Theme().TextMuted).FontFeatures("tnum").SingleLine().Description(full), full)
 }
 
 // formatTime returns t shortly — the clock today, the day too before
@@ -699,7 +699,7 @@ func (a *app) composerTools(c *ui.Context, ready bool) ui.Element {
 		if a.busy != nil {
 			label, svg = locales.Stop(), stopIcon
 		}
-		send := ui.ButtonBase(c.Key("send")).Size(sendSize, sendSize).Radius(sendSize / 2).Label(label).Tooltip(label).
+		send := tooltip(c, ui.ButtonBase(c.Key("send")).Size(sendSize, sendSize).Radius(sendSize/2).Label(label), label).
 			Disabled(a.busy == nil && !ready)
 		// Sending is the one primary action: the accent, with a hint of it
 		// under; stopping is fg, and nothing to send a wash.

@@ -487,6 +487,7 @@ func (a *app) view(c *ui.Context) {
 	c.SetTheme(a.windowTheme())
 	a.setText(textSizes[a.textSize], a.font)
 	a.md.Theme = a.markdownTheme()
+	a.toasts(c)
 	held := a.motionHeld
 	a.motionHeld = false // until the switch says so again
 	if a.reduceMotion && !held && c.Now().Sub(a.motionSwitched) >= motionSettle {
@@ -767,6 +768,59 @@ func (a *app) placeholder(c *ui.Context, s string, show bool, top, left, size, l
 	}
 }
 
+// toasts builds the window's toasts as the app's cards look, rather than
+// turned over as the theme's tooltips are: the composer's face, a hairline
+// round it and its shadow, the action in the accent. They rise a little as
+// they come, and fade as they go.
+func (a *app) toasts(c *ui.Context) {
+	t := c.Theme()
+	ui.ToastViewportBase(c, func(viewport ui.Element, toasts []ui.Toast) {
+		viewport.Padding(0, 24, 24, 24).AlignItems(ui.Center).Gap(8)
+		for _, ts := range toasts {
+			toast := ui.ToastBase(c, ts)
+			toast.Root.Row().AlignItems(ui.Center).Gap(16).Padding(10, 10, 10, 16).Radius(12).
+				Background(a.pal.composer).Border(1, t.Border).Shadow(0, 8, 24, -6, a.pal.shadow(0.18)).
+				TextColor(t.Text).Transition(toastTransition)
+			toast.Root.Children(func() {
+				if ts.Description == "" {
+					ui.Text(c, ts.Title).FontSize(13)
+				} else {
+					ui.Column(c).Shrink(1).Gap(2).Children(func() {
+						ui.Text(c, ts.Title).FontSize(13).FontWeight(500)
+						ui.Text(c, ts.Description).FontSize(12).LineHeight(1.5).TextColor(t.TextMuted)
+					})
+				}
+				if ts.Action == "" {
+					return
+				}
+				b := toast.ActionButton().Padding(5, 10).Radius(8).TextColor(a.pal.ac).Label(ts.Action)
+				if b.Hovered() {
+					b.Background(a.pal.ac.Alpha(0.08))
+				}
+				b.Children(func() { ui.Text(c, ts.Action).FontSize(13).FontWeight(500).SingleLine() })
+			})
+		}
+	})
+}
+
+// tooltip shows s by e as the pointer rests on it, as Element.Tooltip
+// does, but as the app's toasts look rather than turned over: the cards'
+// face, a hairline round it and their shadow. It returns e.
+func tooltip(c *ui.Context, e ui.Element, s string) ui.Element {
+	t, p := c.Theme(), paletteFor(c.Theme())
+	ui.TooltipBase(c, e, func(tip ui.Element) {
+		tip.MaxWidth(320).Padding(5, 8).Radius(6).Background(p.composer).Border(1, t.Border).
+			TextColor(t.Text).FontSize(12).Shadow(0, 4, 12, -4, p.shadow(0.16))
+		tip.Children(func() { ui.Text(c, s) })
+		tip.AttachTo(e, ui.AnchorTop, ui.AnchorBottom).Margin(0, 0, 6, 0)
+	})
+	return e
+}
+
+// toastTransition brings a toast in from a little under its place, and
+// fades it out where it is.
+var toastTransition = ui.ElementTransition{Enter: &ui.Motion{Y: 8}, Exit: &ui.Motion{}}
+
 // iconButton creates a small square button showing an icon, described by
 // label.
 func iconButton(c *ui.Context, svg *ui.SVG, label string) ui.Element {
@@ -776,7 +830,7 @@ func iconButton(c *ui.Context, svg *ui.SVG, label string) ui.Element {
 // iconButtonSized is iconButton with an icon size DIPs square.
 func iconButtonSized(c *ui.Context, svg *ui.SVG, label string, size float32) ui.Element {
 	t := c.Theme()
-	b := ui.ButtonBase(c).Size(30, 28).Radius(6).TextColor(t.TextMuted).Label(label).Tooltip(label)
+	b := tooltip(c, ui.ButtonBase(c).Size(30, 28).Radius(6).TextColor(t.TextMuted).Label(label), label)
 	if b.Hovered() {
 		b.Background(t.Text.Alpha(0.06)).TextColor(t.Text)
 	}

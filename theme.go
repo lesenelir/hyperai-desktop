@@ -73,7 +73,9 @@ func newPalette(dark bool) *palette {
 	t.Accent, t.AccentText = p.ac, p.bg
 	t.AccentHover, t.AccentPressed = p.ac.Alpha(0.85).Over(canvas), p.ac.Alpha(0.75).Over(canvas)
 	t.Selection, t.Focus = p.ac.Alpha(0.22), p.ac.Alpha(0.45)
-	t.Inverse, t.InverseText = p.fg, p.bg
+	// The tips MyGo's own widgets show are not turned over either, but on
+	// the cards' face, as the app's own (tooltip) and its toasts.
+	t.Inverse, t.InverseText = composer, p.fg
 	t.Scrollbar = p.fg.Alpha(0.3)
 	p.theme = t
 
