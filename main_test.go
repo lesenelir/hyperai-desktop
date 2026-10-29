@@ -773,8 +773,8 @@ func TestHistory(t *testing.T) {
 
 func TestBackForward(t *testing.T) {
 	a, tt := newTester()
-	back := "Back (" + shortcutText("⌘[", "Alt+Left") + ")"
-	forward := "Forward (" + shortcutText("⌘]", "Alt+Right") + ")"
+	back := "Back (" + backKeys.String() + ")"
+	forward := "Forward (" + forwardKeys.String() + ")"
 	backKey, forwardKey := func() { tt.Key(ui.Super, ui.KeyBracketLeft) }, func() { tt.Key(ui.Super, ui.KeyBracketRight) }
 	if runtime.GOOS != "darwin" {
 		backKey, forwardKey = func() { tt.Key(ui.Alt, ui.KeyLeft) }, func() { tt.Key(ui.Alt, ui.KeyRight) }
@@ -1548,6 +1548,68 @@ func TestCodeTheme(t *testing.T) {
 	tt.Advance(time.Second)
 	if a.codeTheme != "" || a.md.Theme.CodeColors != darkPalette.md.CodeColors {
 		t.Errorf("theme %q, colors not MyGo's", a.codeTheme)
+	}
+}
+
+func TestShortcutsPage(t *testing.T) {
+	a := newApp(&demo{})
+	tt := ui.NewTester(a.view, 1120, 1500)
+	a.openSettings()
+	a.settingsPage = "shortcuts"
+	tt.Frame()
+
+	// Every shortcut, by where it works, its keys drawn.
+	texts := tt.Texts()
+	for _, g := range shortcutGroups() {
+		if !slices.Contains(texts, g.title) {
+			t.Errorf("no group %q", g.title)
+		}
+		for _, r := range g.rows {
+			if !slices.Contains(texts, r.title) {
+				t.Errorf("no row %q", r.title)
+			}
+			for _, k := range r.keys {
+				for _, cap := range k.caps() {
+					if !strings.ContainsRune("←→↑↓", []rune(cap)[0]) && !slices.Contains(texts, cap) {
+						t.Errorf("%q: no key %q", r.title, cap)
+					}
+				}
+			}
+		}
+	}
+
+	// And the keys the page gives do what it says.
+	tt.Key(ui.Cmd, ui.KeyComma)
+	tt.Advance(time.Second)
+	if a.settings {
+		t.Errorf("%v left the settings open", settingsKeys)
+	}
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyS)
+	tt.Advance(time.Second)
+	if !a.collapsed {
+		t.Errorf("%v did not hide the sidebar", sidebarKeys)
+	}
+	tt.Key(ui.Cmd, ui.KeyF)
+	tt.Advance(time.Second)
+	if !a.searching {
+		t.Errorf("%v did not open the search", findKeys)
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Advance(time.Second)
+	a.open("1")
+	tt.Key(ui.Cmd, ui.KeyN)
+	tt.Advance(time.Second)
+	if a.selected != "" {
+		t.Errorf("%v did not start a new chat", newChatKeys)
+	}
+	if runtime.GOOS == "darwin" {
+		tt.Key(ui.Super, ui.KeyBracketLeft)
+	} else {
+		tt.Key(ui.Alt, ui.KeyLeft)
+	}
+	tt.Advance(time.Second)
+	if a.selected != "1" {
+		t.Errorf("%v did not go back: %q", backKeys, a.selected)
 	}
 }
 

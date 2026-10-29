@@ -19,7 +19,7 @@ type settingsSection struct {
 var settingsSections = []settingsSection{
 	{"general", "Personal", "General", settingsIcon, "How HyperAI starts and behaves: its language, new chats, and sending with Enter.", nil},
 	{"appearance", "Personal", "Appearance", sunIcon, "How HyperAI looks: its theme and font, the conversation's text, and the window.", (*app).appearancePage},
-	{"shortcuts", "Personal", "Keyboard shortcuts", keyboardIcon, "The keys that do what HyperAI does, and changing them.", nil},
+	{"shortcuts", "Personal", "Keyboard shortcuts", keyboardIcon, "The keys that do what HyperAI does, by where they work.", (*app).shortcutsPage},
 	{"providers", "Models", "Providers", plugIcon, "Where replies come from: OpenRouter and its API key, and other providers.", nil},
 	{"model", "Models", "Default model", logoIcon, "The model a new chat asks, until it is changed in the composer.", nil},
 	{"about", "App", "About", infoIcon, "HyperAI's version, and what changed in it.", nil},
@@ -49,7 +49,7 @@ func (a *app) closeSettings() {
 // settingsRow builds the row at the sidebar's foot that opens the
 // settings.
 func (a *app) settingsRow(c *ui.Context) {
-	if a.navRow(c, "settings", settingsIcon, "Settings", shortcutText("⌘,", "Ctrl+,")).Margin(rowGap/2, barClear, 8, 8).Clicked() {
+	if a.navRow(c, "settings", settingsIcon, "Settings", settingsKeys.String()).Margin(rowGap/2, barClear, 8, 8).Clicked() {
 		a.openSettings()
 	}
 }

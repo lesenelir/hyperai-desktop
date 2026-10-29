@@ -114,8 +114,8 @@ func (a *app) historyButtons(c *ui.Context, x float32) {
 		can      bool
 		do       func()
 	}{
-		{arrowLeftIcon, "Back", shortcutText("⌘[", "Alt+Left"), len(a.nav.back) > 0, a.goBack},
-		{arrowRightIcon, "Forward", shortcutText("⌘]", "Alt+Right"), len(a.nav.forward) > 0, a.goForward},
+		{arrowLeftIcon, "Back", backKeys.String(), len(a.nav.back) > 0, a.goBack},
+		{arrowRightIcon, "Forward", forwardKeys.String(), len(a.nav.forward) > 0, a.goForward},
 	} {
 		btn := iconButtonSized(c.Key(b.label), b.svg, b.label+" ("+b.shortcut+")", titleIconSize).
 			Absolute().Left(x + float32(i)*(30+2)).Top((titleBarHeight - 28) / 2).Disabled(!b.can)

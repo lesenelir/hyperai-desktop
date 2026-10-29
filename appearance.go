@@ -326,13 +326,16 @@ func (a *app) settingsCard(c *ui.Context, title string, rows func()) {
 }
 
 // settingRow builds a row of a settings card: what it sets, and under it
-// more of that, on the left; on the right, the control that sets it.
+// more of that (none for ""), on the left; on the right, the control that
+// sets it.
 func (a *app) settingRow(c *ui.Context, title, about string, control func()) {
 	t := c.Theme()
 	ui.Row(c).Padding(12, 16).Gap(24).AlignItems(ui.Center).Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 			ui.Text(c, title).FontSize(14)
-			ui.Text(c, about).FontSize(12).LineHeight(1.5).TextColor(t.TextMuted)
+			if about != "" {
+				ui.Text(c, about).FontSize(12).LineHeight(1.5).TextColor(t.TextMuted)
+			}
 		})
 		ui.Row(c).Shrink(0).Children(control)
 	})

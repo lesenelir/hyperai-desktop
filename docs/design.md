@@ -96,7 +96,7 @@ Sizes are DIPs. The window's theme size is the platform's (13 on macOS,
 | Title | 14 / 500 | The chat's title in the title bar; the search's field |
 | UI | 13 (theme) | Rows, tabs, menus, buttons |
 | Label | 12 | Metadata, section titles, shortcuts, times — at `fg/70` |
-| Key | 11 | Keys drawn as keys, in the search's footer |
+| Key | 11 | Keys drawn as keys: the search's footer, the Keyboard shortcuts page |
 
 Markdown sizes its headings and code from the reading size
 (`markdown.Theme`): code at 0.875 of it, headings from 1.6 down.
@@ -230,6 +230,15 @@ A small button that floats over the conversation (scroll to end) rests at
   measured). Code in a line
   keeps the accent. No sample cards: the preview under them, a question
   and a reply with code in a line and in a block, shows all of it.
+- **Keyboard shortcuts** lists the keys, not yet changed there: by where
+  they work (App, Going back and forth, Composer, Search), each a card of
+  rows, what the keys do over when (12 `fg/70`, none for always), and the
+  keys on the right, drawn as the search's footer draws them (`keyCap`).
+  Keys pressed together are caps side by side (⇧ ⌘ S); keys that do the
+  same are apart, "or" between (↓ or ⌃N), so caps together are always
+  one chord. macOS's glyphs there, Ctrl and Shift elsewhere. One table,
+  [shortcuts.go](../shortcuts.go), gives the page, the sidebar's keys and
+  the title bar's tooltips theirs.
 - **Search**: a card near the window's top over a scrim, its field over
   tabs (All, Chats, Projects, Artifacts, Settings), titled sections of
   rows in the sidebar's look, and the keys it takes in its footer.

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -419,7 +418,7 @@ func (a *app) view(c *ui.Context) {
 	if a.collapsed {
 		label = "Show sidebar"
 	}
-	toggle := iconButtonSized(c.Key("toggle"), sidebarIcon, label+" ("+shortcutText("⇧⌘S", "Ctrl+Shift+S")+")", titleIconSize).
+	toggle := iconButtonSized(c.Key("toggle"), sidebarIcon, label+" ("+sidebarKeys.String()+")", titleIconSize).
 		Absolute().Left(bar.Left + 8).Top((titleBarHeight - 28) / 2)
 	if toggle.Clicked() {
 		a.collapsed = !a.collapsed
@@ -439,10 +438,10 @@ func (a *app) sidebar(c *ui.Context) {
 	t := c.Theme()
 	ui.Box(c).Height(titleBarHeight).Shrink(0).DragWindow()
 
-	if a.navRow(c, "new", newChatIcon, "New chat", shortcutText("⌘N", "Ctrl+N")).Clicked() {
+	if a.navRow(c, "new", newChatIcon, "New chat", newChatKeys.String()).Clicked() {
 		a.newChat()
 	}
-	if a.navRow(c, "search", searchIcon, "Search", shortcutText("⌘F", "Ctrl+F")).Clicked() {
+	if a.navRow(c, "search", searchIcon, "Search", findKeys.String()).Clicked() {
 		a.toggleSearch()
 	}
 	if len(a.threads) == 0 {
@@ -624,14 +623,6 @@ func iconButtonSized(c *ui.Context, svg *ui.SVG, label string, size float32) ui.
 	}
 	b.Children(func() { ui.Icon(c, svg).Size(size, size) })
 	return b
-}
-
-// shortcutText is mac on macOS and other elsewhere.
-func shortcutText(mac, other string) string {
-	if runtime.GOOS == "darwin" {
-		return mac
-	}
-	return other
 }
 
 func b2f(b bool) float32 {

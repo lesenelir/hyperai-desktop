@@ -484,17 +484,6 @@ func (a *app) searchEmpty(c *ui.Context) {
 func (a *app) searchKeys(c *ui.Context) {
 	t := c.Theme()
 	ui.Box(c).Height(1).Shrink(0).Background(t.Border)
-	key := func(label string, svg *ui.SVG) {
-		k := ui.Row(c).Height(18).MinWidth(18).Padding(0, 5).Radius(4).Background(a.pal.fg.Alpha(0.06)).
-			Justify(ui.Center).AlignItems(ui.Center)
-		k.Children(func() {
-			if svg != nil {
-				ui.Icon(c, svg).Size(11, 11).TextColor(t.TextMuted)
-			} else {
-				ui.Text(c, label).FontSize(11).TextColor(t.TextMuted)
-			}
-		})
-	}
 	hint := func(label string, keys func()) {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			keys()
@@ -502,14 +491,14 @@ func (a *app) searchKeys(c *ui.Context) {
 		})
 	}
 	ui.Row(c).Shrink(0).Padding(9, 16).Gap(16).AlignItems(ui.Center).Children(func() {
-		hint("Close", func() { key("Esc", nil) })
+		hint("Close", func() { a.keyCap(c, "Esc") })
 		hint("Change type", func() {
 			ui.Row(c).Gap(2).Children(func() {
-				key("", arrowLeftIcon)
-				key("", arrowRightIcon)
+				a.keyCap(c, "←")
+				a.keyCap(c, "→")
 			})
 		})
 		ui.Spacer(c)
-		hint("Compose", func() { key("Tab", nil) })
+		hint("Compose", func() { a.keyCap(c, "Tab") })
 	})
 }
