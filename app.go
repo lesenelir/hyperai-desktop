@@ -65,7 +65,8 @@ type thread struct {
 	ID       int        `json:"id"`
 	Title    string     `json:"title"`
 	Updated  time.Time  `json:"updated"`
-	Model    string     `json:"model,omitempty"` // the model asked last
+	Model    string     `json:"model,omitempty"`    // the model asked last
+	Provider string     `json:"provider,omitempty"` // Model's, "" in chats kept before it
 	Messages []*message `json:"messages"`
 	list     ui.ListState
 	// scroll is where list is scrolled, which the button bringing the end
@@ -95,12 +96,39 @@ func (th *thread) turns() []turn {
 // app is the window's state.
 type app struct {
 	win      *mygo.Window // nil in tests, where replies come at once
-	prov     provider
 	threads  []*thread
 	selected string // the ID of the chat shown, "" for a new chat
 	next     int    // the last ID given to a chat or a message
 	draft    string // what the composer holds
-	model    string
+	model    string // the model asked, of prov
+	// provs are the providers the composer offers the models of, those
+	// with an API key and a model (providers.go), or fallback where none
+	// is, which is the demo in tests and HYPERAI_BENCH, and none in the
+	// app; prov is the one asked, of model, nil for none, which is the chat's modelFor shows
+	// (models.go). keys are the API keys the user gave, by providerKind ID,
+	// which keyring keeps (nil in tests); keyError is what reading or
+	// keeping them last said, "" where it went well. confs are the
+	// providers' other settings, by ID, and defaultModel the model a new
+	// chat asks, which confPath keeps ("" in tests); listing tells the
+	// providers whose models are being listed, and listErrors why those
+	// that could not be were not. The Providers page edits the row editing
+	// in editDraft, "" for none.
+	provs        []provider
+	prov         provider
+	fallback     provider
+	modelFor     string
+	keys         map[string]string
+	keyring      keyring
+	keyError     string
+	confs        map[string]*providerConf
+	defaultModel modelRef
+	confPath     string
+	confSaver    saver
+	listing      map[string]bool
+	listErrors   map[string]string
+	editing      string
+	editDraft    string
+	needProvider bool // the composer sent while no provider has a key
 	// collapsed hides the sidebar, sideWidth wide as it shows; resizing
 	// tells that the pointer drags its edge, which pressed it resizeFrom
 	// wide and went resizeBy since (layout.go).
@@ -242,9 +270,12 @@ type app struct {
 	confirming  bool
 }
 
+// newApp returns the app, which asks p until a provider has an API key
+// (loadKeys): nothing, for nil, until then.
 func newApp(p provider) *app {
-	a := &app{prov: p, model: p.Models()[0], sideWidth: sidebarWidth, theme: "system",
+	a := &app{fallback: p, sideWidth: sidebarWidth, theme: "system",
 		textSize: defaultTextSize, body: bodySize, translucent: true, renderMath: true}
+	a.setProviders()
 	// Math between single dollars too, as models write it within text:
 	// $x^2$, but not $5 and $10, which read as money.
 	a.md.Extensions = parser.Default | parser.ExtDollarMath
@@ -275,7 +306,7 @@ func (a *app) newChat() {
 // streams the reply in.
 func (a *app) send(text string) {
 	text = strings.TrimSpace(text)
-	if text == "" || a.busy != nil {
+	if text == "" || a.busy != nil || a.prov == nil {
 		return
 	}
 	th := a.current()
@@ -283,7 +314,9 @@ func (a *app) send(text string) {
 		a.next++
 		th = &thread{ID: a.next, Title: title(text)}
 		a.threads = append(a.threads, th)
+		// The chat asks the model chosen for it while it was new.
 		a.selected = strconv.Itoa(th.ID)
+		a.modelFor = a.selected
 	}
 	a.next++
 	th.Messages = append(th.Messages, &message{ID: a.next, Role: "user", Text: text, Time: time.Now()})
@@ -294,7 +327,7 @@ func (a *app) send(text string) {
 	a.next++
 	reply := &message{ID: a.next, Role: "assistant", streaming: true, started: time.Now()}
 	th.Messages = append(th.Messages, reply)
-	th.Updated, th.Model = time.Now(), a.model
+	th.Updated, th.Model, th.Provider = time.Now(), a.model, a.prov.ID()
 	a.rev++
 	a.draft = ""
 	a.busy = reply
@@ -448,6 +481,7 @@ func title(text string) string {
 }
 
 func (a *app) view(c *ui.Context) {
+	a.followChat()
 	// The colors are hyperai-next's, in the system's appearance.
 	a.pal = paletteFor(c.Theme())
 	c.SetTheme(a.windowTheme())

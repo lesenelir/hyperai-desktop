@@ -98,12 +98,8 @@
   "@suggestionPlan": { "description": "A prompt an empty chat offers to ask, which a click writes in the composer." },
   "suggestionScheduler": "Explain how Go's scheduler runs goroutines.",
   "@suggestionScheduler": { "description": "A prompt an empty chat offers to ask, which a click writes in the composer." },
-  "suggestionModel": "How do I connect this app to a real model?",
-  "@suggestionModel": { "description": "A prompt an empty chat offers to ask, which a click writes in the composer." },
   "noteAccuracy": "Answers may be inaccurate, so check important details.",
   "@noteAccuracy": { "description": "The note at the foot of an empty chat." },
-  "noteDemo": "Demo replies · set OPENROUTER_API_KEY in .env to talk to a real model.",
-  "@noteDemo": { "description": "The note at the foot of an empty chat while replies are the demo's. OPENROUTER_API_KEY and .env stay as they are." },
   "scrollToEnd": "Scroll to end",
   "@scrollToEnd": { "description": "The button that brings the end of the conversation back into view." },
   "showMore": "Show more",
@@ -236,7 +232,7 @@
   "@pageShortcutsAbout": { "description": "Under the Keyboard shortcuts page's title." },
   "pageProviders": "Providers",
   "@pageProviders": { "description": "A settings page." },
-  "pageProvidersAbout": "Where replies come from: OpenRouter and its API key, and other providers.",
+  "pageProvidersAbout": "Where replies come from: the services HyperAI asks, with your API key for each.",
   "@pageProvidersAbout": { "description": "Under the Providers page's title." },
   "pageModel": "Default model",
   "@pageModel": { "description": "A settings page." },
@@ -494,5 +490,122 @@
   "keysShowAllLabel": "Show all shortcuts",
   "@keysShowAllLabel": { "description": "Names the button that shows every shortcut again to assistive technology." },
   "keysOr": "or",
-  "@keysOr": { "description": "Between two shortcuts that do the same, as \"↓ or ⌃N\"." }
+  "@keysOr": { "description": "Between two shortcuts that do the same, as \"↓ or ⌃N\"." },
+
+  "keysCard": "API keys",
+  "@keysCard": { "description": "The Providers page's card of the providers' keys." },
+  "providerTerms": "API key, key, token, secret, provider, service, endpoint, base URL, proxy, models",
+  "@providerTerms": { "description": "More words the settings' field finds the Providers page by, comma-separated." },
+  "keyNone": "Not set up",
+  "@keyNone": { "description": "Under a provider of the Providers page that has no API key." },
+  "keySet": "Key ending in {end}",
+  "@keySet": {
+    "description": "Under a provider of the Providers page that has the user's API key: its last characters.",
+    "placeholders": { "end": { "type": "String", "example": "a1b2" } }
+  },
+  "keyPlaceholder": "Paste the API key",
+  "@keyPlaceholder": { "description": "The placeholder of the field that takes a provider's API key." },
+  "keyLabel": "{provider} API key",
+  "@keyLabel": {
+    "description": "The label of the field that takes a provider's API key, for assistive technologies.",
+    "placeholders": { "provider": { "type": "String", "example": "OpenAI" } }
+  },
+  "keySave": "Save",
+  "@keySave": { "description": "The button that saves the API key typed." },
+  "keyRemove": "Remove",
+  "@keyRemove": { "description": "The button that forgets a provider's API key." },
+  "keyChange": "Change",
+  "@keyChange": { "description": "The button that changes a provider's API key, or its endpoint." },
+  "keyGet": "Get a Key",
+  "@keyGet": { "description": "The button that opens the provider's website, where its API keys are made." },
+  "keyAdd": "Add Key",
+  "@keyAdd": { "description": "The button that shows the field that takes a provider's API key." },
+  "keysKept": "{platform, select, mac {Keys are kept in your Keychain, and sent only to their provider.} other {Keys are kept in the system’s credential store, and sent only to their provider.}}",
+  "@keysKept": {
+    "description": "The note under the Providers page's keys: where they are kept, on macOS (mac) or elsewhere.",
+    "placeholders": { "platform": { "type": "String", "example": "mac" } }
+  },
+  "keysUnread": "Couldn’t read the saved keys: {error}",
+  "@keysUnread": {
+    "description": "The note under the Providers page's keys where the credential store could not read them.",
+    "placeholders": { "error": { "type": "String", "example": "keychain locked" } }
+  },
+  "keysUnkept": "Couldn’t save the key, so it works only until HyperAI quits: {error}",
+  "@keysUnkept": {
+    "description": "The note under the Providers page's keys where the credential store could not keep one.",
+    "placeholders": { "error": { "type": "String", "example": "keychain locked" } }
+  },
+
+  "keyRow": "API key",
+  "@keyRow": { "description": "The row of a provider's card that takes its API key." },
+  "endpoint": "Endpoint",
+  "@endpoint": { "description": "The row of a provider's card that says where its API is, which a proxy or compatible service changes." },
+  "endpointDefault": "{url} (default)",
+  "@endpointDefault": {
+    "description": "Under the endpoint row, where the user kept the provider's own.",
+    "placeholders": { "url": { "type": "String", "example": "https://api.openai.com/v1" } }
+  },
+  "endpointLabel": "{provider} endpoint",
+  "@endpointLabel": {
+    "description": "The label of the field that takes a provider's endpoint, for assistive technologies.",
+    "placeholders": { "provider": { "type": "String", "example": "OpenAI" } }
+  },
+  "endpointReset": "Reset",
+  "@endpointReset": { "description": "The button that makes a provider's endpoint its own again." },
+  "models": "Models",
+  "@models": { "description": "The row of a provider's card over the models the composer offers of it." },
+  "modelsShown": "{count} in the composer",
+  "@modelsShown": {
+    "description": "Under the models row: how many the composer offers, before the provider listed its own.",
+    "placeholders": { "count": { "type": "int", "example": "3" } }
+  },
+  "modelsShownListed": "{count} in the composer, of {listed} it lists",
+  "@modelsShownListed": {
+    "description": "Under the models row: how many the composer offers, of how many the provider lists.",
+    "placeholders": { "count": { "type": "int", "example": "3" }, "listed": { "type": "int", "example": "52" } }
+  },
+  "modelsListing": "Listing its models…",
+  "@modelsListing": { "description": "Under the models row while the provider's models are being listed." },
+  "modelsFailed": "Couldn’t list its models: {error}",
+  "@modelsFailed": {
+    "description": "Under the models row where the provider could not list its models, as with a wrong key.",
+    "placeholders": { "error": { "type": "String", "example": "401 Unauthorized: invalid key" } }
+  },
+  "modelsRefresh": "Refresh",
+  "@modelsRefresh": { "description": "The button that lists the provider's models again." },
+  "modelAdd": "Add Model",
+  "@modelAdd": { "description": "The button that opens the menu of models to add to the composer." },
+  "modelsNoneListed": "No other models listed",
+  "@modelsNoneListed": { "description": "The menu of models to add, where the provider lists none that the composer does not offer." },
+  "modelOther": "Other Model…",
+  "@modelOther": { "description": "The item of the menu of models to add that shows a field for a model's ID." },
+  "modelPlaceholder": "Model ID",
+  "@modelPlaceholder": { "description": "The placeholder of the field that takes a model's ID." },
+  "modelLabel": "{provider} model ID",
+  "@modelLabel": {
+    "description": "The label of the field that takes a model's ID, for assistive technologies.",
+    "placeholders": { "provider": { "type": "String", "example": "OpenAI" } }
+  },
+  "modelRemove": "Remove",
+  "@modelRemove": { "description": "The button that takes a model out of the composer's menu." },
+  "modelIsDefault": "New chats ask it",
+  "@modelIsDefault": { "description": "Under a model of a provider's card that new chats ask." },
+  "defaultModelCard": "New chats",
+  "@defaultModelCard": { "description": "The Default model page's card." },
+  "defaultModelRow": "Model",
+  "@defaultModelRow": { "description": "The Default model page's row that chooses the model new chats ask." },
+  "defaultModelAbout": "What a new chat asks. Each chat keeps the model it asked last.",
+  "@defaultModelAbout": { "description": "Under the row that chooses the model new chats ask." },
+  "defaultModelTerms": "Default, Model, New chat",
+  "@defaultModelTerms": { "description": "Words the settings' field finds the Default model page by, separated by commas." },
+  "noteAddKey": "Add an API key to start chatting",
+  "@noteAddKey": { "description": "The link at the foot of an empty chat while no provider has an API key, which opens the Providers page." },
+  "modelAddProvider": "Add a Provider",
+  "@modelAddProvider": { "description": "The composer's button, where no provider has an API key, and the Default model page's, which open the Providers page." },
+  "defaultModelNone": "No provider has an API key yet.",
+  "@defaultModelNone": { "description": "Under the Default model page's row while no provider has an API key." },
+  "noProviderTitle": "No provider yet",
+  "@noProviderTitle": { "description": "The title of the toast that shows as the user sends while no provider has an API key." },
+  "noProviderAbout": "Add an API key of OpenAI, Anthropic, OpenRouter or DeepSeek to send messages.",
+  "@noProviderAbout": { "description": "Under the title of the toast that shows as the user sends while no provider has an API key." }
 }

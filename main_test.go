@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -17,6 +18,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/anthropics/anthropic-sdk-go/v2/option"
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -148,7 +152,7 @@ func TestGroupByDay(t *testing.T) {
 	}
 }
 
-func TestOpenRouterStream(t *testing.T) {
+func TestChatCompletionsStream(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chat/completions" || r.Header.Get("Authorization") != "Bearer key" || r.Header.Get("X-Title") != "HyperAI" {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -166,7 +170,7 @@ func TestOpenRouterStream(t *testing.T) {
 		fmt.Fprint(w, "data: [DONE]\n\n")
 	}))
 	defer srv.Close()
-	p := &openRouter{baseURL: srv.URL, apiKey: "key", models: []string{"m"}, client: srv.Client()}
+	p := &openAI{name: "OpenRouter", baseURL: srv.URL, apiKey: "key", models: []string{"m"}, client: srv.Client()}
 	var got strings.Builder
 	if err := p.Stream(context.Background(), "m", []turn{{Role: "user", Content: "Hi"}}, func(s string) { got.WriteString(s) }); err != nil {
 		t.Fatal(err)
@@ -176,7 +180,7 @@ func TestOpenRouterStream(t *testing.T) {
 	}
 
 	// An error after the reply began ends it.
-	failing := &openRouter{baseURL: srv.URL, apiKey: "key", client: &http.Client{Transport: failTransport{srv.Client().Transport}}}
+	failing := &openAI{baseURL: srv.URL, apiKey: "key", client: &http.Client{Transport: failTransport{srv.Client().Transport}}}
 	if err := failing.Stream(context.Background(), "m", nil, func(string) {}); err == nil || err.Error() != "Provider returned error" {
 		t.Errorf("error %v for an error mid-stream", err)
 	}
@@ -232,40 +236,6 @@ func TestCSSOklch(t *testing.T) {
 		r2, g2, b2 := p3(oklchOfP3(r, g, b))
 		if math.Abs(r-r2)+math.Abs(g-g2)+math.Abs(b-b2) > 1e-6 {
 			t.Errorf("round trip of %v %v %v is %v %v %v", r, g, b, r2, g2, b2)
-		}
-	}
-}
-
-func TestLoadEnv(t *testing.T) {
-	got := parseEnv(`# a comment
-export A=1
-B = "two words"  
-C='single # not a comment'
-D=plain # a comment
-E=
-broken line
-A=last
-`)
-	want := map[string]string{"A": "last", "B": "two words", "C": "single # not a comment", "D": "plain", "E": ""}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Errorf("parsed %v, want %v", got, want)
-	}
-
-	// The environment wins over the files, and the first file over the
-	// later.
-	dir := t.TempDir()
-	first, second := dir+"/first.env", dir+"/second.env"
-	os.WriteFile(first, []byte("HYPERAI_T1=file\nHYPERAI_T2=first\n"), 0o600)
-	os.WriteFile(second, []byte("HYPERAI_T2=second\nHYPERAI_T3=second\n"), 0o600)
-	t.Setenv("HYPERAI_T1", "shell")
-	for _, k := range []string{"HYPERAI_T2", "HYPERAI_T3"} {
-		t.Setenv(k, "")
-		os.Unsetenv(k)
-	}
-	loadEnv(first, dir+"/missing.env", second)
-	for k, v := range map[string]string{"HYPERAI_T1": "shell", "HYPERAI_T2": "first", "HYPERAI_T3": "second"} {
-		if got := os.Getenv(k); got != v {
-			t.Errorf("%s = %q, want %q", k, got, v)
 		}
 	}
 }
@@ -2473,5 +2443,394 @@ func TestMathSetting(t *testing.T) {
 	tt.Frame()
 	if m := a.settingsMatches(); len(m) != 1 || m[0].key != "general" || !slices.Equal(m[0].hits, []string{"Render math expressions"}) {
 		t.Errorf("LaTeX finds %+v", m)
+	}
+}
+
+func TestAnthropicStream(t *testing.T) {
+	var body map[string]any
+	var beta string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The key, as the SDK sends it for its API version.
+		key := r.Header.Get("X-Api-Key") == "key" || r.Header.Get("Authorization") == "Bearer key"
+		if r.URL.Path != "/v1/messages" || !key || r.Header.Get("Anthropic-Version") == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}`)
+			return
+		}
+		body, beta = nil, r.Header.Get("Anthropic-Beta")
+		json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		event := func(name, data string) { fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, data) }
+		event("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"m","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`)
+		event("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)
+		for _, s := range []string{"Hel", "lo", "!"} {
+			event("content_block_delta", fmt.Sprintf(`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":%q}}`, s))
+		}
+		switch body["model"] {
+		case "overloaded":
+			event("error", `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`)
+			return
+		case "refusing":
+			event("message_delta", `{"type":"message_delta","delta":{"stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"It reads as malware."}},"usage":{"output_tokens":3}}`)
+		default:
+			event("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}`)
+		}
+		event("message_stop", `{"type":"message_stop"}`)
+	}))
+	defer srv.Close()
+	client := func(key string) *anthropicAPI {
+		return &anthropicAPI{client: anthropic.NewClient(option.WithAPIKey(key), option.WithBaseURL(srv.URL), option.WithMaxRetries(0))}
+	}
+	p := client("key")
+	turns := []turn{{Role: "user", Content: "Hi"}, {Role: "assistant", Content: "Hello."}, {Role: "user", Content: "Again"}}
+	var got strings.Builder
+	if err := p.Stream(context.Background(), "claude-opus-5-5", turns, func(s string) { got.WriteString(s) }); err != nil {
+		t.Fatal(err)
+	}
+	if got.String() != "Hello!" {
+		t.Errorf("reply %q", got.String())
+	}
+	// The conversation, in its roles; Claude Opus asks for a fallback, as
+	// Claude Haiku, which has none, does not.
+	msgs, _ := json.Marshal(body["messages"])
+	if want := `[{"content":[{"text":"Hi","type":"text"}],"role":"user"},{"content":[{"text":"Hello.","type":"text"}],"role":"assistant"},{"content":[{"text":"Again","type":"text"}],"role":"user"}]`; string(msgs) != want {
+		t.Errorf("messages %s, want %s", msgs, want)
+	}
+	if body["fallbacks"] != "default" || !strings.Contains(beta, "server-side-fallback-2026-07-01") || body["max_tokens"] != float64(64000) {
+		t.Errorf("fallbacks %v, beta %q, max_tokens %v", body["fallbacks"], beta, body["max_tokens"])
+	}
+	if err := p.Stream(context.Background(), "claude-haiku-5-5", turns, func(string) {}); err != nil || body["fallbacks"] != nil {
+		t.Errorf("Haiku: error %v, fallbacks %v", err, body["fallbacks"])
+	}
+
+	// What went wrong, as the API says it.
+	for _, c := range []struct{ key, model, want string }{
+		{"key", "refusing", "Claude declined to answer: It reads as malware."},
+		{"key", "overloaded", "Overloaded"},
+		{"wrong", "claude-opus-5-5", "401 Unauthorized: invalid x-api-key"},
+	} {
+		if err := client(c.key).Stream(context.Background(), c.model, turns, func(string) {}); err == nil || err.Error() != c.want {
+			t.Errorf("%s with %q: error %v, want %q", c.model, c.key, err, c.want)
+		}
+	}
+}
+
+// memKeyring keeps secrets in memory, as the credential store does; fail
+// makes it refuse to keep them.
+type memKeyring struct {
+	secrets map[string][]byte
+	fail    error
+}
+
+func (k *memKeyring) Get(key string) ([]byte, error) {
+	if v, ok := k.secrets[key]; ok {
+		return v, nil
+	}
+	return nil, mygo.ErrSecretNotFound
+}
+
+func (k *memKeyring) Set(key string, value []byte) error {
+	if k.fail != nil {
+		return k.fail
+	}
+	k.secrets[key] = value
+	return nil
+}
+
+func (k *memKeyring) Delete(key string) error {
+	delete(k.secrets, key)
+	return nil
+}
+
+// modelsServer serves the models of OpenAI's API at /models and of
+// Anthropic's at /v1/models, to key "good", and replies to chats there.
+func modelsServer(t *testing.T) *httptest.Server {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization") == "Bearer good" || r.Header.Get("X-Api-Key") == "good"
+		w.Header().Set("Content-Type", "application/json")
+		if !auth {
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, `{"type":"error","error":{"type":"authentication_error","message":"invalid key"}}`)
+			return
+		}
+		switch r.URL.Path {
+		case "/models":
+			fmt.Fprint(w, `{"data":[{"id":"gpt-5"},{"id":"text-embedding-3-small"},{"id":"gpt-5-nano"},{"id":"openai/gpt-5"},{"id":"meta/llama-4"}]}`)
+		case "/v1/models":
+			fmt.Fprint(w, `{"data":[{"type":"model","id":"claude-sonnet-5-5","display_name":"Claude Sonnet 5.5","created_at":"2026-08-01T00:00:00Z"},`+
+				`{"type":"model","id":"claude-opus-5-5","display_name":"Claude Opus 5.5","created_at":"2026-09-01T00:00:00Z"}],"has_more":false}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestListModels(t *testing.T) {
+	srv := modelsServer(t)
+	p := &openAI{baseURL: srv.URL, apiKey: "good", client: srv.Client()}
+	got, err := p.List(context.Background())
+	if want := []string{"gpt-5", "text-embedding-3-small", "gpt-5-nano", "openai/gpt-5", "meta/llama-4"}; err != nil || !slices.Equal(got, want) {
+		t.Errorf("OpenAI's: %q, %v", got, err)
+	}
+	p.apiKey = "bad"
+	if _, err := p.List(context.Background()); err == nil || !strings.Contains(err.Error(), "401") {
+		t.Errorf("error %v for a bad key", err)
+	}
+	q := openAnthropic(providerKindOf("anthropic"), srv.URL, "good", nil)
+	if got, err := q.List(context.Background()); err != nil || !slices.Equal(got, []string{"claude-sonnet-5-5", "claude-opus-5-5"}) {
+		t.Errorf("Anthropic's: %q, %v", got, err)
+	}
+	q = openAnthropic(providerKindOf("anthropic"), srv.URL, "bad", nil)
+	if _, err := q.List(context.Background()); err == nil || err.Error() != "401 Unauthorized: invalid key" {
+		t.Errorf("error %v for a bad key", err)
+	}
+	// OpenAI's models that chat, and not those that embed.
+	for model, chat := range map[string]bool{"gpt-5": true, "o4-mini": true, "text-embedding-3-small": false, "gpt-4o-mini-tts": false, "whisper-1": false} {
+		if openAIChat(model) != chat {
+			t.Errorf("openAIChat(%q) is %v", model, !chat)
+		}
+	}
+}
+
+func TestProviders(t *testing.T) {
+	srv := modelsServer(t)
+	kr := &memKeyring{secrets: map[string][]byte{}}
+	// The app, which asks nothing until a provider has a key.
+	a := newApp(nil)
+	tt := ui.NewTester(a.view, 1120, 760)
+	// The environment gives none: keys are the user's to give.
+	t.Setenv("OPENAI_API_KEY", "sk-env")
+	a.loadKeys(kr)
+	if a.prov != nil || a.model != "" {
+		t.Fatalf("asks %v's %q without a key", a.prov, a.model)
+	}
+	// The endpoints, here, of all.
+	for _, kind := range providerKinds {
+		a.setEndpoint(kind.id, srv.URL+"/")
+	}
+	if c := a.confs["openai"]; c.BaseURL != srv.URL {
+		t.Errorf("endpoint %q, want it without its slash", c.BaseURL)
+	}
+
+	// Without one, sending sends nothing, keeps what the composer holds,
+	// and says why, once however often it is tried, with the button that
+	// goes to the Providers page.
+	texts := func(s string) int { return strings.Count(strings.Join(tt.Texts(), "\n"), s) }
+	toast := func(how string) {
+		t.Helper()
+		if len(a.threads) != 0 || a.draft != "Hello" || tt.HasText("hyperai-demo") {
+			t.Fatalf("%s without a key: chats %d, draft %q, texts %q", how, len(a.threads), a.draft, tt.Texts())
+		}
+		if texts("Add an API key of OpenAI, Anthropic, OpenRouter or DeepSeek to send messages.") != 1 || texts("No provider yet") != 1 {
+			t.Fatalf("%s: no one toast that says why in %q", how, tt.Texts())
+		}
+	}
+	tt.Frame()
+	tt.Type("Hello")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	toast("Return")
+	if err := tt.Click("Send"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	toast("Send")
+	// Its button, beside the composer's, goes as it does.
+	withToast := texts("Add a Provider")
+	tt.Advance(5 * time.Second)
+	if tt.HasText("No provider yet") || texts("Add a Provider") >= withToast {
+		t.Errorf("the toast, and its button, still show: %q", tt.Texts())
+	}
+	if err := tt.Click("Add a Provider"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.settings || a.settingsPage != "providers" || a.draft != "Hello" {
+		t.Fatalf("the composer's button shows settings %v, page %q, draft %q", a.settings, a.settingsPage, a.draft)
+	}
+	a.openSettings()
+	a.settingsPage = "model"
+	tt.Frame()
+	if !tt.HasText("No provider has an API key yet.") {
+		t.Errorf("the Default model page shows %q", tt.Texts())
+	}
+	a.closeSettings()
+	a.draft = ""
+	tt.Frame()
+	if err := tt.Click("Add an API key to start chatting"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if !a.settings || a.settingsPage != "providers" || !tt.HasText("Not set up") || !tt.HasText("Anthropic") {
+		t.Fatalf("the note shows settings %v, page %q: %q", a.settings, a.settingsPage, tt.Texts())
+	}
+
+	// A key typed, and Return, keeps it, lists its models, and asks the
+	// first the provider offers of its own that it lists.
+	a.edit("key anthropic", "")
+	tt.Frame()
+	tt.Type("good")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	if a.prov.ID() != "anthropic" || a.model != "claude-opus-5-5" || a.editing != "" {
+		t.Fatalf("asks %s's %q, editing %q after a key", a.prov.Name(), a.model, a.editing)
+	}
+	if got := string(kr.secrets[keysSecret]); got != `{"anthropic":"good"}` {
+		t.Errorf("kept %q", got)
+	}
+	if got := a.prov.Models(); !slices.Equal(got, []string{"claude-opus-5-5", "claude-sonnet-5-5"}) {
+		t.Errorf("offers %q, want those of its own it lists", got)
+	}
+	if !tt.HasText("Key ending in good") || !tt.HasText("2 in the composer, of 2 it lists") || !tt.HasText(srv.URL) {
+		t.Errorf("the page shows %q", tt.Texts())
+	}
+
+	// A wrong key says so where the models are.
+	a.setKey("openai", "bad")
+	tt.Frame()
+	if !tt.HasText("Couldn’t list its models: 401 Unauthorized: invalid key") {
+		t.Errorf("no error for a bad key in %q", tt.Texts())
+	}
+	a.setKey("openai", "good")
+	if c := a.confs["openai"]; !slices.Equal(c.Listed, []string{"gpt-5", "gpt-5-nano", "meta/llama-4", "openai/gpt-5"}) {
+		t.Errorf("listed %q, want those that chat, sorted", c.Listed)
+	}
+	// OpenAI's own, but gpt-5-mini, which it does not list.
+	if got := a.shownModels(providerKindOf("openai")); !slices.Equal(got, []string{"gpt-5"}) {
+		t.Errorf("OpenAI offers %q", got)
+	}
+	if a.prov.ID() != "anthropic" {
+		t.Errorf("a key added changed the provider to %s", a.prov.Name())
+	}
+
+	// Models added, from the list or by name, and removed.
+	a.addModel("openai", "gpt-5-nano")
+	a.edit("model openai", "")
+	tt.Frame()
+	tt.Type("o3-pro")
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	a.removeModel("openai", "gpt-5")
+	if got := a.shownModels(providerKindOf("openai")); !slices.Equal(got, []string{"gpt-5-nano", "o3-pro"}) {
+		t.Errorf("OpenAI offers %q after the edits", got)
+	}
+	if !tt.HasText("o3-pro") {
+		t.Errorf("no row of the model added in %q", tt.Texts())
+	}
+	// With none left, the provider is offered no more, and lists still.
+	a.setShown("openai", nil)
+	a.confs["openai"].Listed = nil
+	if a.providerOf(modelRef{"openai", "o3-pro"}) != nil {
+		t.Errorf("OpenAI offered with no model")
+	}
+	a.listModels("openai")
+	if len(a.confs["openai"].Listed) == 0 {
+		t.Errorf("OpenAI listed nothing with no model offered")
+	}
+	a.setShown("openai", []string{"gpt-5-nano", "o3-pro"})
+
+	// The composer's menu lists each one's models under its name, and asks
+	// the one chosen.
+	a.closeSettings()
+	tt.Frame()
+	if err := tt.Click("Model"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"OpenAI", "gpt-5-nano", "o3-pro", "-", "Anthropic", "claude-opus-5-5", "claude-sonnet-5-5"}
+	if got := tt.Menu(); !slices.Equal(got, want) {
+		t.Fatalf("menu %q, want %q", got, want)
+	}
+	if err := tt.ChooseMenuItem("o3-pro"); err != nil {
+		t.Fatal(err)
+	}
+	if a.prov.ID() != "openai" || a.model != "o3-pro" {
+		t.Errorf("asks %s's %q, want OpenAI's o3-pro", a.prov.Name(), a.model)
+	}
+
+	// A chat keeps the model it asked, and a new chat asks the default,
+	// which the Default model page chooses.
+	a.send("Hello")
+	tt.Advance(time.Second)
+	chat := a.selected
+	if th := a.current(); th == nil || th.Provider != "openai" || th.Model != "o3-pro" {
+		t.Fatalf("the chat keeps %+v", th)
+	}
+	// The first provider's first model, until a default is chosen.
+	a.newChat()
+	tt.Frame()
+	if a.prov.ID() != "openai" || a.model != "gpt-5-nano" {
+		t.Errorf("a new chat asks %s's %q", a.prov.Name(), a.model)
+	}
+	a.openSettings()
+	a.settingsPage = "model"
+	tt.Frame()
+	// The pop-up button, by the default it shows.
+	if err := tt.Click("gpt-5-nano"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("claude-sonnet-5-5"); err != nil {
+		t.Fatal(err)
+	}
+	if a.defaultModel != (modelRef{"anthropic", "claude-sonnet-5-5"}) || a.model != "claude-sonnet-5-5" {
+		t.Errorf("default %+v, asks %q", a.defaultModel, a.model)
+	}
+	a.open(chat)
+	tt.Frame()
+	if a.prov.ID() != "openai" || a.model != "o3-pro" {
+		t.Errorf("the chat asks %s's %q again", a.prov.Name(), a.model)
+	}
+	a.newChat()
+	tt.Frame()
+	if a.model != "claude-sonnet-5-5" {
+		t.Errorf("a new chat asks %q, not the default", a.model)
+	}
+
+	// The settings, kept for the next start, the keys apart.
+	dir := t.TempDir()
+	a.confPath = filepath.Join(dir, "providers.json")
+	a.saveConf()
+	a.confSaver.wait()
+	b := newApp(&demo{})
+	b.loadConf(dir)
+	b.loadKeys(kr)
+	if b.defaultModel != a.defaultModel || !slices.Equal(b.shownModels(providerKindOf("openai")), []string{"gpt-5-nano", "o3-pro"}) ||
+		b.prov.ID() != "anthropic" || b.model != "claude-sonnet-5-5" {
+		t.Errorf("after a restart: default %+v, asks %s's %q", b.defaultModel, b.prov.Name(), b.model)
+	}
+	if kept, _ := os.ReadFile(a.confPath); strings.Contains(string(kept), "good") {
+		t.Errorf("providers.json holds a key: %s", kept)
+	}
+
+	// Removing the keys asks the next, then the demo.
+	a.setKey("anthropic", "")
+	if a.prov.ID() != "openai" {
+		t.Errorf("asks %s once Anthropic's key is gone", a.prov.Name())
+	}
+	a.setKey("openai", "")
+	if a.prov != nil || len(kr.secrets) != 0 {
+		t.Errorf("asks %v, keeps %q with no key", a.prov, kr.secrets)
+	}
+
+	// Where the store cannot keep a key, it serves until the app quits,
+	// and the page says why.
+	kr.fail = errors.New("keychain locked")
+	a.setKey("deepseek", "good")
+	a.openSettings()
+	a.settingsPage = "providers"
+	tt.Frame()
+	if a.prov.ID() != "deepseek" || !tt.HasText("Couldn’t save the key, so it works only until HyperAI quits: keychain locked") {
+		t.Errorf("asks %s, the page shows %q", a.prov.Name(), tt.Texts())
+	}
+
+	// The field finds the pages.
+	for q, page := range map[string]string{"deepseek": "providers", "proxy": "providers"} {
+		a.settingsQuery = q
+		tt.Frame()
+		if m := a.settingsMatches(); len(m) != 1 || m[0].key != page {
+			t.Errorf("%s finds %+v", q, m)
+		}
 	}
 }

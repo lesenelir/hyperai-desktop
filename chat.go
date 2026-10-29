@@ -24,7 +24,6 @@ var suggestions = []struct {
 	{codeIcon, locales.SuggestionCache},
 	{planIcon, locales.SuggestionPlan},
 	{ideaIcon, locales.SuggestionScheduler},
-	{plugIcon, locales.SuggestionModel},
 }
 
 // pane builds the chat shown: its title bar, its messages or the welcome,
@@ -112,11 +111,21 @@ func (a *app) prompts(c *ui.Context) {
 			}
 		})
 		ui.Spacer(c)
-		note := locales.NoteAccuracy()
-		if _, ok := a.prov.(*demo); ok {
-			note = locales.NoteDemo()
+		if a.prov != nil {
+			ui.Text(c, locales.NoteAccuracy()).FontSize(12).TextColor(t.TextMuted).Padding(24, 0, 14, 0)
+			return
 		}
-		ui.Text(c, note).FontSize(12).TextColor(t.TextMuted).Padding(24, 0, 14, 0)
+		// No provider has a key: the note goes to the page that takes one.
+		link := ui.ButtonBase(c.Key("add a key")).Label(locales.NoteAddKey()).TextColor(a.pal.ac).Padding(24, 0, 14, 0)
+		link.Children(func() {
+			text := ui.Text(c, locales.NoteAddKey()).FontSize(12)
+			if link.Hovered() {
+				text.Underline()
+			}
+		})
+		if link.Clicked() {
+			a.showProviders()
+		}
 	})
 }
 
@@ -620,7 +629,12 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 							if !a.sends(k.Key, k.Mods) {
 								return false
 							}
-							if a.busy == nil && strings.TrimSpace(k.Text()) != "" {
+							switch {
+							case a.busy != nil || strings.TrimSpace(k.Text()) == "":
+							case a.prov == nil:
+								// Out of the frame: the toast shows in the next.
+								a.needProvider = true
+							default:
 								a.send(k.Text())
 								k.SetText("")
 							}
@@ -698,10 +712,17 @@ func (a *app) composerTools(c *ui.Context, ready bool) ui.Element {
 			send.Background(a.pal.fg.Alpha(0.08)).TextColor(a.pal.fg.Alpha(0.35))
 		}
 		send.Children(func() { ui.Icon(c, svg).Size(16, 16) })
+		if a.needProvider {
+			a.needProvider = false
+			a.askForProvider(c)
+		}
 		if send.Clicked() {
-			if a.busy != nil {
+			switch {
+			case a.busy != nil:
 				a.stop()
-			} else {
+			case a.prov == nil:
+				a.askForProvider(c)
+			default:
 				a.send(a.draft)
 			}
 		}
@@ -709,9 +730,34 @@ func (a *app) composerTools(c *ui.Context, ready bool) ui.Element {
 	return row
 }
 
-// modelPicker builds the button that chooses the model to ask.
+// askForProvider says, as the user sends while no provider has an API
+// key, that one needs a key first, with the button that goes to the page
+// that takes it; the draft stays. Sending again shows the toast anew,
+// rather than another.
+func (a *app) askForProvider(c *ui.Context) {
+	c.AddToast(ui.Toast{ID: "no provider", Title: locales.NoProviderTitle(), Description: locales.NoProviderAbout(),
+		Action: locales.ModelAddProvider(), OnAction: a.showProviders})
+}
+
+// modelPicker builds the button that chooses the model to ask, or, where
+// no provider has a key, that goes to the page that takes one.
 func (a *app) modelPicker(c *ui.Context) {
 	t := c.Theme()
+	if a.prov == nil {
+		b := ui.ButtonBase(c.Key("add a provider")).Padding(5, 8).Gap(6).Radius(8).TextColor(a.pal.ac).
+			Label(locales.ModelAddProvider())
+		if b.Hovered() {
+			b.Background(a.pal.fg.Alpha(0.06))
+		}
+		b.Children(func() {
+			ui.Icon(c, plugIcon).Size(13, 13)
+			ui.Text(c, locales.ModelAddProvider()).FontSize(13)
+		})
+		if b.Clicked() {
+			a.showProviders()
+		}
+		return
+	}
 	b := ui.ButtonBase(c.Key("model")).Padding(5, 8).Gap(6).Radius(8).TextColor(t.TextMuted).Label(locales.Model())
 	if b.Hovered() {
 		b.Background(a.pal.fg.Alpha(0.06)).TextColor(t.Text)
@@ -722,11 +768,7 @@ func (a *app) modelPicker(c *ui.Context) {
 		ui.Icon(c, chevronIcon).Size(12, 12)
 	})
 	b.Menu(func(m *ui.Menu) {
-		for _, model := range a.prov.Models() {
-			if m.Item(model).Checked(model == a.model).Chosen() {
-				a.model = model
-			}
-		}
+		a.modelMenu(m, func(p provider, model string) bool { return p == a.prov && model == a.model }, a.choose)
 	})
 }
 

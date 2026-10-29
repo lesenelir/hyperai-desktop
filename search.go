@@ -157,9 +157,11 @@ func (a *app) searchSections() []searchSection {
 // for none: the model to ask, and whether the sidebar shows.
 func (a *app) settingItems(q string) []searchItem {
 	var items []searchItem
-	for _, model := range a.prov.Models() {
-		items = append(items, searchItem{key: "model " + model, icon: logoIcon, tint: true, title: locales.SearchModel(model),
-			check: model == a.model, run: func() { a.model = model }})
+	for _, p := range a.provs {
+		for _, model := range p.Models() {
+			items = append(items, searchItem{key: "model " + p.Name() + " " + model, icon: logoIcon, tint: true,
+				title: locales.SearchModel(model), check: p == a.prov && model == a.model, run: func() { a.choose(p, model) }})
+		}
 	}
 	sidebar := locales.HideSidebar()
 	if a.collapsed {

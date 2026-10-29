@@ -23,6 +23,7 @@ func (a *app) load() {
 // shown last, where General says to and it is still there.
 func (a *app) loadFrom(dir string) {
 	a.loadLayout(dir)
+	a.loadConf(dir)
 	defer func() {
 		if a.onLaunch == launchLast && a.thread(a.keptChat) != nil {
 			a.selected = a.keptChat

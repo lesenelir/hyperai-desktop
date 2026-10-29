@@ -1,7 +1,8 @@
 // HyperAI is an AI chat client in native UI: chats in a sidebar, replies
 // streamed in as Markdown, and a composer that asks the model chosen. It
-// talks to models through OpenRouter when OPENROUTER_API_KEY is set, in
-// the environment or a .env file, and to a pretend model otherwise.
+// talks to the providers the user gave an API key on the Providers page
+// (OpenAI, Anthropic, OpenRouter, DeepSeek); until one has a key, the
+// composer asks for one.
 package main
 
 import (
@@ -19,15 +20,6 @@ import (
 
 func main() {
 	mygo.App.WhenReady(func() {
-		// .env files set what the environment leaves unset: the project's,
-		// where `mygo dev` runs the app, then the one in the user data
-		// directory, which an app opened from the Finder, without the
-		// shell's environment, reads too.
-		envFiles := []string{".env"}
-		if dir, err := mygo.App.Path(mygo.PathUserData); err == nil {
-			envFiles = append(envFiles, filepath.Join(dir, ".env"))
-		}
-		loadEnv(envFiles...)
 		bench := benchReplies()
 		var a *app
 		if bench > 0 {
@@ -35,8 +27,11 @@ func main() {
 			// the user's chats.
 			a = newApp(&demo{paced: true, rng: rand.New(rand.NewPCG(1, 2))})
 		} else {
-			a = newApp(newProvider())
+			a = newApp(nil)
 			a.load()
+			// The API keys, from the system's credential store, which asks
+			// the user to let a rebuilt app read them.
+			a.loadKeys(mygo.Secrets)
 			// The theme chosen, before the window opens in another.
 			a.applyTheme = func(theme string) { mygo.Theme.SetSource(mygo.ThemeSource(theme)) }
 			a.applyTheme(a.theme)
@@ -70,6 +65,9 @@ func main() {
 			go a.bench(bench)
 		} else {
 			a.focused = a.win.IsFocused
+			// The models of the providers that listed none yet, as they
+			// have them now.
+			a.listUnlisted()
 			a.notify = func(title, body string, clicked func(), failed func(error)) {
 				notifyReply(a.win, title, body, clicked, failed)
 			}
@@ -78,6 +76,7 @@ func main() {
 		mygo.App.OnQuit(func() {
 			a.saver.wait()
 			a.layoutSaver.wait()
+			a.confSaver.wait()
 		})
 	})
 	if err := mygo.App.Run(); err != nil {

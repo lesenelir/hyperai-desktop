@@ -598,22 +598,6 @@ func (msgs Messages) SuggestionScheduler() string {
 	return Catalog.Format(msgs.locale, "suggestionScheduler", nil)
 }
 
-// SuggestionModel says "How do I connect this app to a real model?"
-// in the language the app shows.
-//
-// A prompt an empty chat offers to ask, which a click writes in the
-// composer.
-func SuggestionModel() string { return In(i18n.Locale()).SuggestionModel() }
-
-// SuggestionModel says "How do I connect this app to a real model?"
-// in the language of msgs.
-//
-// A prompt an empty chat offers to ask, which a click writes in the
-// composer.
-func (msgs Messages) SuggestionModel() string {
-	return Catalog.Format(msgs.locale, "suggestionModel", nil)
-}
-
 // NoteAccuracy says "Answers may be inaccurate, so check important details."
 // in the language the app shows.
 //
@@ -626,22 +610,6 @@ func NoteAccuracy() string { return In(i18n.Locale()).NoteAccuracy() }
 // The note at the foot of an empty chat.
 func (msgs Messages) NoteAccuracy() string {
 	return Catalog.Format(msgs.locale, "noteAccuracy", nil)
-}
-
-// NoteDemo says "Demo replies · set OPENROUTER_API_KEY in .env to talk to a real model."
-// in the language the app shows.
-//
-// The note at the foot of an empty chat while replies are the demo's.
-// OPENROUTER_API_KEY and .env stay as they are.
-func NoteDemo() string { return In(i18n.Locale()).NoteDemo() }
-
-// NoteDemo says "Demo replies · set OPENROUTER_API_KEY in .env to talk to a real model."
-// in the language of msgs.
-//
-// The note at the foot of an empty chat while replies are the demo's.
-// OPENROUTER_API_KEY and .env stay as they are.
-func (msgs Messages) NoteDemo() string {
-	return Catalog.Format(msgs.locale, "noteDemo", nil)
 }
 
 // ScrollToEnd says "Scroll to end"
@@ -1412,13 +1380,13 @@ func (msgs Messages) PageProviders() string {
 	return Catalog.Format(msgs.locale, "pageProviders", nil)
 }
 
-// PageProvidersAbout says "Where replies come from: OpenRouter and its API key, and other providers."
+// PageProvidersAbout says "Where replies come from: the services HyperAI asks, with your API key for each."
 // in the language the app shows.
 //
 // Under the Providers page's title.
 func PageProvidersAbout() string { return In(i18n.Locale()).PageProvidersAbout() }
 
-// PageProvidersAbout says "Where replies come from: OpenRouter and its API key, and other providers."
+// PageProvidersAbout says "Where replies come from: the services HyperAI asks, with your API key for each."
 // in the language of msgs.
 //
 // Under the Providers page's title.
@@ -3064,4 +3032,620 @@ func KeysOr() string { return In(i18n.Locale()).KeysOr() }
 // Between two shortcuts that do the same, as "↓ or ⌃N".
 func (msgs Messages) KeysOr() string {
 	return Catalog.Format(msgs.locale, "keysOr", nil)
+}
+
+// KeysCard says "API keys"
+// in the language the app shows.
+//
+// The Providers page's card of the providers' keys.
+func KeysCard() string { return In(i18n.Locale()).KeysCard() }
+
+// KeysCard says "API keys"
+// in the language of msgs.
+//
+// The Providers page's card of the providers' keys.
+func (msgs Messages) KeysCard() string {
+	return Catalog.Format(msgs.locale, "keysCard", nil)
+}
+
+// ProviderTerms says "API key, key, token, secret, provider, service, endpoint, base URL, proxy, models"
+// in the language the app shows.
+//
+// More words the settings' field finds the Providers page by,
+// comma-separated.
+func ProviderTerms() string { return In(i18n.Locale()).ProviderTerms() }
+
+// ProviderTerms says "API key, key, token, secret, provider, service, endpoint, base URL, proxy, models"
+// in the language of msgs.
+//
+// More words the settings' field finds the Providers page by,
+// comma-separated.
+func (msgs Messages) ProviderTerms() string {
+	return Catalog.Format(msgs.locale, "providerTerms", nil)
+}
+
+// KeyNone says "Not set up"
+// in the language the app shows.
+//
+// Under a provider of the Providers page that has no API key.
+func KeyNone() string { return In(i18n.Locale()).KeyNone() }
+
+// KeyNone says "Not set up"
+// in the language of msgs.
+//
+// Under a provider of the Providers page that has no API key.
+func (msgs Messages) KeyNone() string {
+	return Catalog.Format(msgs.locale, "keyNone", nil)
+}
+
+// KeySet says "Key ending in {end}"
+// in the language the app shows.
+//
+// Under a provider of the Providers page that has the user's API key: its
+// last characters.
+func KeySet(end string) string { return In(i18n.Locale()).KeySet(end) }
+
+// KeySet says "Key ending in {end}"
+// in the language of msgs.
+//
+// Under a provider of the Providers page that has the user's API key: its
+// last characters.
+func (msgs Messages) KeySet(end string) string {
+	return Catalog.Format(msgs.locale, "keySet", map[string]any{"end": end})
+}
+
+// KeyPlaceholder says "Paste the API key"
+// in the language the app shows.
+//
+// The placeholder of the field that takes a provider's API key.
+func KeyPlaceholder() string { return In(i18n.Locale()).KeyPlaceholder() }
+
+// KeyPlaceholder says "Paste the API key"
+// in the language of msgs.
+//
+// The placeholder of the field that takes a provider's API key.
+func (msgs Messages) KeyPlaceholder() string {
+	return Catalog.Format(msgs.locale, "keyPlaceholder", nil)
+}
+
+// KeyLabel says "{provider} API key"
+// in the language the app shows.
+//
+// The label of the field that takes a provider's API key, for assistive
+// technologies.
+func KeyLabel(provider string) string { return In(i18n.Locale()).KeyLabel(provider) }
+
+// KeyLabel says "{provider} API key"
+// in the language of msgs.
+//
+// The label of the field that takes a provider's API key, for assistive
+// technologies.
+func (msgs Messages) KeyLabel(provider string) string {
+	return Catalog.Format(msgs.locale, "keyLabel", map[string]any{"provider": provider})
+}
+
+// KeySave says "Save"
+// in the language the app shows.
+//
+// The button that saves the API key typed.
+func KeySave() string { return In(i18n.Locale()).KeySave() }
+
+// KeySave says "Save"
+// in the language of msgs.
+//
+// The button that saves the API key typed.
+func (msgs Messages) KeySave() string {
+	return Catalog.Format(msgs.locale, "keySave", nil)
+}
+
+// KeyRemove says "Remove"
+// in the language the app shows.
+//
+// The button that forgets a provider's API key.
+func KeyRemove() string { return In(i18n.Locale()).KeyRemove() }
+
+// KeyRemove says "Remove"
+// in the language of msgs.
+//
+// The button that forgets a provider's API key.
+func (msgs Messages) KeyRemove() string {
+	return Catalog.Format(msgs.locale, "keyRemove", nil)
+}
+
+// KeyChange says "Change"
+// in the language the app shows.
+//
+// The button that changes a provider's API key, or its endpoint.
+func KeyChange() string { return In(i18n.Locale()).KeyChange() }
+
+// KeyChange says "Change"
+// in the language of msgs.
+//
+// The button that changes a provider's API key, or its endpoint.
+func (msgs Messages) KeyChange() string {
+	return Catalog.Format(msgs.locale, "keyChange", nil)
+}
+
+// KeyGet says "Get a Key"
+// in the language the app shows.
+//
+// The button that opens the provider's website, where its API keys are
+// made.
+func KeyGet() string { return In(i18n.Locale()).KeyGet() }
+
+// KeyGet says "Get a Key"
+// in the language of msgs.
+//
+// The button that opens the provider's website, where its API keys are
+// made.
+func (msgs Messages) KeyGet() string {
+	return Catalog.Format(msgs.locale, "keyGet", nil)
+}
+
+// KeyAdd says "Add Key"
+// in the language the app shows.
+//
+// The button that shows the field that takes a provider's API key.
+func KeyAdd() string { return In(i18n.Locale()).KeyAdd() }
+
+// KeyAdd says "Add Key"
+// in the language of msgs.
+//
+// The button that shows the field that takes a provider's API key.
+func (msgs Messages) KeyAdd() string {
+	return Catalog.Format(msgs.locale, "keyAdd", nil)
+}
+
+// KeysKept says "{platform, select, mac {Keys are kept in your Keychain, and sent only to their provider.} other {Keys are kept in the…"
+// in the language the app shows.
+//
+// The note under the Providers page's keys: where they are kept, on macOS
+// (mac) or elsewhere.
+func KeysKept(platform string) string { return In(i18n.Locale()).KeysKept(platform) }
+
+// KeysKept says "{platform, select, mac {Keys are kept in your Keychain, and sent only to their provider.} other {Keys are kept in the…"
+// in the language of msgs.
+//
+// The note under the Providers page's keys: where they are kept, on macOS
+// (mac) or elsewhere.
+func (msgs Messages) KeysKept(platform string) string {
+	return Catalog.Format(msgs.locale, "keysKept", map[string]any{"platform": platform})
+}
+
+// KeysUnread says "Couldn’t read the saved keys: {error}"
+// in the language the app shows.
+//
+// The note under the Providers page's keys where the credential store could
+// not read them.
+func KeysUnread(error string) string { return In(i18n.Locale()).KeysUnread(error) }
+
+// KeysUnread says "Couldn’t read the saved keys: {error}"
+// in the language of msgs.
+//
+// The note under the Providers page's keys where the credential store could
+// not read them.
+func (msgs Messages) KeysUnread(error string) string {
+	return Catalog.Format(msgs.locale, "keysUnread", map[string]any{"error": error})
+}
+
+// KeysUnkept says "Couldn’t save the key, so it works only until HyperAI quits: {error}"
+// in the language the app shows.
+//
+// The note under the Providers page's keys where the credential store could
+// not keep one.
+func KeysUnkept(error string) string { return In(i18n.Locale()).KeysUnkept(error) }
+
+// KeysUnkept says "Couldn’t save the key, so it works only until HyperAI quits: {error}"
+// in the language of msgs.
+//
+// The note under the Providers page's keys where the credential store could
+// not keep one.
+func (msgs Messages) KeysUnkept(error string) string {
+	return Catalog.Format(msgs.locale, "keysUnkept", map[string]any{"error": error})
+}
+
+// KeyRow says "API key"
+// in the language the app shows.
+//
+// The row of a provider's card that takes its API key.
+func KeyRow() string { return In(i18n.Locale()).KeyRow() }
+
+// KeyRow says "API key"
+// in the language of msgs.
+//
+// The row of a provider's card that takes its API key.
+func (msgs Messages) KeyRow() string {
+	return Catalog.Format(msgs.locale, "keyRow", nil)
+}
+
+// Endpoint says "Endpoint"
+// in the language the app shows.
+//
+// The row of a provider's card that says where its API is, which a proxy or
+// compatible service changes.
+func Endpoint() string { return In(i18n.Locale()).Endpoint() }
+
+// Endpoint says "Endpoint"
+// in the language of msgs.
+//
+// The row of a provider's card that says where its API is, which a proxy or
+// compatible service changes.
+func (msgs Messages) Endpoint() string {
+	return Catalog.Format(msgs.locale, "endpoint", nil)
+}
+
+// EndpointDefault says "{url} (default)"
+// in the language the app shows.
+//
+// Under the endpoint row, where the user kept the provider's own.
+func EndpointDefault(url string) string { return In(i18n.Locale()).EndpointDefault(url) }
+
+// EndpointDefault says "{url} (default)"
+// in the language of msgs.
+//
+// Under the endpoint row, where the user kept the provider's own.
+func (msgs Messages) EndpointDefault(url string) string {
+	return Catalog.Format(msgs.locale, "endpointDefault", map[string]any{"url": url})
+}
+
+// EndpointLabel says "{provider} endpoint"
+// in the language the app shows.
+//
+// The label of the field that takes a provider's endpoint, for assistive
+// technologies.
+func EndpointLabel(provider string) string { return In(i18n.Locale()).EndpointLabel(provider) }
+
+// EndpointLabel says "{provider} endpoint"
+// in the language of msgs.
+//
+// The label of the field that takes a provider's endpoint, for assistive
+// technologies.
+func (msgs Messages) EndpointLabel(provider string) string {
+	return Catalog.Format(msgs.locale, "endpointLabel", map[string]any{"provider": provider})
+}
+
+// EndpointReset says "Reset"
+// in the language the app shows.
+//
+// The button that makes a provider's endpoint its own again.
+func EndpointReset() string { return In(i18n.Locale()).EndpointReset() }
+
+// EndpointReset says "Reset"
+// in the language of msgs.
+//
+// The button that makes a provider's endpoint its own again.
+func (msgs Messages) EndpointReset() string {
+	return Catalog.Format(msgs.locale, "endpointReset", nil)
+}
+
+// Models says "Models"
+// in the language the app shows.
+//
+// The row of a provider's card over the models the composer offers of it.
+func Models() string { return In(i18n.Locale()).Models() }
+
+// Models says "Models"
+// in the language of msgs.
+//
+// The row of a provider's card over the models the composer offers of it.
+func (msgs Messages) Models() string {
+	return Catalog.Format(msgs.locale, "models", nil)
+}
+
+// ModelsShown says "{count} in the composer"
+// in the language the app shows.
+//
+// Under the models row: how many the composer offers, before the provider
+// listed its own.
+func ModelsShown(count int) string { return In(i18n.Locale()).ModelsShown(count) }
+
+// ModelsShown says "{count} in the composer"
+// in the language of msgs.
+//
+// Under the models row: how many the composer offers, before the provider
+// listed its own.
+func (msgs Messages) ModelsShown(count int) string {
+	return Catalog.Format(msgs.locale, "modelsShown", map[string]any{"count": count})
+}
+
+// ModelsShownListed says "{count} in the composer, of {listed} it lists"
+// in the language the app shows.
+//
+// Under the models row: how many the composer offers, of how many the
+// provider lists.
+func ModelsShownListed(count int, listed int) string {
+	return In(i18n.Locale()).ModelsShownListed(count, listed)
+}
+
+// ModelsShownListed says "{count} in the composer, of {listed} it lists"
+// in the language of msgs.
+//
+// Under the models row: how many the composer offers, of how many the
+// provider lists.
+func (msgs Messages) ModelsShownListed(count int, listed int) string {
+	return Catalog.Format(msgs.locale, "modelsShownListed", map[string]any{"count": count, "listed": listed})
+}
+
+// ModelsListing says "Listing its models…"
+// in the language the app shows.
+//
+// Under the models row while the provider's models are being listed.
+func ModelsListing() string { return In(i18n.Locale()).ModelsListing() }
+
+// ModelsListing says "Listing its models…"
+// in the language of msgs.
+//
+// Under the models row while the provider's models are being listed.
+func (msgs Messages) ModelsListing() string {
+	return Catalog.Format(msgs.locale, "modelsListing", nil)
+}
+
+// ModelsFailed says "Couldn’t list its models: {error}"
+// in the language the app shows.
+//
+// Under the models row where the provider could not list its models, as
+// with a wrong key.
+func ModelsFailed(error string) string { return In(i18n.Locale()).ModelsFailed(error) }
+
+// ModelsFailed says "Couldn’t list its models: {error}"
+// in the language of msgs.
+//
+// Under the models row where the provider could not list its models, as
+// with a wrong key.
+func (msgs Messages) ModelsFailed(error string) string {
+	return Catalog.Format(msgs.locale, "modelsFailed", map[string]any{"error": error})
+}
+
+// ModelsRefresh says "Refresh"
+// in the language the app shows.
+//
+// The button that lists the provider's models again.
+func ModelsRefresh() string { return In(i18n.Locale()).ModelsRefresh() }
+
+// ModelsRefresh says "Refresh"
+// in the language of msgs.
+//
+// The button that lists the provider's models again.
+func (msgs Messages) ModelsRefresh() string {
+	return Catalog.Format(msgs.locale, "modelsRefresh", nil)
+}
+
+// ModelAdd says "Add Model"
+// in the language the app shows.
+//
+// The button that opens the menu of models to add to the composer.
+func ModelAdd() string { return In(i18n.Locale()).ModelAdd() }
+
+// ModelAdd says "Add Model"
+// in the language of msgs.
+//
+// The button that opens the menu of models to add to the composer.
+func (msgs Messages) ModelAdd() string {
+	return Catalog.Format(msgs.locale, "modelAdd", nil)
+}
+
+// ModelsNoneListed says "No other models listed"
+// in the language the app shows.
+//
+// The menu of models to add, where the provider lists none that the
+// composer does not offer.
+func ModelsNoneListed() string { return In(i18n.Locale()).ModelsNoneListed() }
+
+// ModelsNoneListed says "No other models listed"
+// in the language of msgs.
+//
+// The menu of models to add, where the provider lists none that the
+// composer does not offer.
+func (msgs Messages) ModelsNoneListed() string {
+	return Catalog.Format(msgs.locale, "modelsNoneListed", nil)
+}
+
+// ModelOther says "Other Model…"
+// in the language the app shows.
+//
+// The item of the menu of models to add that shows a field for a model's
+// ID.
+func ModelOther() string { return In(i18n.Locale()).ModelOther() }
+
+// ModelOther says "Other Model…"
+// in the language of msgs.
+//
+// The item of the menu of models to add that shows a field for a model's
+// ID.
+func (msgs Messages) ModelOther() string {
+	return Catalog.Format(msgs.locale, "modelOther", nil)
+}
+
+// ModelPlaceholder says "Model ID"
+// in the language the app shows.
+//
+// The placeholder of the field that takes a model's ID.
+func ModelPlaceholder() string { return In(i18n.Locale()).ModelPlaceholder() }
+
+// ModelPlaceholder says "Model ID"
+// in the language of msgs.
+//
+// The placeholder of the field that takes a model's ID.
+func (msgs Messages) ModelPlaceholder() string {
+	return Catalog.Format(msgs.locale, "modelPlaceholder", nil)
+}
+
+// ModelLabel says "{provider} model ID"
+// in the language the app shows.
+//
+// The label of the field that takes a model's ID, for assistive
+// technologies.
+func ModelLabel(provider string) string { return In(i18n.Locale()).ModelLabel(provider) }
+
+// ModelLabel says "{provider} model ID"
+// in the language of msgs.
+//
+// The label of the field that takes a model's ID, for assistive
+// technologies.
+func (msgs Messages) ModelLabel(provider string) string {
+	return Catalog.Format(msgs.locale, "modelLabel", map[string]any{"provider": provider})
+}
+
+// ModelRemove says "Remove"
+// in the language the app shows.
+//
+// The button that takes a model out of the composer's menu.
+func ModelRemove() string { return In(i18n.Locale()).ModelRemove() }
+
+// ModelRemove says "Remove"
+// in the language of msgs.
+//
+// The button that takes a model out of the composer's menu.
+func (msgs Messages) ModelRemove() string {
+	return Catalog.Format(msgs.locale, "modelRemove", nil)
+}
+
+// ModelIsDefault says "New chats ask it"
+// in the language the app shows.
+//
+// Under a model of a provider's card that new chats ask.
+func ModelIsDefault() string { return In(i18n.Locale()).ModelIsDefault() }
+
+// ModelIsDefault says "New chats ask it"
+// in the language of msgs.
+//
+// Under a model of a provider's card that new chats ask.
+func (msgs Messages) ModelIsDefault() string {
+	return Catalog.Format(msgs.locale, "modelIsDefault", nil)
+}
+
+// DefaultModelCard says "New chats"
+// in the language the app shows.
+//
+// The Default model page's card.
+func DefaultModelCard() string { return In(i18n.Locale()).DefaultModelCard() }
+
+// DefaultModelCard says "New chats"
+// in the language of msgs.
+//
+// The Default model page's card.
+func (msgs Messages) DefaultModelCard() string {
+	return Catalog.Format(msgs.locale, "defaultModelCard", nil)
+}
+
+// DefaultModelRow says "Model"
+// in the language the app shows.
+//
+// The Default model page's row that chooses the model new chats ask.
+func DefaultModelRow() string { return In(i18n.Locale()).DefaultModelRow() }
+
+// DefaultModelRow says "Model"
+// in the language of msgs.
+//
+// The Default model page's row that chooses the model new chats ask.
+func (msgs Messages) DefaultModelRow() string {
+	return Catalog.Format(msgs.locale, "defaultModelRow", nil)
+}
+
+// DefaultModelAbout says "What a new chat asks. Each chat keeps the model it asked last."
+// in the language the app shows.
+//
+// Under the row that chooses the model new chats ask.
+func DefaultModelAbout() string { return In(i18n.Locale()).DefaultModelAbout() }
+
+// DefaultModelAbout says "What a new chat asks. Each chat keeps the model it asked last."
+// in the language of msgs.
+//
+// Under the row that chooses the model new chats ask.
+func (msgs Messages) DefaultModelAbout() string {
+	return Catalog.Format(msgs.locale, "defaultModelAbout", nil)
+}
+
+// DefaultModelTerms says "Default, Model, New chat"
+// in the language the app shows.
+//
+// Words the settings' field finds the Default model page by, separated by
+// commas.
+func DefaultModelTerms() string { return In(i18n.Locale()).DefaultModelTerms() }
+
+// DefaultModelTerms says "Default, Model, New chat"
+// in the language of msgs.
+//
+// Words the settings' field finds the Default model page by, separated by
+// commas.
+func (msgs Messages) DefaultModelTerms() string {
+	return Catalog.Format(msgs.locale, "defaultModelTerms", nil)
+}
+
+// NoteAddKey says "Add an API key to start chatting"
+// in the language the app shows.
+//
+// The link at the foot of an empty chat while no provider has an API key,
+// which opens the Providers page.
+func NoteAddKey() string { return In(i18n.Locale()).NoteAddKey() }
+
+// NoteAddKey says "Add an API key to start chatting"
+// in the language of msgs.
+//
+// The link at the foot of an empty chat while no provider has an API key,
+// which opens the Providers page.
+func (msgs Messages) NoteAddKey() string {
+	return Catalog.Format(msgs.locale, "noteAddKey", nil)
+}
+
+// ModelAddProvider says "Add a Provider"
+// in the language the app shows.
+//
+// The composer's button, where no provider has an API key, and the Default
+// model page's, which open the Providers page.
+func ModelAddProvider() string { return In(i18n.Locale()).ModelAddProvider() }
+
+// ModelAddProvider says "Add a Provider"
+// in the language of msgs.
+//
+// The composer's button, where no provider has an API key, and the Default
+// model page's, which open the Providers page.
+func (msgs Messages) ModelAddProvider() string {
+	return Catalog.Format(msgs.locale, "modelAddProvider", nil)
+}
+
+// DefaultModelNone says "No provider has an API key yet."
+// in the language the app shows.
+//
+// Under the Default model page's row while no provider has an API key.
+func DefaultModelNone() string { return In(i18n.Locale()).DefaultModelNone() }
+
+// DefaultModelNone says "No provider has an API key yet."
+// in the language of msgs.
+//
+// Under the Default model page's row while no provider has an API key.
+func (msgs Messages) DefaultModelNone() string {
+	return Catalog.Format(msgs.locale, "defaultModelNone", nil)
+}
+
+// NoProviderTitle says "No provider yet"
+// in the language the app shows.
+//
+// The title of the toast that shows as the user sends while no provider has
+// an API key.
+func NoProviderTitle() string { return In(i18n.Locale()).NoProviderTitle() }
+
+// NoProviderTitle says "No provider yet"
+// in the language of msgs.
+//
+// The title of the toast that shows as the user sends while no provider has
+// an API key.
+func (msgs Messages) NoProviderTitle() string {
+	return Catalog.Format(msgs.locale, "noProviderTitle", nil)
+}
+
+// NoProviderAbout says "Add an API key of OpenAI, Anthropic, OpenRouter or DeepSeek to send messages."
+// in the language the app shows.
+//
+// Under the title of the toast that shows as the user sends while no
+// provider has an API key.
+func NoProviderAbout() string { return In(i18n.Locale()).NoProviderAbout() }
+
+// NoProviderAbout says "Add an API key of OpenAI, Anthropic, OpenRouter or DeepSeek to send messages."
+// in the language of msgs.
+//
+// Under the title of the toast that shows as the user sends while no
+// provider has an API key.
+func (msgs Messages) NoProviderAbout() string {
+	return Catalog.Format(msgs.locale, "noProviderAbout", nil)
 }

@@ -60,8 +60,8 @@ func settingsSections() []settingsSection {
 		{"general", personal, locales.PageGeneral(), settingsIcon, locales.PageGeneralAbout(), (*app).generalPage, (*app).generalTerms},
 		{"appearance", personal, locales.PageAppearance(), sunIcon, locales.PageAppearanceAbout(), (*app).appearancePage, (*app).appearanceTerms},
 		{"shortcuts", personal, locales.PageShortcuts(), keyboardIcon, locales.PageShortcutsAbout(), (*app).shortcutsPage, (*app).shortcutTerms},
-		{"providers", models, locales.PageProviders(), plugIcon, locales.PageProvidersAbout(), nil, nil},
-		{"model", models, locales.PageModel(), logoIcon, locales.PageModelAbout(), nil, nil},
+		{"providers", models, locales.PageProviders(), plugIcon, locales.PageProvidersAbout(), (*app).providersPage, (*app).providerTerms},
+		{"model", models, locales.PageModel(), logoIcon, locales.PageModelAbout(), (*app).modelPage, (*app).modelTerms},
 		{"about", locales.GroupApp(), locales.PageAbout(), infoIcon, locales.PageAboutAbout(), (*app).aboutPage, (*app).aboutTerms},
 	}
 }
@@ -85,6 +85,13 @@ func (a *app) openSettings() {
 	if a.openAtLogin != nil {
 		a.atLogin = a.openAtLogin()
 	}
+}
+
+// showProviders shows the settings' Providers page, which takes the API
+// keys.
+func (a *app) showProviders() {
+	a.openSettings()
+	a.settingsPage = "providers"
 }
 
 // closeSettings goes back to the chat shown before them.
