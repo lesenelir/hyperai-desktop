@@ -20,6 +20,7 @@ import (
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
+	"github.com/egoist/mygo/ui/markdown/parser"
 
 	"hyperai-desktop/locales"
 )
@@ -2225,5 +2226,116 @@ func TestAbout(t *testing.T) {
 	tt.Frame()
 	if m := a.settingsMatches(); len(m) != 1 || m[0].key != "about" {
 		t.Errorf("GitHub finds %+v", m)
+	}
+}
+
+// TestDollarMath holds replies to math between single dollars, as models
+// write it within text, but not to dollars of money: $x_i^2$ is TeX, its
+// _ no emphasis; $5 and $10 stay text.
+func TestDollarMath(t *testing.T) {
+	a := newApp(&demo{})
+	d := parser.New(a.md.Extensions)
+	d.Set("The cost is $5 or $10, and the loss is $x_i^2$ summed.")
+	var math []string
+	for b := range d.Len() {
+		for _, in := range d.Inlines(b) {
+			if in.Kind == parser.Math {
+				math = append(math, in.Text)
+			}
+		}
+	}
+	if !slices.Equal(math, []string{"x_i^2"}) {
+		t.Errorf("math %q, want only x_i^2", math)
+	}
+}
+
+// TestSetTeX sets the TeX models write as text: symbols as Unicode,
+// scripts apart (here ^(…) and _(…)), fractions as a/b with the
+// parentheses they need, stacked in a block; and sets nothing it cannot,
+// which shows as TeX.
+func TestSetTeX(t *testing.T) {
+	st := mathStyle{size: 15, root: 15}
+	for _, c := range []struct{ tex, want string }{
+		{`x^2 + y^2 = z^2`, "x^(2)+y^(2)=z^(2)"},
+		{`-x`, "−x"},
+		{`\alpha \leq \frac{1}{2}`, "α≤1/2"},
+		{`\frac{a+b}{2\pi}`, "(a+b)/(2π)"},
+		{`\frac{n(n+1)}{2}`, "n(n+1)/2"},
+		{`\sum_{i=1}^{n} i`, "∑_(i=1)^(n)i"},
+		{`x_i^2`, "x_(i)^(2)"},
+		{`e^{-x^2}`, "e^(−x^(2))"},
+		{`\sqrt{x+1} + \sqrt[3]{y}`, "√(x+1)+∛y"},
+		{`\mathbb{R}^n \to \mathcal{L}`, "ℝ^(n)→ℒ"},
+		{`\hat{y} = \sigma(Wx + b)`, "y\u0302=σ(Wx+b)"},
+		{`f(x) = 1 \text{ if } x > 0`, "f(x)=1 if x>0"},
+		{`\lim_{x \to 0} \frac{\sin x}{x}`, "lim_(x→0)sinx/x"},
+		{`\left( \frac{a}{b} \right)`, "(a/b)"},
+		{`a \not= b, \; 3.14 \in \mathbf{Q}`, "a≠b,3.14∈Q"},
+		{`O(n \log n)`, "O(nlogn)"},
+		{`\begin{pmatrix} a & b \\ c & d \end{pmatrix}`, "(a,b;c,d)"},
+		{`\begin{bmatrix}1&0\\0&1\end{bmatrix}`, "[1,0;0,1]"},
+		{`\det \begin{vmatrix} a \\ b \\ \end{vmatrix}`, "det|a;b|"},
+		{`\begin{matrix} x_1 & \cdots \end{matrix}`, "x_(1),⋯"},
+		{`f(x) = \begin{cases} 1 & x > 0 \\ 0 & \text{otherwise} \end{cases}`, "f(x)={1,x>0;0,otherwise"},
+		{`\begin{aligned} a &= b \end{aligned}`, ""},
+		{`\begin{pmatrix} a & b`, ""},
+		{`\begin{pmatrix} a \end{bmatrix}`, ""},
+		{`\binom{n}{k}`, ""},
+		{`\frac{a}{`, ""},
+		{`a & b`, ""},
+		{`\unknown`, ""},
+	} {
+		b, ok := setTeX(c.tex, st)
+		if got := b.text; c.want == "" && ok || c.want != "" && (!ok || got != c.want) {
+			t.Errorf("%s: %q, %v; want %q", c.tex, got, ok, c.want)
+		}
+	}
+	display := st
+	display.display = true
+	if b, ok := setTeX(`\sum_{i=1}^n \frac{1}{i}`, display); !ok || b.text != "∑_(i=1)^(n)(1)/(i)" || len(b.rules) != 1 {
+		t.Errorf("in a block: %q, %v, %d rules", b.text, ok, len(b.rules))
+	}
+	// A matrix's delimiters are drawn, as tall as its rows: two rows reach
+	// past a line of text.
+	if b, _ := setTeX(`\begin{pmatrix} a \\ b \end{pmatrix}`, st); len(b.strokes) != 2 || b.asc+b.desc <= 2*15 {
+		t.Errorf("the matrix is %v tall, %d delimiters drawn", b.asc+b.desc, len(b.strokes))
+	}
+	if b, _ := setTeX(`\left( x \right)`, st); len(b.strokes) != 0 {
+		t.Errorf("parentheses of a line drawn, not set: %d", len(b.strokes))
+	}
+	// Scripts sit apart: the superscript over the subscript, both smaller.
+	b, _ := setTeX(`x_i^2`, st)
+	if b.asc <= 0.75*15 || b.desc <= 0.22*15 {
+		t.Errorf("x_i^2 reaches %v up and %v down, no further than x", b.asc, b.desc)
+	}
+}
+
+// TestMathInReply sets a reply's math, within text and in a block, and
+// shows as TeX what it cannot set.
+func TestMathInReply(t *testing.T) {
+	a, tt := newTester()
+	tt.SetSize(1120, 1400)
+	a.threads = []*thread{{ID: 1, Title: "Math", Updated: time.Now(), Messages: []*message{
+		{ID: 2, Role: "user", Text: "Explain"},
+		{ID: 3, Role: "assistant", Text: "The loss $x_i^2$ grows, but $\\unknown{q}$ does not.\n\n" +
+			"$$\n\\frac{a}{b}\n$$\n\n$$\n\\begin{aligned} a &= b \\end{aligned}\n$$\n"},
+	}}}
+	a.next, a.selected, a.rev = 3, "1", 1
+	tt.Frame()
+	if !tt.HasText("The loss \uFFFC grows, but \\unknown{q} does not.") {
+		t.Errorf("the math within text is not set, or the unknown not TeX: %q", tt.Texts())
+	}
+	if !tt.HasText(`\begin{aligned} a &= b \end{aligned}`) {
+		t.Errorf("what cannot be set is not shown as TeX: %q", tt.Texts())
+	}
+	// The block set, stacked: its TeX names it, and shows as no text.
+	set := false
+	for key, f := range a.formulas {
+		if strings.HasPrefix(key, `\frac{a}{b}`+"\x00") && strings.HasSuffix(key, "display") {
+			set = f != nil && len(f.rules) == 1
+		}
+	}
+	if !set {
+		t.Errorf("the block is not set stacked: %v", a.formulas)
 	}
 }

@@ -193,6 +193,27 @@ A small button that floats over the conversation (scroll to end) rests at
   reply's stay. A question past 8 lines shows 6, fading out from 70% of
   their height, over a muted "Show more" that takes the accent under the
   pointer, as hyperai-next's agent does.
+- **Math** in replies ([math.go](../math.go)) is set as text, as MyGo
+  has no TeX typesetter: `$…$`, `\(…\)`, `$$…$$` and `\[…\]`, but not
+  dollars of money ($5). Symbols are Unicode (\alpha α, \leq ≤,
+  \mathbb{R} ℝ, \mathcal{L} ℒ), letters and lower-case Greek italic as
+  TeX sets them, functions upright (sin, log, lim), accents combining
+  marks (ŷ); scripts are the text's own glyphs at 70%, raised and
+  lowered, spaced by TeX's classes. Within text a fraction is a/b, in
+  the parentheses it needs ((a+b)/2, 1/(2π)); a block of math, 1.15 of
+  the text, centered, stacks its fractions over a line on the math
+  axis, its sums' limits over and under them, and grows `\left( \right)`
+  to what they hold. A root is √x, √(x+1), ∛x. Matrices (`matrix`,
+  `pmatrix`, `bmatrix`, `Bmatrix`, `vmatrix`, `Vmatrix`, `smallmatrix`)
+  and `cases` (`dcases`, `rcases`) are grids, a quad between columns,
+  rows a line of their text apart at least, centered on the math axis:
+  a matrix centers its cells, cases sets them from the left. A delimiter
+  taller than a line of text is drawn, not set, its stroke 0.07 of the
+  text, as KaTeX draws its tall ones: a glyph made larger thickens as it
+  grows. Everything is `fg`. What it cannot set — `aligned` and the
+  other environments, \binom, commands it does not know, TeX half
+  written as a reply streams — shows as its TeX in the code font, as
+  MyGo shows it. Copied, math is its TeX.
 - **Empty chat**: as hyperai-next's agent page, the composer in the
   middle — the greeting over it (the HyperAI mark from
   `resources/logo.svg`, 48, in the accent as hyperai-next fills its Logo,

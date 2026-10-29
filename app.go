@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
+	"github.com/egoist/mygo/ui/markdown/parser"
 
 	"hyperai-desktop/locales"
 )
@@ -131,6 +132,7 @@ type app struct {
 	copiedUntil time.Time
 	pal         *palette // the frame's colors
 	md          markdown.Options
+	formulas    map[string]*mathBox // math set, by its TeX, size and font (math.go)
 	// busy is the reply streaming in, nil when none, and cancel stops it.
 	busy   *message
 	cancel context.CancelFunc
@@ -235,8 +237,13 @@ type app struct {
 }
 
 func newApp(p provider) *app {
-	return &app{prov: p, model: p.Models()[0], sideWidth: sidebarWidth, theme: "system",
+	a := &app{prov: p, model: p.Models()[0], sideWidth: sidebarWidth, theme: "system",
 		textSize: defaultTextSize, body: bodySize, translucent: true}
+	// Math between single dollars too, as models write it within text:
+	// $x^2$, but not $5 and $10, which read as money.
+	a.md.Extensions = parser.Default | parser.ExtDollarMath
+	a.setMath()
+	return a
 }
 
 // current returns the chat shown, nil for a new chat.
