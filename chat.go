@@ -264,12 +264,25 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 	// A little further from its question than the list's gap, which the
 	// rule over it sits too close to; still closer than to the next question,
 	// with its actions between.
-	ui.Column(c).Gap(10).AlignItems(ui.Stretch).Padding(replyGap, 0, 0, 0).Children(func() {
+	reply := ui.Column(c).Gap(10).AlignItems(ui.Stretch).Padding(replyGap, 0, 0, 0)
+	// A reply built anew while it streams, its chat shown again or it
+	// scrolled back into view, shows what came at once, and reveals only
+	// what comes next: its reveal went with the element, which started
+	// over from the reply's first word.
+	anew := false
+	ui.Local(reply, shownKey{}, func() bool { anew = true; return true })
+	reply.Children(func() {
 		if m.streaming || m.Elapsed > 0 {
 			worked(c, m)
 		}
 		switch {
 		case m.streaming && m.Text == "":
+		case m.streaming && anew:
+			// For this view only: Options holds a lock, and is not copied.
+			reveal := a.md.Reveal
+			a.md.Reveal = &revealAtOnce
+			markdown.Stream(c, m.Text, &a.md)
+			a.md.Reveal = reveal
 		case m.streaming:
 			markdown.Stream(c, m.Text, &a.md)
 		case m.Text != "":
@@ -291,6 +304,14 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 		}
 	})
 }
+
+// shownKey keys the state a reply's element keeps, which tells it was
+// built before (message).
+type shownKey struct{}
+
+// revealAtOnce shows a stream's text as it is, still streaming: what a
+// reply shown anew had come.
+var revealAtOnce = markdown.Reveal{Unit: markdown.AtOnce}
 
 // question builds the user's message m in its bubble, as wide as room at
 // most. A long one, past clampLines+slackLines lines, shows clampLines of

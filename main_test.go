@@ -378,6 +378,64 @@ func TestChatsStreamAtOnce(t *testing.T) {
 	}
 }
 
+func TestReplyShownAgain(t *testing.T) {
+	p := &held{gate: map[string]chan struct{}{}}
+	a := newApp(p)
+	posts := make(chan func(), 100)
+	a.post = func(f func()) { posts <- f }
+	tt := ui.NewTester(a.view, 1120, 760)
+	// shown is how much of the reply shows, which says the question again.
+	shown := func() int {
+		n := 0
+		for _, s := range tt.Texts() {
+			if strings.HasPrefix(s, "Reply to ") {
+				n = max(n, len(s))
+			}
+		}
+		return n
+	}
+	q := strings.TrimSpace(strings.Repeat("streaming words come in one after another ", 60))
+	tt.Type(q)
+	tt.Key(0, ui.KeyEnter)
+	// The reply shows, thinking, before its first words come, as the
+	// network takes a while.
+	tt.Frame()
+	th := a.current()
+	for th.busy == nil || th.busy.Text == "" {
+		(<-posts)()
+	}
+	came := len(th.busy.Text)
+	// It comes in a word at a time, and has, in a while.
+	tt.Frame()
+	if n := shown(); n == 0 || n >= came {
+		t.Fatalf("%d of the reply's %d bytes show at first, want some", n, came)
+	}
+	tt.Advance(3 * time.Second)
+	if n := shown(); n != came {
+		t.Fatalf("%d of the reply's %d bytes show in a while", n, came)
+	}
+
+	// Its chat shown again, what came shows at once, rather than from its
+	// first word again.
+	a.newChat()
+	tt.Frame()
+	a.open(strconv.Itoa(th.ID))
+	tt.Frame()
+	if n := shown(); n != came {
+		t.Errorf("%d of the reply's %d bytes show as its chat shows again: it comes in again", n, came)
+	}
+	// What comes next comes in as before.
+	close(p.release(q))
+	for th.busy != nil {
+		(<-posts)()
+	}
+	tt.Frame()
+	tt.Advance(time.Second)
+	if n := shown(); n != len(th.Messages[1].Text) {
+		t.Errorf("%d of the reply's %d bytes show once it ended", n, len(th.Messages[1].Text))
+	}
+}
+
 func TestRemove(t *testing.T) {
 	a, tt := newTester()
 	tt.Type("Hello")
