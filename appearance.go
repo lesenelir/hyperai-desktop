@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 )
@@ -21,6 +23,13 @@ var (
 )
 
 const defaultTextSize = 1 // bodySize, of textSizes
+
+// motionSettle is how long the app keeps moving after Reduce motion is
+// switched: for the switch's knob, which slides for 140 ms as every
+// switch's, to slide too, rather than jump as the motion it turns off.
+// It moves while the pointer is on the switch, or the focus shows on it,
+// too (app.motionHeld).
+const motionSettle = 250 * time.Millisecond
 
 // setTheme shows the app in theme, as the app does from then on.
 func (a *app) setTheme(theme string) {
@@ -133,9 +142,14 @@ func (a *app) appearancePage(c *ui.Context) {
 			if system {
 				on = &always
 			}
-			if ui.Switch(c.Key("reduce motion"), on).Label("Reduce motion").Disabled(system).Changed() {
+			sw := ui.Switch(c.Key("reduce motion"), on).Label("Reduce motion").Disabled(system)
+			if sw.Changed() {
+				a.motionSwitched = c.Now()
 				a.saveLayout()
 			}
+			// The app moves while the switch could turn: a frame it turns
+			// in, with motion reduced, could not move its knob after.
+			a.motionHeld = sw.Hovered() || sw.FocusVisible()
 		})
 	})
 }

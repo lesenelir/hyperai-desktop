@@ -167,25 +167,29 @@ type app struct {
 	// tests); the size of the conversation's text, of textSizes, which is
 	// body DIPs, as mdTheme, the palette mdOf's Markdown, takes it; whether
 	// the sidebar lets the desktop's material through; and whether nothing
-	// moves, whatever the desktop asks. font is the app's font family, ""
+	// moves, whatever the desktop asks, from motionSettle after it was
+	// switched at motionSwitched, but for while motionHeld, the switch
+	// could turn. font is the app's font family, ""
 	// for the system's, which winTheme, the palette winOf's theme, takes,
 	// and textFont the one the conversation was measured in; codeFont is
 	// code's, "" for the system's monospaced font; fonts are those
 	// installed, which the settings choose of.
-	theme        string
-	applyTheme   func(theme string)
-	textSize     int
-	body         float32
-	mdTheme      *markdown.Theme
-	mdOf         *palette
-	translucent  bool
-	reduceMotion bool
-	font         string
-	textFont     string
-	codeFont     string
-	fonts        []ui.FontFamily
-	winTheme     *ui.Theme
-	winOf        *palette
+	theme          string
+	applyTheme     func(theme string)
+	textSize       int
+	body           float32
+	mdTheme        *markdown.Theme
+	mdOf           *palette
+	translucent    bool
+	reduceMotion   bool
+	motionSwitched time.Time
+	motionHeld     bool
+	font           string
+	textFont       string
+	codeFont       string
+	fonts          []ui.FontFamily
+	winTheme       *ui.Theme
+	winOf          *palette
 }
 
 func newApp(p provider) *app {
@@ -333,7 +337,9 @@ func (a *app) view(c *ui.Context) {
 	c.SetTheme(a.windowTheme())
 	a.setText(textSizes[a.textSize], a.font)
 	a.md.Theme = a.markdownTheme()
-	if a.reduceMotion {
+	held := a.motionHeld
+	a.motionHeld = false // until the switch says so again
+	if a.reduceMotion && !held && c.Now().Sub(a.motionSwitched) >= motionSettle {
 		c.DisableAnimations()
 	}
 	t := c.Theme()

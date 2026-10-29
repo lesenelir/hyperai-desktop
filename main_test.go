@@ -1486,6 +1486,74 @@ func TestAppFont(t *testing.T) {
 	}
 }
 
+func TestReduceMotionSwitchSlides(t *testing.T) {
+	a := newApp(&demo{})
+	tt := ui.NewTester(a.view, 1120, 1300)
+	a.openSettings()
+	a.settingsPage = "appearance"
+	tt.Advance(time.Second)
+	title, about := "Reduce motion", "Show changes at once rather than fading or gliding. On whenever the system asks for less motion."
+	r, _ := tt.Find(title)
+	d, _ := tt.Find(about)
+	right, y := int(r.X-16+settingsWidth-1-16), int((r.Y+d.Y+d.H)/2)
+	knob := func() []uint8 {
+		img := tt.Image()
+		var px []uint8
+		for x := right - 44; x < right; x++ {
+			o := img.PixOffset(x, y)
+			px = append(px, img.Pix[o:o+4]...)
+		}
+		return px
+	}
+
+	// Its knob slides as it turns motion off, as every switch's does, and
+	// the app holds still after.
+	tt.ClickAt(float32(right-12), float32(y))
+	tt.Advance(70 * time.Millisecond)
+	mid := knob()
+	tt.Advance(time.Second)
+	if !a.reduceMotion {
+		t.Fatal("motion not reduced")
+	}
+	if slices.Equal(mid, knob()) {
+		t.Errorf("the knob jumped to its end")
+	}
+	if c := a.motionSwitched; c.IsZero() {
+		t.Errorf("the switch's time was not kept")
+	}
+
+	// And as it turns it on again.
+	tt.ClickAt(float32(right-12), float32(y))
+	tt.Advance(70 * time.Millisecond)
+	mid = knob()
+	tt.Advance(time.Second)
+	if a.reduceMotion {
+		t.Fatal("motion still reduced")
+	}
+	if slices.Equal(mid, knob()) {
+		t.Errorf("the knob jumped back")
+	}
+
+	// Motion reduced again, the pointer gone, another switch jumps.
+	tt.ClickAt(float32(right-12), float32(y))
+	tt.Advance(time.Second)
+	tt.Move(10, 10)
+	tt.SetVibrancy(true)
+	tt.Advance(time.Second)
+	r, _ = tt.Find("Translucent sidebar")
+	y = int(r.Y + 12)
+	tt.ClickAt(float32(right-12), float32(y))
+	tt.Advance(time.Millisecond)
+	mid = knob()
+	tt.Advance(time.Second)
+	if a.translucent || !a.reduceMotion {
+		t.Fatalf("translucent %v, motion reduced %v", a.translucent, a.reduceMotion)
+	}
+	if !slices.Equal(mid, knob()) {
+		t.Errorf("a switch slid with motion reduced")
+	}
+}
+
 // toggle clicks the switch of the settings row titled title, about which
 // says more: on the right of the page's card, which the title is 16 in
 // from, centered on the two.
