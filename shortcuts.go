@@ -2,6 +2,7 @@ package main
 
 import (
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -101,11 +102,63 @@ func shortcutGroups() []struct {
 	}
 }
 
+// term returns the row as the settings' field finds it: by what the keys
+// do, when, and the keys, as their caps show them and as menus write them.
+func (r shortcutRow) term() settingsTerm {
+	t := settingsTerm{title: r.title, more: []string{r.about}}
+	for _, k := range r.keys {
+		t.more = append(t.more, k.String())
+		t.more = append(t.more, k.caps()...)
+	}
+	return t
+}
+
+// shortcutTerms returns the shortcuts as the settings' field finds the
+// page by them.
+func shortcutTerms() []settingsTerm {
+	var out []settingsTerm
+	for _, g := range shortcutGroups() {
+		for _, r := range g.rows {
+			out = append(out, r.term())
+		}
+	}
+	return out
+}
+
 // shortcutsPage builds the Keyboard shortcuts page: the shortcuts, by
 // where they work, as cards of rows, each its keys on the right, drawn as
-// keys.
+// keys. While the settings' field finds some of them, it shows those
+// alone, under what it found them by, and a way to the rest.
 func (a *app) shortcutsPage(c *ui.Context) {
-	for _, g := range shortcutGroups() {
+	t := c.Theme()
+	q := lowerRunes([]rune(a.settingsQuery))
+	groups := shortcutGroups()
+	found := false
+	if len(q) > 0 {
+		for i, g := range groups {
+			groups[i].rows = slices.DeleteFunc(slices.Clone(g.rows), func(r shortcutRow) bool { return !r.term().matches(q) })
+			found = found || len(groups[i].rows) > 0
+		}
+	}
+	if !found {
+		groups = shortcutGroups()
+	} else {
+		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "Matching “"+a.settingsQuery+"”").FontSize(13).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine()
+			all := ui.ButtonBase(c.Key("all shortcuts")).Padding(4, 8).Radius(6).TextColor(t.TextMuted).Label("Show all shortcuts")
+			if all.Hovered() {
+				all.TextColor(a.pal.ac)
+			}
+			all.Children(func() { ui.Text(c, "Show all").FontSize(13) })
+			if all.Clicked() {
+				a.settingsQuery = ""
+			}
+		})
+	}
+	for _, g := range groups {
+		if len(g.rows) == 0 {
+			continue
+		}
 		a.settingsCard(c, g.title, func() {
 			for i, r := range g.rows {
 				if i > 0 {

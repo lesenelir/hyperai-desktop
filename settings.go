@@ -1,28 +1,65 @@
 package main
 
 import (
+	"slices"
+	"strconv"
+
 	"github.com/egoist/mygo/ui"
 )
 
 // settingsSection is a page of the settings, under its group in the
 // sidebar: about says what it holds, under its title, and page builds what
-// it holds, nil until it holds something.
+// it holds, nil until it holds something; terms are the names of what it
+// holds, which the sidebar's field finds it by too, nil for none.
 type settingsSection struct {
 	key, group, title string
 	icon              *ui.SVG
 	about             string
 	page              func(a *app, c *ui.Context)
+	terms             func() []settingsTerm
+}
+
+// settingsTerm is a thing a settings page holds, as the sidebar's field
+// finds it: by its title, which the sidebar then shows under the page, or
+// by more of what it is.
+type settingsTerm struct {
+	title string
+	more  []string
+}
+
+// matches reports whether the term's title or more holds q, lowered.
+func (t settingsTerm) matches(q []rune) bool {
+	if holds(t.title, q) {
+		return true
+	}
+	for _, m := range t.more {
+		if holds(m, q) {
+			return true
+		}
+	}
+	return false
+}
+
+// holds reports whether s holds q, lowered, in any case.
+func holds(s string, q []rune) bool { return find(lowerRunes([]rune(s)), q) >= 0 }
+
+// settingsMatch is a page the sidebar's field found: hits are the titles of
+// what it holds that the query found, none when its own title or group
+// did.
+type settingsMatch struct {
+	settingsSection
+	hits []string
 }
 
 // settingsSections are the settings' pages, in the sidebar's order: by
 // group, as Codex's.
 var settingsSections = []settingsSection{
-	{"general", "Personal", "General", settingsIcon, "How HyperAI starts and behaves: its language, new chats, and sending with Enter.", nil},
-	{"appearance", "Personal", "Appearance", sunIcon, "How HyperAI looks: its theme and font, the conversation's text, and the window.", (*app).appearancePage},
-	{"shortcuts", "Personal", "Keyboard shortcuts", keyboardIcon, "The keys that do what HyperAI does, by where they work.", (*app).shortcutsPage},
-	{"providers", "Models", "Providers", plugIcon, "Where replies come from: OpenRouter and its API key, and other providers.", nil},
-	{"model", "Models", "Default model", logoIcon, "The model a new chat asks, until it is changed in the composer.", nil},
-	{"about", "App", "About", infoIcon, "HyperAI's version, and what changed in it.", nil},
+	{"general", "Personal", "General", settingsIcon, "How HyperAI starts and behaves: its language, new chats, and sending with Enter.", nil, nil},
+	{"appearance", "Personal", "Appearance", sunIcon, "How HyperAI looks: its theme and font, the conversation's text, and the window.", (*app).appearancePage, appearanceTerms},
+	{"shortcuts", "Personal", "Keyboard shortcuts", keyboardIcon, "The keys that do what HyperAI does, by where they work.", (*app).shortcutsPage, shortcutTerms},
+	{"providers", "Models", "Providers", plugIcon, "Where replies come from: OpenRouter and its API key, and other providers.", nil, nil},
+	{"model", "Models", "Default model", logoIcon, "The model a new chat asks, until it is changed in the composer.", nil, nil},
+	{"about", "App", "About", infoIcon, "HyperAI's version, and what changed in it.", nil, nil},
 }
 
 // section returns the settings' page shown, the first when none is.
@@ -87,6 +124,12 @@ func (a *app) settingsSidebar(c *ui.Context) {
 	})
 
 	sections := a.settingsMatches()
+	// The page follows the field: the first it finds, once what was shown
+	// is not among them.
+	if a.settingsQuery != "" && len(sections) > 0 &&
+		!slices.ContainsFunc(sections, func(m settingsMatch) bool { return m.key == a.section().key }) {
+		a.settingsPage = sections[0].key
+	}
 	ui.Scroll(c.Key("settings pages")).Grow(1).MinHeight(0).Padding(0, 0, 12, 0).Label("Settings").Children(func() {
 		if len(sections) == 0 {
 			ui.Text(c, "No settings match.").FontSize(13).TextColor(t.TextMuted).Padding(14, 20)
@@ -101,7 +144,7 @@ func (a *app) settingsSidebar(c *ui.Context) {
 			}
 			on := s.key == shown
 			row := ui.ButtonBase(c.Key("settings "+s.key)).Margin(rowGap/2, barClear, rowGap/2, 8).Padding(7, 12).Gap(10).
-				Radius(8).Justify(ui.Start).Label(s.title)
+				Radius(8).Justify(ui.Start).AlignItems(ui.Start).Label(s.title)
 			switch {
 			case on:
 				row.Background(a.pal.fg.Alpha(0.07))
@@ -110,7 +153,14 @@ func (a *app) settingsSidebar(c *ui.Context) {
 			}
 			row.Children(func() {
 				icon := ui.Icon(c, s.icon).Size(16, 16).TextColor(t.TextMuted)
-				label := ui.Text(c, s.title).Grow(1).SingleLine()
+				var label ui.Element
+				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+					label = ui.Text(c, s.title).SingleLine()
+					// What the field found in it, when not the page itself.
+					if len(s.hits) > 0 {
+						ui.Text(c, hitsText(s.hits)).FontSize(12).TextColor(t.TextMuted).SingleLine()
+					}
+				})
 				if on {
 					icon.TextColor(t.Text)
 					label.FontWeight(500)
@@ -124,19 +174,38 @@ func (a *app) settingsSidebar(c *ui.Context) {
 }
 
 // settingsMatches returns the settings' pages whose title or group holds
-// the query, in any case: all for none.
-func (a *app) settingsMatches() []settingsSection {
+// the query, in any case, or some of what they hold: all for none.
+func (a *app) settingsMatches() []settingsMatch {
 	q := lowerRunes([]rune(a.settingsQuery))
-	if len(q) == 0 {
-		return settingsSections
-	}
-	var out []settingsSection
+	var out []settingsMatch
 	for _, s := range settingsSections {
-		if find(lowerRunes([]rune(s.title)), q) >= 0 || find(lowerRunes([]rune(s.group)), q) >= 0 {
-			out = append(out, s)
+		if len(q) == 0 || holds(s.title, q) || holds(s.group, q) {
+			out = append(out, settingsMatch{settingsSection: s})
+			continue
+		}
+		if s.terms == nil {
+			continue
+		}
+		var hits []string
+		for _, t := range s.terms() {
+			if t.matches(q) {
+				hits = append(hits, t.title)
+			}
+		}
+		if len(hits) > 0 {
+			out = append(out, settingsMatch{s, hits})
 		}
 	}
 	return out
+}
+
+// hitsText returns what a page's hits say under it, in the sidebar's
+// narrow room: the first, and how many more, which the page lists.
+func hitsText(hits []string) string {
+	if len(hits) == 1 {
+		return hits[0]
+	}
+	return hits[0] + " and " + strconv.Itoa(len(hits)-1) + " more"
 }
 
 // settingsPane builds the page of the settings shown, beside their

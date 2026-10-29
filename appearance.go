@@ -31,6 +31,24 @@ const defaultTextSize = 1 // bodySize, of textSizes
 // too (app.motionHeld).
 const motionSettle = 250 * time.Millisecond
 
+// appearanceTerms returns what the Appearance page holds, as the settings'
+// field finds it: its rows' titles, and what they offer.
+func appearanceTerms() []settingsTerm {
+	codes := []string{"Syntax", "Highlighting"}
+	for _, ct := range codeThemes {
+		codes = append(codes, ct.title)
+	}
+	return []settingsTerm{
+		{"Theme", append([]string{"Mode"}, themeTitles[:]...)},
+		{"Font", []string{"Typeface"}},
+		{"Code font", []string{"Monospace"}},
+		{"Code theme", codes},
+		{"Text size", textSizeTitles[:]},
+		{"Translucent sidebar", []string{"Vibrancy", "Transparency", "Material"}},
+		{"Reduce motion", []string{"Animation"}},
+	}
+}
+
 // setTheme shows the app in theme, as the app does from then on.
 func (a *app) setTheme(theme string) {
 	if theme == a.theme {

@@ -1302,6 +1302,10 @@ func TestSettings(t *testing.T) {
 	if !tt.HasText("Default model") || tt.HasText("Keyboard shortcuts") || !tt.HasText("Providers") {
 		t.Errorf("for %q, the pages %q", a.settingsQuery, tt.Texts())
 	}
+	// And the page follows, Appearance found no more.
+	if a.settingsPage != "providers" {
+		t.Errorf("for %q, the page %q, want the first found", a.settingsQuery, a.settingsPage)
+	}
 	tt.Type("zzz")
 	tt.Advance(time.Second)
 	if !tt.HasText("No settings match.") {
@@ -1318,7 +1322,7 @@ func TestSettings(t *testing.T) {
 	}
 	tt.Key(ui.Cmd, ui.KeyComma)
 	tt.Advance(time.Second)
-	if !a.settings || a.settingsQuery != "" || !tt.HasText("How HyperAI looks") {
+	if !a.settings || a.settingsQuery != "" || !tt.HasText("Where replies come from") {
 		t.Fatalf("⌘,: settings %v, query %q, texts %q", a.settings, a.settingsQuery, tt.Texts())
 	}
 	tt.Key(0, ui.KeyEscape)
@@ -1548,6 +1552,75 @@ func TestCodeTheme(t *testing.T) {
 	tt.Advance(time.Second)
 	if a.codeTheme != "" || a.md.Theme.CodeColors != darkPalette.md.CodeColors {
 		t.Errorf("theme %q, colors not MyGo's", a.codeTheme)
+	}
+}
+
+func TestSettingsSearchContents(t *testing.T) {
+	a := newApp(&demo{})
+	tt := ui.NewTester(a.view, 1120, 1500)
+	a.openSettings()
+	tt.Frame()
+	search := func(q string) {
+		t.Helper()
+		a.settingsQuery = q
+		tt.Frame()
+		tt.Advance(time.Second)
+	}
+
+	// A shortcut finds its page, which says what it found there and shows
+	// it alone.
+	search("send")
+	if a.settingsPage != "shortcuts" || !tt.HasText("Matching “send”") || !tt.HasText("Send") || tt.HasText("Next result") {
+		t.Errorf("for send: page %q, texts %q", a.settingsPage, tt.Texts())
+	}
+	if got := a.settingsMatches(); len(got) != 1 || !slices.Equal(got[0].hits, []string{"Send"}) {
+		t.Errorf("for send, the pages %v", got)
+	}
+	// Show all, the field cleared.
+	if err := tt.Click("Show all"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.settingsQuery != "" || !tt.HasText("Next result") {
+		t.Errorf("show all: query %q, texts %q", a.settingsQuery, tt.Texts())
+	}
+
+	// By its keys too; more hits say how many more.
+	search("esc")
+	if !tt.HasText("Close the settings and 2 more") {
+		t.Errorf("for esc, the sidebar %q", tt.Texts())
+	}
+
+	// What Appearance offers finds it, and the page follows.
+	search("dark")
+	if a.settingsPage != "appearance" || !tt.HasText("Theme") {
+		t.Errorf("for dark: page %q, texts %q", a.settingsPage, tt.Texts())
+	}
+	search("font")
+	if got := a.settingsMatches(); len(got) != 1 || !slices.Equal(got[0].hits, []string{"Font", "Code font"}) {
+		t.Errorf("for font, the pages %v", got)
+	}
+
+	// A page found by its own title shows all it holds.
+	search("keyboard")
+	if a.settingsPage != "shortcuts" || tt.HasText("Matching “keyboard”") || !tt.HasText("Next result") {
+		t.Errorf("for keyboard: page %q, texts %q", a.settingsPage, tt.Texts())
+	}
+}
+
+// TestAppearanceTerms holds the terms the settings' field finds Appearance
+// by to the page: each the title of one of its rows.
+func TestAppearanceTerms(t *testing.T) {
+	a := newApp(&demo{})
+	tt := ui.NewTester(a.view, 1120, 1500)
+	a.openSettings()
+	a.settingsPage = "appearance"
+	tt.Frame()
+	texts := tt.Texts()
+	for _, term := range appearanceTerms() {
+		if !slices.Contains(texts, term.title) {
+			t.Errorf("no %q on the Appearance page", term.title)
+		}
 	}
 }
 

@@ -194,7 +194,15 @@ A small button that floats over the conversation (scroll to end) rests at
   theirs, as Codex's: "Back to app" (muted, as Escape), a field of its
   own — 34 tall, radius 8, on `composer` with a hairline, since the
   sidebar is no box — and the pages by group, in the chat rows' look,
-  the one shown on the 7% wash with its label at 500. The pane shows the
+  the one shown on the 7% wash with its label at 500. The field finds a
+  page by its title or group, or by what it holds (a page's `terms`: a
+  shortcut by what it does, when, or its keys; an Appearance row by its
+  title or what it offers), the first it found under the page's title at
+  12 `fg/70` and how many more ("Close the settings and 2 more"); and the
+  pane follows, to the first page found, once the page shown is not. The
+  Keyboard shortcuts page then shows the shortcuts found alone, under
+  "Matching “…”" and Show all, muted, the accent under the pointer, which
+  clears the field. The pane shows the
   page, 640 wide at most: its title at 20/500 over what it holds at
   `fg/70`. Showing a chat leaves them.
 - **Settings pages** are groups 28 apart, each a title at 12 `fg/70`
