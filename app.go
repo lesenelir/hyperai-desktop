@@ -46,6 +46,12 @@ type message struct {
 	started   time.Time
 	preview   string  // the outline's preview of Text, once it is complete
 	height    float32 // how tall its row was laid out last
+	// A question's lines, as wrapped at wrapWidth; whether it shows whole
+	// while it is long; and whether to bring it back into view, collapsed.
+	lines     int
+	wrapWidth float32
+	expanded  bool
+	reveal    bool
 }
 
 // thread is a chat: its messages, and where its list is scrolled.

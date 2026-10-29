@@ -320,7 +320,7 @@ func atTop(t *testing.T, tt *ui.Tester, text string) (bool, float32) {
 	if !ok {
 		t.Fatalf("no %q in %q", text, tt.Texts())
 	}
-	y := r.Y - titleBarHeight
+	y := r.Y - titleBarHeight - bubblePadY // its bubble's top
 	return y > listPadTop-0.5 && y < listPadTop+0.5, y
 }
 
@@ -1175,5 +1175,66 @@ func TestFieldScrollsUnderItsPadding(t *testing.T) {
 	tt.Advance(time.Second)
 	if a.fieldScroll.Y != 0 || a.fieldFade() != 0 {
 		t.Errorf("at the field's top: scrolled %v, fade %v, want none", a.fieldScroll.Y, a.fieldFade())
+	}
+}
+
+func TestLongQuestionCollapses(t *testing.T) {
+	a, tt := newTester()
+	tt.SetSize(1120, 1600)
+	ask := func(text string) *message {
+		t.Helper()
+		a.newChat() // a chat each, so that one button shows
+		a.send(text)
+		tt.Frame()
+		tt.Advance(time.Second)
+		th := a.current()
+		return th.Messages[len(th.Messages)-2]
+	}
+	line := float32(bodySize * bodyLineHeight)
+
+	// As many lines as collapsing would leave and the slack past them: whole.
+	short := ask(strings.TrimSpace(strings.Repeat("A line\n", clampLines+slackLines)))
+	if tt.HasText("Show more") || short.height < (clampLines+slackLines)*line {
+		t.Fatalf("%d lines: with the button %v, %v tall", clampLines+slackLines, tt.HasText("Show more"), short.height)
+	}
+
+	// Past them, by lines or by wrapping: clampLines of them, over the button.
+	for _, text := range []string{
+		strings.TrimSpace(strings.Repeat("A line\n", 40)),
+		strings.Repeat("A long question that wraps across the bubble. ", 60),
+	} {
+		m := ask(text)
+		collapsed := m.height
+		if !tt.HasText("Show more") || collapsed > clampLines*line+2*bubblePadY+40 {
+			t.Fatalf("long: with the button %v, %v tall", tt.HasText("Show more"), collapsed)
+		}
+		if err := tt.Click("Show more"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Advance(time.Second)
+		if !tt.HasText("Show less") || m.height < 20*line {
+			t.Fatalf("expanded: with the button %v, %v tall", tt.HasText("Show less"), m.height)
+		}
+		if err := tt.Click("Show less"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Advance(time.Second)
+		if !tt.HasText("Show more") || m.height != collapsed {
+			t.Fatalf("collapsed again: with the button %v, %v tall, want %v", tt.HasText("Show more"), m.height, collapsed)
+		}
+	}
+
+	// Narrow, the bubble is too: a question that fits wide wraps past them.
+	tt.SetSize(400, 1600)
+	a.collapsed = true
+	text := strings.Repeat("A question that wraps. ", 20)
+	m := ask(text)
+	if m.wrapWidth >= bubbleMaxWidth-2*bubblePadX || !tt.HasText("Show more") {
+		t.Errorf("narrow: wrapped at %v, %d lines, with the button %v", m.wrapWidth, m.lines, tt.HasText("Show more"))
+	}
+	tt.SetSize(1120, 1600)
+	tt.Advance(time.Second)
+	if m.wrapWidth != bubbleMaxWidth-2*bubblePadX || tt.HasText("Show more") {
+		t.Errorf("wide: wrapped at %v, %d lines, with the button %v", m.wrapWidth, m.lines, tt.HasText("Show more"))
 	}
 }

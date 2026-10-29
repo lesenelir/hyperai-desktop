@@ -169,6 +169,12 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 				}
 				return
 			}
+			if m := th.Messages[i]; m.reveal {
+				// A question just collapsed, from far down it: its top was
+				// above the view.
+				m.reveal = false
+				th.list.ScrollIntoView(i)
+			}
 			row := ui.Row(c).Justify(ui.Center)
 			if b := row.Bounds(); !empty(b) {
 				th.boxes[i], th.Messages[i].height = b, b.H
@@ -223,7 +229,9 @@ func (a *app) scrollToEnd(c *ui.Context, th *thread) {
 func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 	t := c.Theme()
 	if m.Role == "user" {
-		ui.Row(c).AlignItems(ui.Start).Gap(4).Children(func() {
+		row := ui.Row(c).AlignItems(ui.Start).Gap(4)
+		width := row.Bounds().W
+		row.Children(func() {
 			ui.Spacer(c)
 			// Beside the bubble, centered on its first line, over the
 			// bubble's padding: the time, then the button next to the bubble.
@@ -234,7 +242,9 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 				a.messageTime(c, m)
 				a.copyButton(c, m)
 			})
-			ui.Text(c, m.Text).FontSize(bodySize).LineHeight(bodyLineHeight).Selectable().Padding(bubblePadY, 14).Radius(14).Background(a.pal.raised).MaxWidth(560)
+			// The row's room for the bubble, as of the last frame: past the
+			// spacer's gap and the actions'.
+			a.question(c, m, width-actions.Bounds().W-8)
 		})
 		return
 	}
@@ -269,6 +279,78 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 	})
 }
 
+// question builds the user's message m in its bubble, as wide as room at
+// most. A long one, past clampLines+slackLines lines, shows clampLines of
+// them, fading out, over a button that shows it whole and collapses it
+// again, as hyperai-next's agent does.
+func (a *app) question(c *ui.Context, m *message, room float32) {
+	t := c.Theme()
+	width := float32(bubbleMaxWidth - 2*bubblePadX)
+	switch {
+	case room > 0:
+		width = min(width, room-2*bubblePadX)
+	case m.wrapWidth > 0:
+		width = m.wrapWidth
+	}
+	if room <= 0 {
+		c.AnimationFrame() // a frame laid out, for the room
+	}
+	if width != m.wrapWidth {
+		// Every line is as tall, whatever the script: the font's.
+		_, h := c.MeasureText(width, ui.Span{Text: m.Text, Size: bodySize})
+		_, line := c.MeasureText(0, ui.Span{Text: "x", Size: bodySize})
+		m.lines, m.wrapWidth = int(h/line+0.5), width
+	}
+	long := m.lines > clampLines+slackLines
+	collapsed := long && !m.expanded
+	bubble := ui.Column(c).MinWidth(0).MaxWidth(bubbleMaxWidth).Padding(bubblePadY, bubblePadX).Radius(14).
+		Background(a.pal.raised).AlignItems(ui.Stretch).Gap(4)
+	bubble.Children(func() {
+		h := float32(clampLines * bodySize * bodyLineHeight)
+		clip := ui.Column(c)
+		if collapsed {
+			clip.Height(h).ClipY()
+		}
+		clip.Children(func() {
+			ui.Text(c, m.Text).FontSize(bodySize).LineHeight(bodyLineHeight).Selectable()
+			if collapsed {
+				// Its last lines fade into the bubble, from 70% down.
+				ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(h*0.3).PassThrough().
+					Gradient(a.pal.raised.Alpha(0), a.pal.raised, 180)
+			}
+		})
+		if !long {
+			return
+		}
+		// Muted, open or not, as hyperai-next's; the accent under the pointer,
+		// as a link.
+		label, svg := "Show more", chevronIcon
+		if m.expanded {
+			label, svg = "Show less", chevronUpIcon
+		}
+		b := ui.ButtonBase(c.Key("show more")).AlignSelf(ui.Start).Padding(2, 0).Gap(4).TextColor(t.TextMuted).Label(label)
+		if b.Hovered() {
+			b.TextColor(a.pal.ac)
+		}
+		b.Children(func() {
+			ui.Text(c, label).FontSize(13)
+			ui.Icon(c, svg).Size(14, 14)
+		})
+		if b.Clicked() {
+			m.expanded = !m.expanded
+			m.reveal = !m.expanded
+		}
+	})
+}
+
+const (
+	// A long question shows clampLines lines collapsed. One at most
+	// slackLines past them shows whole: collapsing it would hide less than
+	// the button takes.
+	clampLines = 6
+	slackLines = 2
+)
+
 const (
 	// The conversation's text — questions, replies, and the composer —
 	// is 15 DIPs on lines of 1.6, as hyperai-next's (text-[15px],
@@ -276,9 +358,11 @@ const (
 	bodySize       = 15
 	bodyLineHeight = 1.6
 
-	replyGap      = 8  // a reply's room over it, past the list's gap
-	bubblePadY    = 9  // a question's bubble's padding over and under its text
-	actionsHeight = 28 // a message's actions' height: an iconButton's
+	replyGap       = 8   // a reply's room over it, past the list's gap
+	bubblePadY     = 9   // a question's bubble's padding over and under its text
+	bubblePadX     = 14  // and to its sides
+	bubbleMaxWidth = 560 // a question's bubble's width at most
+	actionsHeight  = 28  // a message's actions' height: an iconButton's
 )
 
 // revealDuration is how long a message's actions take to fade in or out.

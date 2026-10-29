@@ -48,6 +48,7 @@ var (
 	copyIcon      = icon(`<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>`)
 	checkIcon     = icon(`<path d="M20 6 9 17l-5-5"/>`)
 	chevronIcon   = icon(`<path d="m6 9 6 6 6-6"/>`)
+	chevronUpIcon = icon(`<path d="m18 15-6-6-6 6"/>`)
 	moreIcon      = icon(`<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>`)
 	messageIcon   = icon(`<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>`)
 )

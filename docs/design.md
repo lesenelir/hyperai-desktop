@@ -173,7 +173,9 @@ A small button that floats over the conversation (scroll to end) rests at
 - **Messages**: the user's in a `raised` bubble on the right; replies as
   Markdown across the column under a rule saying how long they took.
   Their actions (copy, time) fade in under the pointer in 150 ms; the last
-  reply's stay.
+  reply's stay. A question past 8 lines shows 6, fading out from 70% of
+  their height, over a muted "Show more" that takes the accent under the
+  pointer, as hyperai-next's agent does.
 - **Empty chat**: as hyperai-next's agent page, the composer in the
   middle — the greeting over it (the HyperAI mark from
   `resources/logo.svg`, 48, in the accent as hyperai-next fills its Logo,
