@@ -310,5 +310,6 @@
   "noProviderTitle": "아직 제공업체가 없습니다",
   "noProviderAbout": "메시지를 보내려면 OpenAI, Anthropic, OpenRouter 또는 DeepSeek의 API 키를 추가하세요.",
   "sidebarReplying": "응답 중",
-  "sidebarUnread": "새 응답"
+  "sidebarUnread": "새 응답",
+  "keysKeptFile": "{platform, select, mac {개발 버전: 키는 키체인이 아니라 {path}에 암호화되지 않은 상태로 보관됩니다. 설치된 앱은 키체인에 보관합니다.} other {개발 버전: 키는 시스템 자격 증명 저장소가 아니라 {path}에 암호화되지 않은 상태로 보관됩니다. 설치된 앱은 자격 증명 저장소에 보관합니다.}}"
 }

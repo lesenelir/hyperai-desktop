@@ -310,5 +310,6 @@
   "noProviderTitle": "Aucun fournisseur pour l’instant",
   "noProviderAbout": "Ajoutez une clé d’API d’OpenAI, d’Anthropic, d’OpenRouter ou de DeepSeek pour envoyer des messages.",
   "sidebarReplying": "Réponse en cours",
-  "sidebarUnread": "Nouvelle réponse"
+  "sidebarUnread": "Nouvelle réponse",
+  "keysKeptFile": "{platform, select, mac {Version de développement : les clés sont conservées dans {path}, sans chiffrement, et non dans votre trousseau. L’app installée les conserve dans le trousseau.} other {Version de développement : les clés sont conservées dans {path}, sans chiffrement, et non dans le magasin d’identifiants du système. L’app installée les y conserve.}}"
 }

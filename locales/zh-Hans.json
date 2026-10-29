@@ -261,5 +261,6 @@
   "noProviderTitle": "还没有可用的服务商",
   "noProviderAbout": "添加 OpenAI、Anthropic、OpenRouter 或 DeepSeek 的 API 密钥后即可发送消息。",
   "sidebarReplying": "正在回复",
-  "sidebarUnread": "有新回复"
+  "sidebarUnread": "有新回复",
+  "keysKeptFile": "{platform, select, mac {开发版：密钥以明文保存在 {path}，而不是钥匙串中。正式安装的应用会保存在钥匙串里。} other {开发版：密钥以明文保存在 {path}，而不是系统的凭据存储中。正式安装的应用会保存在凭据存储里。}}"
 }

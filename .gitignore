@@ -5,5 +5,7 @@ mygo_windows_*.syso
 .idea
 /hyperai-desktop
 
-# Secrets: copy .env.example to .env
+# Secrets, should one be copied here: the app reads neither, but an old
+# .env, or a development build's keys (DEVELOPMENT.md), stay out of git.
 .env
+dev-keys.json

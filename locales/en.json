@@ -611,5 +611,10 @@
   "sidebarReplying": "Replying",
   "@sidebarReplying": { "description": "Names, for assistive technologies, the spinner of a chat in the sidebar whose reply is streaming in." },
   "sidebarUnread": "New reply",
-  "@sidebarUnread": { "description": "Names, for assistive technologies, the dot of a chat in the sidebar whose reply ended while it was not shown." }
+  "@sidebarUnread": { "description": "Names, for assistive technologies, the dot of a chat in the sidebar whose reply ended while it was not shown." },
+  "keysKeptFile": "{platform, select, mac {Development build: keys are kept in {path}, unencrypted, not in your Keychain. The installed app keeps them in the Keychain.} other {Development build: keys are kept in {path}, unencrypted, not in the system’s credential store. The installed app keeps them there.}}",
+  "@keysKeptFile": {
+    "description": "The note under the Providers page's keys in a development build, which keeps them in a file: on macOS (mac), or elsewhere.",
+    "placeholders": { "platform": { "type": "String", "example": "mac" }, "path": { "type": "String", "example": "~/Library/Application Support/com.example.hyperaidesktop.dev/dev-keys.json" } }
+  }
 }

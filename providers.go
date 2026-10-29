@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -28,6 +29,105 @@ type keyring interface {
 	Get(key string) ([]byte, error)
 	Set(key string, value []byte) error
 	Delete(key string) error
+}
+
+// devKeysEnv, set, has a development build keep the keys in the
+// credential store, as the app does, to try that (DEVELOPMENT.md).
+const devKeysEnv = "HYPERAI_DEV_KEYCHAIN"
+
+// appKeyring returns where the app keeps the API keys: the system's
+// credential store, but for a development build a file of the development
+// app's data directory, which file names, unless devKeysEnv is set. A
+// rebuilt app is another to the macOS Keychain, which would ask to let
+// each build read the keys: contributors would have to sign their builds
+// (DEVELOPMENT.md).
+func appKeyring() (k keyring, file string) {
+	if !mygo.IsDev() || os.Getenv(devKeysEnv) != "" {
+		return mygo.Secrets, ""
+	}
+	dir, err := mygo.App.Path(mygo.PathUserData)
+	if err != nil {
+		return mygo.Secrets, ""
+	}
+	return devKeyring(dir)
+}
+
+// devKeyring returns where a development build keeps the keys, its data
+// directory being dir: the file there, unless devKeysEnv is set.
+func devKeyring(dir string) (k keyring, file string) {
+	if os.Getenv(devKeysEnv) != "" {
+		return mygo.Secrets, ""
+	}
+	file = filepath.Join(dir, "dev-keys.json")
+	return fileKeyring{file}, file
+}
+
+// fileKeyring keeps secrets in the file at path, as JSON by key, which
+// the user alone reads and writes: unencrypted, for development only.
+type fileKeyring struct{ path string }
+
+func (k fileKeyring) read() (map[string]string, error) {
+	b, err := os.ReadFile(k.path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return map[string]string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	secrets := map[string]string{}
+	if err := json.Unmarshal(b, &secrets); err != nil {
+		return nil, err
+	}
+	return secrets, nil
+}
+
+// write writes secrets whole, or none, through a file beside it.
+func (k fileKeyring) write(secrets map[string]string) error {
+	b, err := json.MarshalIndent(secrets, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(k.path), 0o700); err != nil {
+		return err
+	}
+	tmp := k.path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, k.path)
+}
+
+func (k fileKeyring) Get(key string) ([]byte, error) {
+	secrets, err := k.read()
+	if err != nil {
+		return nil, err
+	}
+	v, ok := secrets[key]
+	if !ok {
+		return nil, mygo.ErrSecretNotFound
+	}
+	return []byte(v), nil
+}
+
+func (k fileKeyring) Set(key string, value []byte) error {
+	secrets, err := k.read()
+	if err != nil {
+		return err
+	}
+	secrets[key] = string(value)
+	return k.write(secrets)
+}
+
+func (k fileKeyring) Delete(key string) error {
+	secrets, err := k.read()
+	if err != nil {
+		return err
+	}
+	if _, ok := secrets[key]; !ok {
+		return nil
+	}
+	delete(secrets, key)
+	return k.write(secrets)
 }
 
 // providerConf is what the user set of a provider but its key, as
@@ -338,6 +438,9 @@ func (a *app) providersPage(c *ui.Context) {
 		})
 	}
 	note := locales.KeysKept(platform())
+	if a.keysFile != "" {
+		note = locales.KeysKeptFile(platform(), homeRelative(a.keysFile))
+	}
 	if a.keyError != "" {
 		note = a.keyError
 	}

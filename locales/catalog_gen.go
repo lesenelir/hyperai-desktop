@@ -3681,3 +3681,21 @@ func SidebarUnread() string { return In(i18n.Locale()).SidebarUnread() }
 func (msgs Messages) SidebarUnread() string {
 	return Catalog.Format(msgs.locale, "sidebarUnread", nil)
 }
+
+// KeysKeptFile says "{platform, select, mac {Development build: keys are kept in {path}, unencrypted, not in your Keychain. The installed …"
+// in the language the app shows.
+//
+// The note under the Providers page's keys in a development build, which
+// keeps them in a file: on macOS (mac), or elsewhere.
+func KeysKeptFile(platform string, path string) string {
+	return In(i18n.Locale()).KeysKeptFile(platform, path)
+}
+
+// KeysKeptFile says "{platform, select, mac {Development build: keys are kept in {path}, unencrypted, not in your Keychain. The installed …"
+// in the language of msgs.
+//
+// The note under the Providers page's keys in a development build, which
+// keeps them in a file: on macOS (mac), or elsewhere.
+func (msgs Messages) KeysKeptFile(platform string, path string) string {
+	return Catalog.Format(msgs.locale, "keysKeptFile", map[string]any{"platform": platform, "path": path})
+}

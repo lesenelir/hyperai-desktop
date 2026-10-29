@@ -2934,6 +2934,60 @@ func TestListModels(t *testing.T) {
 	}
 }
 
+func TestFileKeyring(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "dev-keys.json")
+	k := fileKeyring{path}
+	if _, err := k.Get(keysSecret); !errors.Is(err, mygo.ErrSecretNotFound) {
+		t.Fatalf("Get of none: %v, want ErrSecretNotFound", err)
+	}
+	if err := k.Delete(keysSecret); err != nil {
+		t.Fatalf("Delete of none: %v", err)
+	}
+	// Kept in a file, its directory made, that the user alone reads.
+	if err := k.Set(keysSecret, []byte(`{"deepseek":"sk-dev"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("the file: %v, %v, want it 0600", fi, err)
+	}
+	if v, err := k.Get(keysSecret); err != nil || string(v) != `{"deepseek":"sk-dev"}` {
+		t.Errorf("Get: %q, %v", v, err)
+	}
+
+	// The app reads the keys from it, says where they are, and a next
+	// start does too.
+	a := newApp(nil)
+	a.keysFile = path
+	a.loadKeys(k)
+	if a.prov == nil || a.prov.ID() != "deepseek" {
+		t.Fatalf("asks %v, want DeepSeek of the file's key", a.prov)
+	}
+	tt := ui.NewTester(a.view, 1120, 760)
+	a.showProviders()
+	tt.Frame()
+	if want := "Development build: keys are kept in " + homeRelative(path) + ", unencrypted, not in your Keychain."; runtime.GOOS == "darwin" &&
+		!slices.ContainsFunc(tt.Texts(), func(s string) bool { return strings.HasPrefix(s, want) }) {
+		t.Errorf("no note of the file in %q", tt.Texts())
+	}
+	a.setKey("deepseek", "")
+	if _, err := k.Get(keysSecret); !errors.Is(err, mygo.ErrSecretNotFound) {
+		t.Errorf("the key kept once removed: %v", err)
+	}
+
+	// HYPERAI_DEV_KEYCHAIN keeps them in the credential store, as the
+	// installed app does. (devKeyring, rather than appKeyring, which
+	// would make the test app's data directory among the user's.)
+	dir := t.TempDir()
+	t.Setenv(devKeysEnv, "1")
+	if k, file := devKeyring(dir); file != "" || k != keyring(mygo.Secrets) {
+		t.Errorf("with %s: %T in %q, want the credential store", devKeysEnv, k, file)
+	}
+	t.Setenv(devKeysEnv, "")
+	if k, file := devKeyring(dir); file != filepath.Join(dir, "dev-keys.json") || k != keyring(fileKeyring{file}) {
+		t.Errorf("a development build keeps the keys with %T in %q", k, file)
+	}
+}
+
 func TestProviders(t *testing.T) {
 	srv := modelsServer(t)
 	kr := &memKeyring{secrets: map[string][]byte{}}

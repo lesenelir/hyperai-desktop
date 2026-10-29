@@ -29,9 +29,11 @@ func main() {
 		} else {
 			a = newApp(nil)
 			a.load()
-			// The API keys, from the system's credential store, which asks
-			// the user to let a rebuilt app read them.
-			a.loadKeys(mygo.Secrets)
+			// The API keys: from the system's credential store, or a file
+			// for a development build.
+			var k keyring
+			k, a.keysFile = appKeyring()
+			a.loadKeys(k)
 			// The theme chosen, before the window opens in another.
 			a.applyTheme = func(theme string) { mygo.Theme.SetSource(mygo.ThemeSource(theme)) }
 			a.applyTheme(a.theme)

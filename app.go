@@ -119,7 +119,8 @@ type app struct {
 	// is, which is the demo in tests and HYPERAI_BENCH, and none in the
 	// app; prov is the one asked, of model, nil for none, which is the chat's modelFor shows
 	// (models.go). keys are the API keys the user gave, by providerKind ID,
-	// which keyring keeps (nil in tests); keyError is what reading or
+	// which keyring keeps (nil in tests), in keysFile for a development
+	// build (appKeyring); keyError is what reading or
 	// keeping them last said, "" where it went well. confs are the
 	// providers' other settings, by ID, and defaultModel the model a new
 	// chat asks, which confPath keeps ("" in tests); listing tells the
@@ -132,6 +133,7 @@ type app struct {
 	modelFor     string
 	keys         map[string]string
 	keyring      keyring
+	keysFile     string // the file keyring keeps the keys in, "" for the credential store
 	keyError     string
 	confs        map[string]*providerConf
 	defaultModel modelRef
