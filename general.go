@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -115,9 +116,7 @@ func (a *app) generalPage(c *ui.Context) {
 			}
 			if ui.Switch(c.Key("open at login"), on).Label(locales.OpenAtLogin()).Disabled(a.setOpenAtLogin == nil).Changed() {
 				a.loginError = ""
-				if err := a.setOpenAtLogin(a.atLogin); err != nil {
-					a.atLogin, a.loginError = !a.atLogin, err.Error()
-				}
+				a.changeOpenAtLogin(a.atLogin)
 			}
 		})
 		settingDivider(c)
@@ -170,6 +169,39 @@ func (a *app) generalPage(c *ui.Context) {
 			}
 		})
 	})
+}
+
+// loginSettle is how long the switch of Open at login slides, 140 ms as
+// every switch's, before the system is told: the login item it registers
+// (SMAppService on macOS) takes the main thread a while, and the frame it
+// held would show the knob at its end, rather than sliding as Replies'.
+const loginSettle = 180 * time.Millisecond
+
+// changeOpenAtLogin tells the system the app opens at login, or not, as
+// the switch now says, once it slid; where it fails, the switch turns back
+// and says why. Only the last change answers, as the switch turns again
+// first.
+func (a *app) changeOpenAtLogin(open bool) {
+	done := func(err error) {
+		if err != nil {
+			a.atLogin, a.loginError = !open, err.Error()
+		}
+	}
+	if a.post == nil {
+		done(a.setOpenAtLogin(open))
+		return
+	}
+	a.loginChange++
+	change := a.loginChange
+	go func() {
+		time.Sleep(loginSettle)
+		err := a.setOpenAtLogin(open)
+		a.post(func() {
+			if change == a.loginChange {
+				done(err)
+			}
+		})
+	}()
 }
 
 // choiceButton builds the pop-up button, labeled label, that chooses

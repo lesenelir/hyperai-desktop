@@ -254,7 +254,8 @@ type app struct {
 	// "" for the system's, which applyLanguage gives the app (nil in
 	// tests); whether the app opens at login, as
 	// the system has it, which openAtLogin reads and setOpenAtLogin sets
-	// (nil in tests), loginError what setting it last said; the chat shown
+	// (nil in tests), loginError what setting it last said, loginChange
+	// counting the switch's changes, of which the last answers; the chat shown
 	// as the app opens, of launchTitles, the last chat shown being
 	// keptChat, as layout.json has it; the key that sends, of sendTitles;
 	// and reveal, which shows a file in the file manager (nil in tests).
@@ -264,6 +265,7 @@ type app struct {
 	openAtLogin    func() bool
 	setOpenAtLogin func(open bool) error
 	loginError     string
+	loginChange    int
 	onLaunch       int
 	keptChat       string
 	sendWith       int
