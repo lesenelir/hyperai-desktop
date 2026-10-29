@@ -84,9 +84,21 @@ func newPalette(dark bool) *palette {
 	md.CodeBlockBackground, md.CodeBlockBorder = composer, on(0.10)
 	md.QuoteBar, md.Rule, md.TableBorder = on(0.2), on(0.12), on(0.12)
 	md.TableHeader = p.fg.Alpha(0.03)
-	md.FontSize, md.LineHeight = bodySize, bodyLineHeight
+	md.LineHeight = bodyLineHeight
 	p.md = md
 	return p
+}
+
+// markdownTheme returns the palette's Markdown at the size of the
+// conversation's text: made again only as either changes, as the Markdown
+// lays out again when its theme does.
+func (a *app) markdownTheme() *markdown.Theme {
+	if a.mdOf != a.pal || a.mdTheme.FontSize != a.body {
+		md := *a.pal.md
+		md.FontSize = a.body
+		a.mdTheme, a.mdOf = &md, a.pal
+	}
+	return a.mdTheme
 }
 
 // shadow returns the color of a shadow of strength a: fg with a trace of

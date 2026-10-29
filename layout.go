@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -18,9 +19,14 @@ const (
 	paneMin    = 360
 )
 
-// layout is what layout.json holds.
+// layout is what layout.json holds: the sidebar's width, and the
+// appearance chosen in the settings.
 type layout struct {
-	SidebarWidth float32 `json:"sidebarWidth,omitempty"`
+	SidebarWidth  float32 `json:"sidebarWidth,omitempty"`
+	Theme         string  `json:"theme,omitempty"`
+	TextSize      float32 `json:"textSize,omitempty"`
+	OpaqueSidebar bool    `json:"opaqueSidebar,omitempty"`
+	ReduceMotion  bool    `json:"reduceMotion,omitempty"`
 }
 
 // loadLayout reads the layout kept in dir, if any.
@@ -31,9 +37,19 @@ func (a *app) loadLayout(dir string) {
 		return
 	}
 	var l layout
-	if json.Unmarshal(b, &l) == nil && l.SidebarWidth > 0 {
+	if json.Unmarshal(b, &l) != nil {
+		return
+	}
+	if l.SidebarWidth > 0 {
 		a.sideWidth = l.SidebarWidth
 	}
+	if slices.Contains(themes[:], l.Theme) {
+		a.theme = l.Theme
+	}
+	if i := slices.Index(textSizes[:], l.TextSize); i >= 0 {
+		a.textSize = i
+	}
+	a.translucent, a.reduceMotion = !l.OpaqueSidebar, l.ReduceMotion
 }
 
 // saveLayout keeps the layout, where the app has a place for it (not in
@@ -42,7 +58,8 @@ func (a *app) saveLayout() {
 	if a.layoutPath == "" {
 		return
 	}
-	b, err := json.Marshal(layout{SidebarWidth: a.sideWidth})
+	b, err := json.Marshal(layout{SidebarWidth: a.sideWidth, Theme: a.theme, TextSize: textSizes[a.textSize],
+		OpaqueSidebar: !a.translucent, ReduceMotion: a.reduceMotion})
 	if err != nil {
 		return
 	}

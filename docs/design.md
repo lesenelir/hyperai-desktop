@@ -192,6 +192,20 @@ A small button that floats over the conversation (scroll to end) rests at
   the one shown on the 7% wash with its label at 500. The pane shows the
   page, 640 wide at most: its title at 20/500 over what it holds at
   `fg/70`. Showing a chat leaves them.
+- **Settings pages** are groups 28 apart, each a title at 12 `fg/70`
+  over a card, as macOS's: `composer`, radius 12, a hairline round it and
+  between its rows, in 16 from its left. A row is what it sets at 14 over
+  more of that at 12 `fg/70`, and its control on the right: MyGo's switch
+  or segmented control, in the theme's colors. A control the desktop
+  decides (no material to show, motion the system reduces) is disabled,
+  as the desktop has it, and its row says why.
+- **Appearance** offers only what the app does: the theme — System,
+  Light, Dark, each a card drawing HyperAI small in its palette (System
+  half light, half dark), ringed in the accent at 2 while chosen, as the
+  app follows it, window controls too (`mygo.Theme.SetSource`); the
+  conversation's text, 14, 15 or 17, over a question and a reply at that
+  size, since the settings hide the conversation; the translucent
+  sidebar; and reduce motion. No accent picker: there is one accent.
 - **Search**: a card near the window's top over a scrim, its field over
   tabs (All, Chats, Projects, Artifacts, Settings), titled sections of
   rows in the sidebar's look, and the keys it takes in its footer.

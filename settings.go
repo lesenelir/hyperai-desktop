@@ -5,22 +5,24 @@ import (
 )
 
 // settingsSection is a page of the settings, under its group in the
-// sidebar: about says what it holds, as the page does until it holds it.
+// sidebar: about says what it holds, under its title, and page builds what
+// it holds, nil until it holds something.
 type settingsSection struct {
 	key, group, title string
 	icon              *ui.SVG
 	about             string
+	page              func(a *app, c *ui.Context)
 }
 
 // settingsSections are the settings' pages, in the sidebar's order: by
 // group, as Codex's.
 var settingsSections = []settingsSection{
-	{"general", "Personal", "General", settingsIcon, "How HyperAI starts and behaves: its language, new chats, and sending with Enter."},
-	{"appearance", "Personal", "Appearance", sunIcon, "Light, dark or as the system is, and the size of the conversation's text."},
-	{"shortcuts", "Personal", "Keyboard shortcuts", keyboardIcon, "The keys that do what HyperAI does, and changing them."},
-	{"providers", "Models", "Providers", plugIcon, "Where replies come from: OpenRouter and its API key, and other providers."},
-	{"model", "Models", "Default model", logoIcon, "The model a new chat asks, until it is changed in the composer."},
-	{"about", "App", "About", infoIcon, "HyperAI's version, and what changed in it."},
+	{"general", "Personal", "General", settingsIcon, "How HyperAI starts and behaves: its language, new chats, and sending with Enter.", nil},
+	{"appearance", "Personal", "Appearance", sunIcon, "How HyperAI looks: its theme, the conversation's text, and the window.", (*app).appearancePage},
+	{"shortcuts", "Personal", "Keyboard shortcuts", keyboardIcon, "The keys that do what HyperAI does, and changing them.", nil},
+	{"providers", "Models", "Providers", plugIcon, "Where replies come from: OpenRouter and its API key, and other providers.", nil},
+	{"model", "Models", "Default model", logoIcon, "The model a new chat asks, until it is changed in the composer.", nil},
+	{"about", "App", "About", infoIcon, "HyperAI's version, and what changed in it.", nil},
 }
 
 // section returns the settings' page shown, the first when none is.
@@ -151,11 +153,18 @@ func (a *app) settingsPane(c *ui.Context, titleLeft float32) {
 		})
 		ui.Scroll(c.Key("settings page")).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).AlignItems(ui.Center).Padding(28, 24).Children(func() {
-				ui.Column(c).WidthPercent(100).MaxWidth(settingsWidth).Gap(8).Children(func() {
+				ui.Column(c).WidthPercent(100).MaxWidth(settingsWidth).Gap(8).AlignItems(ui.Stretch).Children(func() {
 					ui.Text(c, s.title).FontSize(20).FontWeight(500)
 					ui.Text(c, s.about).FontSize(14).LineHeight(1.6).TextColor(t.TextMuted)
-					ui.Text(c, "Nothing to change here yet.").FontSize(13).TextColor(t.TextMuted).
-						Margin(16, 0, 0, 0).Padding(16).Radius(12).Border(1, t.Border).WidthPercent(100)
+					// The page's groups, further apart than its lines.
+					ui.Column(c).Margin(16, 0, 0, 0).Gap(28).AlignItems(ui.Stretch).Children(func() {
+						if s.page != nil {
+							s.page(a, c)
+						} else {
+							ui.Text(c, "Nothing to change here yet.").FontSize(13).TextColor(t.TextMuted).
+								Padding(16).Radius(12).Border(1, t.Border)
+						}
+					})
 				})
 			})
 		})

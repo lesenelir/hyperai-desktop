@@ -33,6 +33,9 @@ func main() {
 		} else {
 			a = newApp(newProvider())
 			a.load()
+			// The theme chosen, before the window opens in another.
+			a.applyTheme = func(theme string) { mygo.Theme.SetSource(mygo.ThemeSource(theme)) }
+			a.applyTheme(a.theme)
 		}
 		a.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:     "HyperAI",

@@ -235,7 +235,7 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 			ui.Spacer(c)
 			// Beside the bubble, centered on its first line, over the
 			// bubble's padding: the time, then the button next to the bubble.
-			actions := ui.Row(c).Height(actionsHeight).Margin(bubblePadY+bodySize*bodyLineHeight/2-actionsHeight/2, 0, 0, 0).
+			actions := ui.Row(c).Height(actionsHeight).Margin(bubblePadY+a.body*bodyLineHeight/2-actionsHeight/2, 0, 0, 0).
 				Gap(4).AlignItems(ui.Center)
 			actions.Opacity(actions.Animate("opacity", shown(hover), revealDuration))
 			actions.Children(func() {
@@ -297,8 +297,8 @@ func (a *app) question(c *ui.Context, m *message, room float32) {
 	}
 	if width != m.wrapWidth {
 		// Every line is as tall, whatever the script: the font's.
-		_, h := c.MeasureText(width, ui.Span{Text: m.Text, Size: bodySize})
-		_, line := c.MeasureText(0, ui.Span{Text: "x", Size: bodySize})
+		_, h := c.MeasureText(width, ui.Span{Text: m.Text, Size: a.body})
+		_, line := c.MeasureText(0, ui.Span{Text: "x", Size: a.body})
 		m.lines, m.wrapWidth = int(h/line+0.5), width
 	}
 	long := m.lines > clampLines+slackLines
@@ -306,13 +306,13 @@ func (a *app) question(c *ui.Context, m *message, room float32) {
 	bubble := ui.Column(c).MinWidth(0).MaxWidth(bubbleMaxWidth).Padding(bubblePadY, bubblePadX).Radius(14).
 		Background(a.pal.raised).AlignItems(ui.Stretch).Gap(4)
 	bubble.Children(func() {
-		h := float32(clampLines * bodySize * bodyLineHeight)
+		h := clampLines * a.body * bodyLineHeight
 		clip := ui.Column(c)
 		if collapsed {
 			clip.Height(h).ClipY()
 		}
 		clip.Children(func() {
-			ui.Text(c, m.Text).FontSize(bodySize).LineHeight(bodyLineHeight).Selectable()
+			ui.Text(c, m.Text).FontSize(a.body).LineHeight(bodyLineHeight).Selectable()
 			if collapsed {
 				// Its last lines fade into the bubble, from 70% down.
 				ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(h*0.3).PassThrough().
@@ -353,8 +353,9 @@ const (
 
 const (
 	// The conversation's text — questions, replies, and the composer —
-	// is 15 DIPs on lines of 1.6, as hyperai-next's (text-[15px],
-	// leading-relaxed); the rest of the window keeps the theme's size.
+	// is 15 DIPs on lines of 1.6 at first, as hyperai-next's (text-[15px],
+	// leading-relaxed), and as large as the settings make it (app.body);
+	// the rest of the window keeps the theme's size.
 	bodySize       = 15
 	bodyLineHeight = 1.6
 
@@ -521,7 +522,7 @@ func (a *app) composerPill(c *ui.Context, welcome bool) bool {
 	}
 	if a.draft != a.measured {
 		a.measured = a.draft
-		a.measuredWidth, _ = c.MeasureText(0, ui.Span{Text: a.draft, Size: bodySize})
+		a.measuredWidth, _ = c.MeasureText(0, ui.Span{Text: a.draft, Size: a.body})
 	}
 	return a.measuredWidth <= a.pillWidth()
 }
@@ -548,7 +549,7 @@ func (a *app) composerRoom(c *ui.Context) {
 		rest, w = floatPadTop+composerPadEnd+2+2*pillPadY, a.pillWidth()
 	}
 	ui.Column(c).Padding(0, 0, rest, 0).Children(func() {
-		ui.Text(c, text).Width(max(0, w)).FontSize(bodySize).LineHeight(bodyLineHeight).
+		ui.Text(c, text).Width(max(0, w)).FontSize(a.body).LineHeight(bodyLineHeight).
 			MaxLines(10).Opacity(0)
 	})
 }
@@ -604,7 +605,7 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 				ui.Box(c).Grow(1).MinWidth(0).Children(func() {
 					// Enter sends, Shift+Enter breaks the line.
 					draft := ui.TextAreaBase(c.Key("draft"), &a.draft).WidthPercent(100).Lines(1, 10).
-						FontSize(bodySize).LineHeight(bodyLineHeight).Padding(top, right, bottom, fieldPadX).
+						FontSize(a.body).LineHeight(bodyLineHeight).Padding(top, right, bottom, fieldPadX).
 						TrackScroll(&a.fieldScroll).
 						Label("Message").AutoFocus().
 						OnTextKey(func(k ui.TextKey) bool {
@@ -617,7 +618,7 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 							}
 							return true
 						})
-					a.placeholder(c, "Ask anything…", a.draft == "" && !draft.Composing(), top, fieldPadX, bodySize, bodyLineHeight)
+					a.placeholder(c, "Ask anything…", a.draft == "" && !draft.Composing(), top, fieldPadX, a.body, bodyLineHeight)
 					if b := draft.Bounds(); !empty(b) {
 						a.field = b
 					}

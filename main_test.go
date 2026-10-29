@@ -1287,7 +1287,7 @@ func TestSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Advance(time.Second)
-	if !tt.HasText("Light, dark") {
+	if !tt.HasText("How HyperAI looks") {
 		t.Fatalf("no Appearance page in %q", tt.Texts())
 	}
 
@@ -1316,7 +1316,7 @@ func TestSettings(t *testing.T) {
 	}
 	tt.Key(ui.Cmd, ui.KeyComma)
 	tt.Advance(time.Second)
-	if !a.settings || a.settingsQuery != "" || !tt.HasText("Light, dark") {
+	if !a.settings || a.settingsQuery != "" || !tt.HasText("How HyperAI looks") {
 		t.Fatalf("⌘,: settings %v, query %q, texts %q", a.settings, a.settingsQuery, tt.Texts())
 	}
 	tt.Key(0, ui.KeyEscape)
@@ -1333,4 +1333,88 @@ func TestSettings(t *testing.T) {
 	if a.settings || a.selected != "" {
 		t.Errorf("new chat: settings %v, chat %q", a.settings, a.selected)
 	}
+}
+
+func TestAppearance(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&demo{})
+	a.loadLayout(dir)
+	var applied []string
+	a.applyTheme = func(theme string) { applied = append(applied, theme) }
+	tt := ui.NewTester(a.view, 1120, 900)
+	tt.Type("How do I cache?")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	question := a.threads[0].Messages[0]
+	before := question.height
+
+	a.openSettings()
+	a.settingsPage = "appearance"
+	tt.Frame()
+
+	// A card chooses the theme, which the app takes.
+	if err := tt.Click("Dark"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.theme != "dark" || !slices.Equal(applied, []string{"dark"}) {
+		t.Errorf("theme %q, applied %q", a.theme, applied)
+	}
+
+	// The text size, which the conversation takes too.
+	if err := tt.Click("Large"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.body != 17 || a.md.Theme.FontSize != 17 {
+		t.Errorf("text %v, Markdown %v, want 17", a.body, a.md.Theme.FontSize)
+	}
+
+	// The sidebar's material, only where the desktop gives one.
+	toggle(t, tt, "Translucent sidebar", "This system draws no material behind windows.")
+	tt.Advance(time.Second)
+	if !a.translucent {
+		t.Errorf("the switch turned with no material to show")
+	}
+	tt.SetVibrancy(true)
+	tt.Frame()
+	toggle(t, tt, "Translucent sidebar", "Let the desktop show through the sidebar.")
+	tt.Advance(time.Second)
+	if a.translucent {
+		t.Errorf("the sidebar stayed translucent")
+	}
+	toggle(t, tt, "Reduce motion", "Show changes at once rather than fading or gliding. On whenever the system asks for less motion.")
+	tt.Advance(time.Second)
+	if !a.reduceMotion {
+		t.Errorf("motion not reduced")
+	}
+
+	tt.Key(0, ui.KeyEscape)
+	tt.Advance(time.Second)
+	if question.height <= before {
+		t.Errorf("the question %v tall at 17, %v at 15", question.height, before)
+	}
+
+	// All of it kept for the next start.
+	a.layoutSaver.wait()
+	b := newApp(&demo{})
+	b.loadLayout(dir)
+	if b.theme != "dark" || textSizes[b.textSize] != 17 || b.translucent || !b.reduceMotion {
+		t.Errorf("after a restart: theme %q, text %v, translucent %v, still %v", b.theme, textSizes[b.textSize], b.translucent, b.reduceMotion)
+	}
+}
+
+// toggle clicks the switch of the settings row titled title, about which
+// says more: on the right of the page's card, which the title is 16 in
+// from, centered on the two.
+func toggle(t *testing.T, tt *ui.Tester, title, about string) {
+	t.Helper()
+	r, ok := tt.Find(title)
+	d, ok2 := tt.Find(about)
+	if !ok || !ok2 {
+		t.Fatalf("no %q or %q in %q", title, about, tt.Texts())
+	}
+	right := r.X - 16 + settingsWidth - 1 - 16
+	tt.ClickAt(right-12, (r.Y+d.Y+d.H)/2)
+	tt.Advance(time.Second)
 }

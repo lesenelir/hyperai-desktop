@@ -162,10 +162,25 @@ type app struct {
 	settings      bool
 	settingsPage  string
 	settingsQuery string
+	// The appearance (appearance.go), which its controls bind: the theme,
+	// "system", "light" or "dark", which applyTheme gives the app (nil in
+	// tests); the size of the conversation's text, of textSizes, which is
+	// body DIPs, as mdTheme, the palette mdOf's Markdown, takes it; whether
+	// the sidebar lets the desktop's material through; and whether nothing
+	// moves, whatever the desktop asks.
+	theme        string
+	applyTheme   func(theme string)
+	textSize     int
+	body         float32
+	mdTheme      *markdown.Theme
+	mdOf         *palette
+	translucent  bool
+	reduceMotion bool
 }
 
 func newApp(p provider) *app {
-	return &app{prov: p, model: p.Models()[0], sideWidth: sidebarWidth}
+	return &app{prov: p, model: p.Models()[0], sideWidth: sidebarWidth, theme: "system",
+		textSize: defaultTextSize, body: bodySize, translucent: true}
 }
 
 // current returns the chat shown, nil for a new chat.
@@ -306,7 +321,11 @@ func (a *app) view(c *ui.Context) {
 	// The colors are hyperai-next's, in the system's appearance.
 	a.pal = paletteFor(c.Theme())
 	c.SetTheme(a.pal.theme)
-	a.md.Theme = a.pal.md
+	a.setBody(textSizes[a.textSize])
+	a.md.Theme = a.markdownTheme()
+	if a.reduceMotion {
+		c.DisableAnimations()
+	}
 	t := c.Theme()
 	if c.Shortcut(ui.Cmd, ui.KeyN) {
 		a.newChat()
@@ -336,7 +355,7 @@ func (a *app) view(c *ui.Context) {
 	}
 	// The window's material shows wherever the view draws no background:
 	// under the sidebar, where the window has one.
-	vibrant := c.Vibrancy()
+	vibrant := c.Vibrancy() && a.translucent
 	if vibrant {
 		c.Root().Background(ui.Transparent)
 	}
