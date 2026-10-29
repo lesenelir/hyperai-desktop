@@ -16,7 +16,7 @@ import (
 
 const (
 	titleBarHeight = 52  // the height of the hidden title bar's room
-	sidebarWidth   = 272 // the sidebar's width while it shows
+	sidebarWidth   = 272 // the sidebar's width at first (layout.go)
 	maxWidth       = 780 // the conversation's and the composer's width at most
 	// barClear is how far a row of a list that scrolls stays from the
 	// list's right, for its wash to clear the scroll bar over it: MyGo's
@@ -89,10 +89,17 @@ type app struct {
 	next     int    // the last ID given to a chat or a message
 	draft    string // what the composer holds
 	model    string
-	// collapsed hides the sidebar.
-	collapsed  bool
-	focusDraft bool    // gives the composer the focus in the next frame
-	nav        history // the chats shown before and after the one shown
+	// collapsed hides the sidebar, sideWidth wide as it shows; resizing
+	// tells that the pointer drags its edge, which pressed it resizeFrom
+	// wide and went resizeBy since (layout.go).
+	collapsed            bool
+	sideWidth            float32
+	resizing             bool
+	resizeFrom, resizeBy float32
+	layoutPath           string // where the layout is kept, "" in tests
+	layoutSaver          saver
+	focusDraft           bool    // gives the composer the focus in the next frame
+	nav                  history // the chats shown before and after the one shown
 	// cardHeight is how tall the outline's card was laid out.
 	cardHeight float32
 	// footer is how tall the composer was laid out, which floats over the
@@ -140,7 +147,7 @@ type app struct {
 }
 
 func newApp(p provider) *app {
-	return &app{prov: p, model: p.Models()[0]}
+	return &app{prov: p, model: p.Models()[0], sideWidth: sidebarWidth}
 }
 
 // current returns the chat shown, nil for a new chat.
@@ -305,11 +312,14 @@ func (a *app) view(c *ui.Context) {
 	bar := c.TitleBar()
 	row := ui.Row(c).Fill().AlignItems(ui.Stretch)
 	shown := row.Animate("sidebar", b2f(!a.collapsed), 220*time.Millisecond)
+	winW, _ := c.Size()
+	lo, hi := sidebarBounds(winW, bar.Left)
+	sideW := max(lo, min(a.sideWidth, hi))
 	row.Children(func() {
 		// The sidebar slides out to the left as it hides.
-		w := sidebarWidth * shown
+		w := sideW * shown
 		ui.Row(c).Width(w).Shrink(0).AlignItems(ui.Stretch).Clip().Children(func() {
-			side := ui.Column(c).Width(sidebarWidth).Shrink(0).Margin(0, 0, 0, w-sidebarWidth)
+			side := ui.Column(c).Width(sideW).Shrink(0).Margin(0, 0, 0, w-sideW)
 			// Over the material, its own color, warm as the canvas beside it,
 			// lets the material through but tints it: the desktop's grey,
 			// cool by itself, sat apart from the canvas.
@@ -325,6 +335,9 @@ func (a *app) view(c *ui.Context) {
 		}
 		// Clear of the toggle, Back and Forward as the sidebar hides.
 		a.pane(c, 20+(1-shown)*(bar.Left+108))
+		if shown == 1 {
+			a.resizer(c, w, lo, hi)
+		}
 	})
 
 	// The sidebar's toggle, beside the window controls whether the sidebar

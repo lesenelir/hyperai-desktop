@@ -16,6 +16,7 @@ func (a *app) load() {
 	if err != nil {
 		return
 	}
+	a.loadLayout(dir)
 	a.path = filepath.Join(dir, "chats.json")
 	b, err := os.ReadFile(a.path)
 	if err != nil || json.Unmarshal(b, &a.threads) != nil {

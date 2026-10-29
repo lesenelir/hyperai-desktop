@@ -66,8 +66,9 @@ one theme and wrong in the other.
 
 **The one accent rule.** The accent marks what acts and what is chosen:
 the send button, the chat shown in the sidebar, the caret and the
-selection, links. Beyond those, it marks HyperAI itself — the sparkle by
-the model — and inline code, as Waku colors it. Nothing else: no accent
+selection, links. Beyond those, it marks HyperAI itself — its mark over
+an empty chat, the sparkle by the model — and inline code, as Waku colors
+it. Nothing else: no accent
 backgrounds, no accent for flavor, no accent on what is inactive.
 
 **The muted-text floor.** Text at 13 DIPs or under is `fg/70` or darker.
@@ -85,7 +86,7 @@ Sizes are DIPs. The window's theme size is the platform's (13 on macOS,
 
 | Role | Size / weight | Where |
 | --- | --- | --- |
-| Display | 26 / 600 | The welcome's greeting |
+| Display | 26 / 400 | The empty chat's greeting |
 | Reading | 15, line 1.6 | Messages and the composer (`bodySize`, `bodyLineHeight`), as hyperai-next's `text-[15px] leading-relaxed` |
 | Title | 14 / 500 | The chat's title in the title bar; the search's field |
 | UI | 13 (theme) | Rows, tabs, menus, buttons |
@@ -96,13 +97,14 @@ Markdown sizes its headings and code from the reading size
 (`markdown.Theme`): code at 0.875 of it, headings from 1.6 down.
 
 Weights are 400, 500 for emphasis (the shown chat, the chosen tab, a
-match) and 600 for headings and the greeting. Never bold UI text for
+match) and 600 for Markdown's headings; the greeting, large enough to
+stand out by size, is 400. Never bold UI text for
 attention; move it up the ladder instead.
 
 ## 3. Shape and space
 
 - **Radii.** 4 for keys, 6 for icon buttons, 8 for rows, tabs and menus,
-  12 for cards (suggestions, the outline's card), 14 for the user's
+  12 for cards (the outline's card), 14 for the user's
   bubble, 16 for the composer and the search. Round things are round: the
   send and scroll-to-end buttons.
 - **Rows** of a list are 7–8 DIPs over and under their text, 12 to its
@@ -112,7 +114,11 @@ attention; move it up the ladder instead.
 - **Icons** are Lucide's, at 2-DIP strokes: 16 in rows and buttons, 14 in
   the title bar and on messages, where they repeat.
 - **Measure.** The conversation and the composer are 780 wide at most
-  (`maxWidth`); the sidebar is 272.
+  (`maxWidth`). The sidebar is 272 at first, and as wide as its edge is
+  dragged, from 200 to 420, leaving the conversation 360 at least
+  ([layout.go](../layout.go)); a double click on the edge makes it 272
+  again. Its edge shows a 2-DIP bar of `fg/35` while the pointer is over
+  it or drags it.
 
 ## 4. Elevation
 
@@ -126,7 +132,6 @@ so that depth keeps the theme's tone instead of reading as grey smudge.
 | Level | Shadow | Where |
 | --- | --- | --- |
 | Rest | 0 4 16 −4 at 12% | The composer |
-| Intent | 0 8 24 −6 at 18% | A suggestion card under the pointer |
 | Float | 0 10 24 −6 at 20%; 0 16 40 −12 at 28% | The outline's card; the search |
 | Action | 0 3 8 −2, `ac` at 35% | The send button, ready |
 
@@ -151,6 +156,15 @@ A small button that floats over the conversation (scroll to end) rests at
   Markdown across the column under a rule saying how long they took.
   Their actions (copy, time) fade in under the pointer in 150 ms; the last
   reply's stay.
+- **Empty chat**: as hyperai-next's agent page, the composer in the
+  middle — the greeting over it (the HyperAI mark from
+  `resources/logo.svg`, 48, in the accent as hyperai-next fills its Logo,
+  over one question of what HyperAI is for, 26/400: "What are you
+  building with AI today?"), prompts under it, and a word on the replies
+  at the window's foot. A prompt is a row, not a card: its icon under the
+  composer's text, 14 at `fg/70`; the pointer brings the text to `fg` and
+  the icon to the accent. A click writes it in the composer, the caret at
+  its end, to send as it is or changed. No grid of cards.
 - **Search**: a card near the window's top over a scrim, its field over
   tabs (All, Chats, Projects, Artifacts, Settings), titled sections of
   rows in the sidebar's look, and the keys it takes in its footer.

@@ -6,17 +6,22 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 )
 
-// suggestions are what an empty chat offers to ask.
-var suggestions = []struct{ title, prompt string }{
-	{"Write a function", "Write an LRU cache in Go that is safe for concurrent use."},
-	{"Plan a change", "Plan how to add streaming replies to a chat app."},
-	{"Explain a concept", "Explain how Go's scheduler runs goroutines."},
-	{"Review my setup", "How do I connect this app to a real model?"},
+// suggestions are what an empty chat offers to ask, each with the icon of
+// its kind.
+var suggestions = []struct {
+	icon   *ui.SVG
+	prompt string
+}{
+	{codeIcon, "Write an LRU cache in Go that is safe for concurrent use."},
+	{planIcon, "Plan how to add streaming replies to a chat app."},
+	{ideaIcon, "Explain how Go's scheduler runs goroutines."},
+	{plugIcon, "How do I connect this app to a real model?"},
 }
 
 // pane builds the chat shown: its title bar, its messages or the welcome,
@@ -50,8 +55,11 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 			}
 		})
 		if th == nil || len(th.Messages) == 0 {
-			a.welcome(c)
+			// The composer is the third element either way, so that it keeps
+			// the focus and what is typed as the chat starts.
+			a.greeting(c)
 			a.composer(c, nil)
+			a.prompts(c)
 		} else {
 			a.conversation(c, th)
 			a.composer(c, th)
@@ -59,32 +67,52 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 	})
 }
 
-// welcome builds an empty chat: a greeting, and suggestions to ask.
-func (a *app) welcome(c *ui.Context) {
+// greeting builds the top of an empty chat, over the composer, which the
+// empty chat centers as hyperai-next's agent page does: the HyperAI mark,
+// in the accent, over a question, as a chat app asks what is on your mind,
+// of what HyperAI is for: AI, its resources and its compute.
+func (a *app) greeting(c *ui.Context) {
+	ui.Column(c).Grow(1).MinHeight(0).Justify(ui.End).AlignItems(ui.Center).Padding(24, 24, 28, 24).Gap(16).
+		Children(func() {
+			ui.Icon(c, markIcon).Size(48, 48).TextColor(a.pal.ac).Label("HyperAI")
+			// Regular: at this size, 500 read heavy.
+			ui.Text(c, "What are you building with AI today?").FontSize(26)
+		})
+}
+
+// prompts builds the bottom of an empty chat, under the composer: what to
+// ask, a row each, which a click writes in the composer to send as it is
+// or after a change; and at the window's foot, a word on the replies.
+func (a *app) prompts(c *ui.Context) {
 	t := c.Theme()
-	ui.Column(c).Grow(1).AlignItems(ui.Center).Justify(ui.Center).Gap(8).Padding(24).Children(func() {
-		ui.Icon(c, logoIcon).Size(34, 34).TextColor(a.pal.ac)
-		ui.Text(c, "What should we work on?").FontSize(26).FontWeight(600).Margin(14, 0, 0, 0)
-		ui.Text(c, "Ask anything, or start with one of these.").TextColor(t.TextMuted)
-		ui.Row(c).Wrap().Gap(10).Justify(ui.Center).MaxWidth(maxWidth).Margin(22, 0, 0, 0).Children(func() {
+	ui.Column(c).Grow(1.2).MinHeight(0).AlignItems(ui.Center).Padding(0, 24).Children(func() {
+		ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Padding(4, 0, 0, 0).Children(func() {
 			for _, s := range suggestions {
-				// Cards rest flat on a hairline, and lift on hover.
-				card := ui.ButtonBase(c.Key(s.title)).Width(300).Padding(12, 14).Radius(12).
-					Background(a.pal.composer).Border(1, t.Border).Justify(ui.Start).Label(s.title)
-				if card.Hovered() {
-					card.Shadow(0, 8, 24, -6, a.pal.shadow(0.18))
-				}
-				card.Children(func() {
-					ui.Column(c).Gap(4).MinWidth(0).Children(func() {
-						ui.Text(c, s.title).FontSize(14).FontWeight(600)
-						ui.Text(c, s.prompt).FontSize(13).TextColor(t.TextMuted).MaxLines(2)
-					})
+				// Its icon under the composer's text, as hyperai-next's: no
+				// card, no wash; the pointer brings the text up the ladder,
+				// and the icon to the accent.
+				row := ui.ButtonBase(c.Key(s.prompt)).Padding(7, 17).Gap(12).Radius(8).Justify(ui.Start).
+					AlignItems(ui.Center).Label(s.prompt)
+				on := row.Hovered()
+				row.Children(func() {
+					icon := ui.Icon(c, s.icon).Size(16, 16).Shrink(0).TextColor(t.TextMuted)
+					text := ui.Text(c, s.prompt).FontSize(14).TextColor(t.TextMuted)
+					if on {
+						icon.TextColor(a.pal.ac)
+						text.TextColor(t.Text)
+					}
 				})
-				if card.Clicked() {
-					a.send(s.prompt)
+				if row.Clicked() {
+					a.draft, a.focusDraft = s.prompt, true
 				}
 			}
 		})
+		ui.Spacer(c)
+		note := "Answers may be inaccurate, so check important details."
+		if _, ok := a.prov.(*demo); ok {
+			note = "Demo replies · set OPENROUTER_API_KEY in .env to talk to a real model."
+		}
+		ui.Text(c, note).FontSize(12).TextColor(t.TextMuted).Padding(24, 0, 14, 0)
 	})
 }
 
@@ -436,9 +464,12 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 			if b := draft.Bounds(); !empty(b) {
 				a.field = b
 			}
-			// Back to writing after choosing a chat.
+			// Back to writing after choosing a chat, or a prompt: at the end
+			// of what is there, where the app's text leaves the caret at its
+			// start.
 			if a.focusDraft {
-				draft.Focus()
+				n := utf8.RuneCountInString(a.draft)
+				draft.Focus().SetTextSelection(n, n)
 				a.focusDraft = false
 			}
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(4, 8, 8, 10).Children(func() {

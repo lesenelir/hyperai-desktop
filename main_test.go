@@ -27,7 +27,7 @@ func newTester() (*app, *ui.Tester) {
 
 func TestSendWithEnter(t *testing.T) {
 	a, tt := newTester()
-	if !tt.HasText("What should we work on?") {
+	if !tt.HasText("What are you building with AI today?") {
 		t.Fatalf("no welcome in %q", tt.Texts())
 	}
 	tt.Type("How do I cache?")
@@ -58,16 +58,22 @@ func TestShiftEnterBreaksLine(t *testing.T) {
 
 func TestSuggestionAndNewChat(t *testing.T) {
 	a, tt := newTester()
-	if err := tt.Click("Write a function"); err != nil {
+	// A prompt goes to the composer, to send as it is or changed.
+	if err := tt.Click(suggestions[0].prompt); err != nil {
 		t.Fatal(err)
 	}
-	if len(a.threads) != 1 || !tt.HasText(suggestions[0].prompt) {
-		t.Fatalf("suggestion not sent: %q", tt.Texts())
+	if len(a.threads) != 0 || a.draft != suggestions[0].prompt {
+		t.Fatalf("after a click on a prompt: %d chats, draft %q", len(a.threads), a.draft)
+	}
+	tt.Type(" With tests.")
+	tt.Key(0, ui.KeyEnter)
+	if len(a.threads) != 1 || !tt.HasText(suggestions[0].prompt+" With tests.") {
+		t.Fatalf("prompt not sent: %q", tt.Texts())
 	}
 	if err := tt.Click("New chat"); err != nil {
 		t.Fatal(err)
 	}
-	if a.selected != "" || !tt.HasText("What should we work on?") {
+	if a.selected != "" || !tt.HasText("What are you building with AI today?") {
 		t.Errorf("selected %q after New chat, texts %q", a.selected, tt.Texts())
 	}
 	// The chat stays in the sidebar, and shows again when chosen.
@@ -808,9 +814,10 @@ func TestBackForward(t *testing.T) {
 func TestSearch(t *testing.T) {
 	a, tt := newTester()
 	for _, s := range suggestions[:3] {
-		if err := tt.Click(s.title); err != nil {
+		if err := tt.Click(s.prompt); err != nil {
 			t.Fatal(err)
 		}
+		tt.Key(0, ui.KeyEnter)
 		if err := tt.Click("New chat"); err != nil {
 			t.Fatal(err)
 		}
@@ -1009,5 +1016,99 @@ func TestPlaceholder(t *testing.T) {
 	tt.Compose("", 0)
 	if !tt.HasText(hint) {
 		t.Errorf("no hint once the composing is gone")
+	}
+}
+
+// TestSidebarResize drags the sidebar's edge, as the pointer does.
+func TestSidebarResize(t *testing.T) {
+	a, tt := newTester()
+	a.send("Hi")
+	tt.Frame()
+	th := a.current()
+	const y = 400
+	edge := func() float32 { return th.listBox.X - 1 } // the line between the two
+	drag := func(xs ...float32) {
+		x := edge()
+		tt.Press(x, y)
+		for _, to := range xs {
+			tt.Move(to, y)
+			tt.Frame()
+		}
+		tt.Release(xs[len(xs)-1], y)
+		tt.Frame()
+		tt.Frame()
+	}
+	if x := edge(); x != sidebarWidth {
+		t.Fatalf("the sidebar is %v wide at first, want %v", x, sidebarWidth)
+	}
+	drag(320, 352)
+	if a.sideWidth != 352 || edge() != 352 {
+		t.Errorf("dragged to 352: the sidebar %v, its edge at %v", a.sideWidth, edge())
+	}
+	// Past its bounds, it stops; coming back, the edge comes with the
+	// pointer at once.
+	drag(1000)
+	if a.sideWidth != sidebarMax {
+		t.Errorf("dragged past the most: %v, want %v", a.sideWidth, sidebarMax)
+	}
+	drag(10, 300)
+	if a.sideWidth != 300 {
+		t.Errorf("dragged past the least and back to 300: %v", a.sideWidth)
+	}
+	drag(10)
+	if a.sideWidth != sidebarMin {
+		t.Errorf("dragged past the least: %v, want %v", a.sideWidth, sidebarMin)
+	}
+
+	// A narrow window keeps the conversation's room, and gives the
+	// sidebar its width back as it widens.
+	drag(400)
+	tt.SetSize(700, 760)
+	tt.Frame()
+	tt.Frame()
+	if want := float32(700 - paneMin); edge() != want {
+		t.Errorf("in a window 700 wide, the edge at %v, want %v", edge(), want)
+	}
+	tt.SetSize(1120, 760)
+	tt.Frame()
+	tt.Frame()
+	if edge() != 400 {
+		t.Errorf("widened again, the edge at %v, want 400", edge())
+	}
+
+	// What a double click on the edge does (a Tester's clicks are single):
+	// as wide as at first.
+	a.resetSidebar()
+	tt.Frame()
+	tt.Frame()
+	if edge() != sidebarWidth {
+		t.Errorf("reset: the edge at %v, want %v", edge(), sidebarWidth)
+	}
+}
+
+func TestLayoutKept(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&demo{})
+	a.loadLayout(dir)
+	a.sideWidth = 333
+	a.saveLayout()
+	a.layoutSaver.wait()
+	b := newApp(&demo{})
+	b.loadLayout(dir)
+	if b.sideWidth != 333 {
+		t.Errorf("the sidebar is %v wide after a restart, want 333", b.sideWidth)
+	}
+	c := newApp(&demo{})
+	c.loadLayout(t.TempDir()) // nothing kept
+	if c.sideWidth != sidebarWidth {
+		t.Errorf("with nothing kept, %v wide, want %v", c.sideWidth, sidebarWidth)
+	}
+}
+
+// TestMark checks that the mark takes the text color: resources/logo.svg
+// fills it in a pink of its own, which icons.go replaces.
+func TestMark(t *testing.T) {
+	if strings.Count(logoSVG, `fill="#FF6096"`) != 1 {
+		t.Errorf("resources/logo.svg no longer fills its mark with #FF6096 once: update markIcon")
 	}
 }

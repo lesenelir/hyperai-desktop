@@ -56,7 +56,10 @@ func main() {
 			go a.bench(bench)
 		}
 		// The chats are written on a goroutine: let the last write end.
-		mygo.App.OnQuit(a.saver.wait)
+		mygo.App.OnQuit(func() {
+			a.saver.wait()
+			a.layoutSaver.wait()
+		})
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
