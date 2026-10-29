@@ -27,15 +27,16 @@ moving end instead.
 
 | Key | Does | Where |
 | --- | --- | --- |
-| `enter` | sends the draft and clears the field; does nothing while a reply streams or the draft is blank | `composer`, `OnTextKey` |
-| `shift-enter` | breaks the line: HyperAI's handler declines it and the editor inserts `\n` | `composer`, `OnTextKey` |
+| `enter` | sends the draft and clears the field; does nothing while a reply streams or the draft is blank. Where General's Send with is ⌘ Return, it breaks the line instead | `composer`, `OnTextKey`, `app.sends` |
+| `cmd-enter` | sends the draft where General's Send with is ⌘ Return (Ctrl+Enter elsewhere); else does nothing | `composer`, `OnTextKey`, `app.sends` |
+| `shift-enter` | breaks the line, whichever key sends: HyperAI's handler declines it and the editor inserts `\n` | `composer`, `OnTextKey` |
 | `escape` | stops the reply streaming in; the editor does not take Escape, so it reaches the window shortcut | `view`, `c.Shortcut` |
 | `cmd-n` | starts a new chat and focuses the composer | `view` |
 | `shift-cmd-s` | shows or hides the sidebar | `view` |
 
-`alt-enter`, `ctrl-enter` and `cmd-enter` are deliberately unbound: the
-handler declines them and the editor takes Enter only without modifiers, so
-they do nothing rather than send.
+`alt-enter` and `ctrl-enter` (on macOS) are deliberately unbound, as is
+`cmd-enter` while Return sends: the handler declines them and the editor
+takes Enter only without modifiers, so they do nothing rather than send.
 
 **Input methods.** While an input method composes (pinyin, kana), its keys
 are its own: `OnTextKey` does not see them, so Enter commits the

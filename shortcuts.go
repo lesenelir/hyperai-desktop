@@ -63,11 +63,16 @@ type shortcutRow struct {
 }
 
 // shortcutGroups are the shortcuts, by where they work, as the page lists
-// them.
-func shortcutGroups() []struct {
+// them: the composer's as General has its keys.
+func (a *app) shortcutGroups() []struct {
 	title string
 	rows  []shortcutRow
 } {
+	shiftReturn := keys{append([]string{"⇧"}, returnKey.mac...), append([]string{"Shift"}, returnKey.other...)}
+	send, newLine := []keys{returnKey}, []keys{shiftReturn}
+	if a.sendWith == sendCmdReturn {
+		send, newLine = []keys{cmdReturnKeys}, []keys{returnKey, shiftReturn}
+	}
 	return []struct {
 		title string
 		rows  []shortcutRow
@@ -86,8 +91,8 @@ func shortcutGroups() []struct {
 				"To the chat gone back from. The mouse's forward button, too."), []keys{forwardKeys}},
 		}},
 		{"Composer", []shortcutRow{
-			{"Send", "", []keys{returnKey}},
-			{"New line", "", []keys{{append([]string{"⇧"}, returnKey.mac...), append([]string{"Shift"}, returnKey.other...)}}},
+			{"Send", "Which keys, General chooses.", send},
+			{"New line", "", newLine},
 			{"Stop the reply", "While a reply comes in.", []keys{key("Esc")}},
 		}},
 		{"Search", []shortcutRow{
@@ -115,9 +120,9 @@ func (r shortcutRow) term() settingsTerm {
 
 // shortcutTerms returns the shortcuts as the settings' field finds the
 // page by them.
-func shortcutTerms() []settingsTerm {
+func (a *app) shortcutTerms() []settingsTerm {
 	var out []settingsTerm
-	for _, g := range shortcutGroups() {
+	for _, g := range a.shortcutGroups() {
 		for _, r := range g.rows {
 			out = append(out, r.term())
 		}
@@ -132,7 +137,7 @@ func shortcutTerms() []settingsTerm {
 func (a *app) shortcutsPage(c *ui.Context) {
 	t := c.Theme()
 	q := lowerRunes([]rune(a.settingsQuery))
-	groups := shortcutGroups()
+	groups := a.shortcutGroups()
 	found := false
 	if len(q) > 0 {
 		for i, g := range groups {
@@ -141,7 +146,7 @@ func (a *app) shortcutsPage(c *ui.Context) {
 		}
 	}
 	if !found {
-		groups = shortcutGroups()
+		groups = a.shortcutGroups()
 	} else {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "Matching “"+a.settingsQuery+"”").FontSize(13).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine()

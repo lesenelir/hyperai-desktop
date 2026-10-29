@@ -192,6 +192,33 @@ type app struct {
 	fonts          []ui.FontFamily
 	winTheme       *ui.Theme
 	winOf          *palette
+	popUpWidths    map[string]float32 // popUpWidth's, by button, font and what it shows
+	// The General page's (general.go): whether the app opens at login, as
+	// the system has it, which openAtLogin reads and setOpenAtLogin sets
+	// (nil in tests), loginError what setting it last said; the chat shown
+	// as the app opens, of launchTitles, the last chat shown being
+	// keptChat, as layout.json has it; the key that sends, of sendTitles;
+	// and reveal, which shows a file in the file manager (nil in tests).
+	atLogin        bool
+	openAtLogin    func() bool
+	setOpenAtLogin func(open bool) error
+	loginError     string
+	onLaunch       int
+	keptChat       string
+	sendWith       int
+	reveal         func(path string)
+	// Whether a reply that ends while the window is in the background
+	// shows a notification, which notify shows and focused tells (nil in
+	// tests), notifyError why the last could not show; and the chat
+	// asked about deleting, all of them where deletingAll, while
+	// confirming shows the alert that asks.
+	notifyDone  bool
+	notify      func(title, body string, clicked func(), failed func(err error))
+	focused     func() bool
+	notifyError string
+	deleting    *thread
+	deletingAll bool
+	confirming  bool
 }
 
 func newApp(p provider) *app {
@@ -200,9 +227,12 @@ func newApp(p provider) *app {
 }
 
 // current returns the chat shown, nil for a new chat.
-func (a *app) current() *thread {
+func (a *app) current() *thread { return a.thread(a.selected) }
+
+// thread returns the chat of id, nil for none.
+func (a *app) thread(id string) *thread {
 	for _, th := range a.threads {
-		if strconv.Itoa(th.ID) == a.selected {
+		if strconv.Itoa(th.ID) == id {
 			return th
 		}
 	}
@@ -256,6 +286,9 @@ func (a *app) send(text string) {
 		th.Updated = time.Now()
 		a.rev++
 		a.save()
+		if !errors.Is(err, context.Canceled) {
+			a.notifyReply(th, reply)
+		}
 		if f := a.onFinish; f != nil {
 			a.onFinish = nil
 			f()
@@ -306,6 +339,53 @@ func (a *app) stop() {
 		reply.Error = "Stopped."
 	}
 	a.busy, a.cancel = nil, nil
+	a.save()
+}
+
+// askDelete asks whether to delete th, which the alert does once it is
+// confirmed; all the chats where th is nil.
+func (a *app) askDelete(th *thread) {
+	a.deleting, a.deletingAll, a.confirming = th, th == nil, true
+}
+
+// deleteAlert builds the alert that asks to delete a chat, or all of
+// them, while one is asked, and deletes what it asked about once Delete
+// is chosen.
+func (a *app) deleteAlert(c *ui.Context) {
+	if !a.confirming {
+		a.deleting, a.deletingAll = nil, false
+		return
+	}
+	title, about := "", "This can't be undone."
+	switch {
+	case a.deletingAll:
+		title = "Delete all chats?"
+		about = "All " + strconv.Itoa(len(a.threads)) + " chats and their messages go. " + about
+		if len(a.threads) == 1 {
+			about = "The chat and its messages go. This can't be undone."
+		}
+	case a.deleting != nil:
+		title = "Delete “" + a.deleting.Title + "”?"
+		about = "Its messages go with it. " + about
+	}
+	if ui.AlertDialog(c, &a.confirming, title, about, "Cancel", "Delete") == 1 {
+		if a.deletingAll {
+			a.removeAll()
+		} else if a.deleting != nil {
+			a.remove(a.deleting)
+		}
+	}
+	if !a.confirming {
+		a.deleting, a.deletingAll = nil, false
+	}
+}
+
+// removeAll deletes every chat, stopping the reply.
+func (a *app) removeAll() {
+	a.stop()
+	a.threads, a.selected = nil, ""
+	a.nav = history{}
+	a.rev++
 	a.save()
 }
 
@@ -362,10 +442,17 @@ func (a *app) view(c *ui.Context) {
 		}
 	}
 	a.historyKeys(c)
+	// The chat shown, kept for the next start (General's On launch).
+	if a.selected != a.keptChat {
+		a.keptChat = a.selected
+		a.saveLayout()
+	}
 	// Once a frame, for the composer and the room the conversation leaves it.
 	th := a.current()
 	a.pill = a.composerPill(c, th == nil || len(th.Messages) == 0)
 	switch {
+	case a.confirming:
+		// Escape is the alert's, which it cancels.
 	case a.settings && !a.searching && c.Shortcut(0, ui.KeyEscape):
 		a.closeSettings()
 	case a.busy != nil && c.Shortcut(0, ui.KeyEscape):
@@ -425,6 +512,8 @@ func (a *app) view(c *ui.Context) {
 	}
 	a.historyButtons(c, bar.Left+8+30+6)
 	a.searchPalette(c)
+	// Over all of it, the alert asking to delete.
+	a.deleteAlert(c)
 }
 
 // sidebar builds, as Waku's does, New chat and Search over the chats by
@@ -542,8 +631,8 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 		})
 	})
 	row.ContextMenu(func(m *ui.Menu) {
-		if m.Item("Delete chat").Chosen() {
-			a.remove(th)
+		if m.Item("Delete Chat…").Chosen() {
+			a.askDelete(th)
 		}
 	})
 	if row.Clicked() {

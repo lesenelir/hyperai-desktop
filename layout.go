@@ -30,6 +30,13 @@ type layout struct {
 	Font          string  `json:"font,omitempty"`
 	CodeFont      string  `json:"codeFont,omitempty"`
 	CodeTheme     string  `json:"codeTheme,omitempty"`
+	// OnLaunch is "last" to show Chat, the last chat shown, as the app
+	// opens; SendWith "cmd" to send with Cmd+Return.
+	OnLaunch string `json:"onLaunch,omitempty"`
+	Chat     string `json:"chat,omitempty"`
+	SendWith string `json:"sendWith,omitempty"`
+	// Notify shows a notification as a reply ends in the background.
+	Notify bool `json:"notify,omitempty"`
 }
 
 // loadLayout reads the layout kept in dir, if any.
@@ -57,6 +64,13 @@ func (a *app) loadLayout(dir string) {
 	if codeThemeNamed(l.CodeTheme) != nil {
 		a.codeTheme = l.CodeTheme
 	}
+	if l.OnLaunch == "last" {
+		a.onLaunch = launchLast
+	}
+	if l.SendWith == "cmd" {
+		a.sendWith = sendCmdReturn
+	}
+	a.keptChat, a.notifyDone = l.Chat, l.Notify
 }
 
 // saveLayout keeps the layout, where the app has a place for it (not in
@@ -65,9 +79,16 @@ func (a *app) saveLayout() {
 	if a.layoutPath == "" {
 		return
 	}
-	b, err := json.Marshal(layout{SidebarWidth: a.sideWidth, Theme: a.theme, TextSize: textSizes[a.textSize],
+	l := layout{SidebarWidth: a.sideWidth, Theme: a.theme, TextSize: textSizes[a.textSize],
 		OpaqueSidebar: !a.translucent, ReduceMotion: a.reduceMotion,
-		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme})
+		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme, Chat: a.keptChat, Notify: a.notifyDone}
+	if a.onLaunch == launchLast {
+		l.OnLaunch = "last"
+	}
+	if a.sendWith == sendCmdReturn {
+		l.SendWith = "cmd"
+	}
+	b, err := json.Marshal(l)
 	if err != nil {
 		return
 	}

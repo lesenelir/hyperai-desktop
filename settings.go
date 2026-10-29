@@ -16,7 +16,7 @@ type settingsSection struct {
 	icon              *ui.SVG
 	about             string
 	page              func(a *app, c *ui.Context)
-	terms             func() []settingsTerm
+	terms             func(a *app) []settingsTerm
 }
 
 // settingsTerm is a thing a settings page holds, as the sidebar's field
@@ -54,9 +54,9 @@ type settingsMatch struct {
 // settingsSections are the settings' pages, in the sidebar's order: by
 // group, as Codex's.
 var settingsSections = []settingsSection{
-	{"general", "Personal", "General", settingsIcon, "How HyperAI starts and behaves: its language, new chats, and sending with Enter.", nil, nil},
-	{"appearance", "Personal", "Appearance", sunIcon, "How HyperAI looks: its theme and font, the conversation's text, and the window.", (*app).appearancePage, appearanceTerms},
-	{"shortcuts", "Personal", "Keyboard shortcuts", keyboardIcon, "The keys that do what HyperAI does, by where they work.", (*app).shortcutsPage, shortcutTerms},
+	{"general", "Personal", "General", settingsIcon, "How HyperAI starts and behaves: at login and on launch, sending, replies in the background, and your chats.", (*app).generalPage, (*app).generalTerms},
+	{"appearance", "Personal", "Appearance", sunIcon, "How HyperAI looks: its theme and font, the conversation's text, and the window.", (*app).appearancePage, (*app).appearanceTerms},
+	{"shortcuts", "Personal", "Keyboard shortcuts", keyboardIcon, "The keys that do what HyperAI does, by where they work.", (*app).shortcutsPage, (*app).shortcutTerms},
 	{"providers", "Models", "Providers", plugIcon, "Where replies come from: OpenRouter and its API key, and other providers.", nil, nil},
 	{"model", "Models", "Default model", logoIcon, "The model a new chat asks, until it is changed in the composer.", nil, nil},
 	{"about", "App", "About", infoIcon, "HyperAI's version, and what changed in it.", nil, nil},
@@ -76,6 +76,10 @@ func (a *app) section() settingsSection {
 // sidebar, which lists their pages.
 func (a *app) openSettings() {
 	a.settings, a.settingsQuery, a.collapsed, a.searching = true, "", false, false
+	// As the system has it now: the user may have changed it there.
+	if a.openAtLogin != nil {
+		a.atLogin = a.openAtLogin()
+	}
 }
 
 // closeSettings goes back to the chat shown before them.
@@ -187,7 +191,7 @@ func (a *app) settingsMatches() []settingsMatch {
 			continue
 		}
 		var hits []string
-		for _, t := range s.terms() {
+		for _, t := range s.terms(a) {
 			if t.matches(q) {
 				hits = append(hits, t.title)
 			}

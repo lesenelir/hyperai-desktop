@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"math/rand/v2"
 	"path/filepath"
@@ -36,6 +37,8 @@ func main() {
 			// The theme chosen, before the window opens in another.
 			a.applyTheme = func(theme string) { mygo.Theme.SetSource(mygo.ThemeSource(theme)) }
 			a.applyTheme(a.theme)
+			a.openAtLogin, a.setOpenAtLogin = mygo.App.OpenAtLogin, mygo.App.SetOpenAtLogin
+			a.reveal = mygo.Shell.ShowItemInFolder
 		}
 		a.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:     "HyperAI",
@@ -57,6 +60,11 @@ func main() {
 		})
 		if bench > 0 {
 			go a.bench(bench)
+		} else {
+			a.focused = a.win.IsFocused
+			a.notify = func(title, body string, clicked func(), failed func(error)) {
+				notifyReply(a.win, title, body, clicked, failed)
+			}
 		}
 		// The chats are written on a goroutine: let the last write end.
 		mygo.App.OnQuit(func() {
@@ -67,4 +75,30 @@ func main() {
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// notifyReply shows a notification titled title, saying body, which brings
+// win to the front and calls clicked as it is clicked; failed hears why it
+// could not show, errNotificationsOff where the user does not allow them.
+// Both run on the main thread. Showing waits for the system, and the first
+// time for the user to allow notifications, so it waits on a goroutine.
+func notifyReply(win *mygo.Window, title, body string, clicked func(), failed func(error)) {
+	n := mygo.NewNotification(mygo.NotificationOptions{Title: title, Body: body, Group: "replies"})
+	n.OnClick(func() {
+		win.Update(func() {
+			mygo.App.Focus()
+			win.Show()
+			win.Focus()
+			clicked()
+		})
+	})
+	go func() {
+		err := n.Show()
+		if errors.Is(err, mygo.ErrNotificationsDenied) {
+			err = errNotificationsOff
+		}
+		if err != nil {
+			win.Update(func() { failed(err) })
+		}
+	}()
 }

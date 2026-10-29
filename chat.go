@@ -48,8 +48,8 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 						c.Toast("Copied")
 					}
 					m.Separator()
-					if m.Item("Delete chat").Chosen() {
-						a.remove(th)
+					if m.Item("Delete Chat…").Chosen() {
+						a.askDelete(th)
 					}
 				})
 			}
@@ -603,13 +603,14 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 				// The field, and over it its placeholder and the fade at its
 				// top.
 				ui.Box(c).Grow(1).MinWidth(0).Children(func() {
-					// Enter sends, Shift+Enter breaks the line.
+					// Return sends, or Cmd+Return as the settings choose
+					// (app.sends); the editor breaks the line for the rest.
 					draft := ui.TextAreaBase(c.Key("draft"), &a.draft).WidthPercent(100).Lines(1, 10).
 						FontSize(a.body).LineHeight(bodyLineHeight).Padding(top, right, bottom, fieldPadX).
 						TrackScroll(&a.fieldScroll).
 						Label("Message").AutoFocus().
 						OnTextKey(func(k ui.TextKey) bool {
-							if k.Key != ui.KeyEnter || k.Mods != 0 {
+							if !a.sends(k.Key, k.Mods) {
 								return false
 							}
 							if a.busy == nil && strings.TrimSpace(k.Text()) != "" {

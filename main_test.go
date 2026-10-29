@@ -91,12 +91,39 @@ func TestRemove(t *testing.T) {
 	a, tt := newTester()
 	tt.Type("Hello")
 	tt.Key(0, ui.KeyEnter)
-	if err := tt.Click("More"); err != nil {
+	ask := func() {
+		t.Helper()
+		if err := tt.Click("More"); err != nil {
+			t.Fatal(err)
+		}
+		if err := tt.ChooseMenuItem("Delete Chat…"); err != nil {
+			t.Fatalf("%v; menu %q", err, tt.Menu())
+		}
+		tt.Advance(time.Second)
+		if !tt.HasText("Delete “Hello”?") {
+			t.Fatalf("no alert asking in %q", tt.Texts())
+		}
+	}
+
+	// The alert asks first: Cancel, and Escape, keep the chat.
+	ask()
+	if err := tt.Click("Cancel"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.ChooseMenuItem("Delete chat"); err != nil {
-		t.Fatalf("%v; menu %q", err, tt.Menu())
+	tt.Advance(time.Second)
+	ask()
+	tt.Key(0, ui.KeyEscape)
+	tt.Advance(time.Second)
+	if len(a.threads) != 1 || a.confirming || tt.HasText("Delete “Hello”?") {
+		t.Fatalf("after Cancel and Escape: threads %d, asking %v", len(a.threads), a.confirming)
 	}
+
+	// Delete deletes it.
+	ask()
+	if err := tt.Click("Delete"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
 	if len(a.threads) != 0 || a.selected != "" || !tt.HasText("Your chats show here.") {
 		t.Errorf("threads %d, selected %q, texts %q", len(a.threads), a.selected, tt.Texts())
 	}
@@ -1555,6 +1582,212 @@ func TestCodeTheme(t *testing.T) {
 	}
 }
 
+func TestGeneral(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&demo{})
+	a.loadFrom(dir)
+	loginOn, loginFails := false, false
+	a.openAtLogin = func() bool { return loginOn }
+	a.setOpenAtLogin = func(open bool) error {
+		if loginFails {
+			return fmt.Errorf("no app bundle")
+		}
+		loginOn = open
+		return nil
+	}
+	var revealed []string
+	a.reveal = func(path string) { revealed = append(revealed, path) }
+	tt := ui.NewTester(a.view, 1120, 1200)
+	a.openSettings()
+	tt.Frame()
+
+	// Open at login, as the system has it, and back where it fails.
+	toggle(t, tt, "Open at login", "Start HyperAI as you log in.")
+	if !a.atLogin || !loginOn {
+		t.Errorf("at login %v, system %v, want both on", a.atLogin, loginOn)
+	}
+	loginFails = true
+	toggle(t, tt, "Open at login", "Start HyperAI as you log in.")
+	if !a.atLogin || !tt.HasText("Could not change it: no app bundle") {
+		t.Errorf("a failed change: at login %v, texts %q", a.atLogin, tt.Texts())
+	}
+
+	// Where the chats are kept: their folder, before any is written.
+	if !tt.HasText(homeRelative(filepath.Join(dir, "chats.json"))) {
+		t.Errorf("no path of the chats in %q", tt.Texts())
+	}
+	if err := tt.Click(onMac("Show in Finder", "Show in Folder")); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(revealed, []string{dir}) {
+		t.Errorf("revealed %q, want the folder %q", revealed, dir)
+	}
+
+	// Cmd+Return to send, which the shortcuts show; Return breaks the line.
+	// Each of a menu, the one chosen checked.
+	choose := func(row, about, item string, want []string) {
+		t.Helper()
+		toggle(t, tt, row, about)
+		if got := tt.Menu(); !slices.Equal(got, want) {
+			t.Fatalf("%s: menu %q, want %q", row, got, want)
+		}
+		if err := tt.ChooseMenuItem(item); err != nil {
+			t.Fatal(err)
+		}
+		tt.Advance(time.Second)
+	}
+	choose("Send with", "The other breaks the line, as Shift with either does.", sendTitles[sendCmdReturn], sendTitles[:])
+	choose("On launch", "The chat HyperAI shows as it opens.", "Last chat", launchTitles[:])
+	if !tt.HasText(sendTitles[sendCmdReturn]) || !tt.HasText("Last chat") {
+		t.Errorf("the buttons do not show what was chosen: %q", tt.Texts())
+	}
+	tt.Advance(time.Second)
+	if a.sendWith != sendCmdReturn || a.onLaunch != launchLast {
+		t.Fatalf("send with %d, on launch %d", a.sendWith, a.onLaunch)
+	}
+	a.settingsPage = "shortcuts"
+	tt.Frame()
+	for _, cap := range cmdReturnKeys.caps() {
+		if !tt.HasText(cap) {
+			t.Errorf("the shortcuts do not show %q to send", cap)
+		}
+	}
+	a.closeSettings()
+	tt.Frame()
+	tt.Type("How do I cache?")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	if len(a.threads) != 0 || !strings.Contains(a.draft, "\n") {
+		t.Fatalf("Return sent, or broke no line: chats %d, draft %q", len(a.threads), a.draft)
+	}
+	tt.Key(ui.Cmd, ui.KeyEnter)
+	tt.Advance(time.Second)
+	if len(a.threads) != 1 {
+		t.Fatalf("Cmd+Return sent nothing")
+	}
+
+	// The chat shown, again at the next start; a new one where General
+	// says so.
+	a.layoutSaver.wait()
+	a.saver.wait()
+	b := newApp(&demo{})
+	b.loadFrom(dir)
+	if b.selected != a.selected || b.sendWith != sendCmdReturn {
+		t.Errorf("after a restart: chat %q, want %q; send with %d", b.selected, a.selected, b.sendWith)
+	}
+	a.onLaunch = launchNew
+	a.saveLayout()
+	a.layoutSaver.wait()
+	b = newApp(&demo{})
+	b.loadFrom(dir)
+	if b.selected != "" {
+		t.Errorf("after a restart, for a new chat: chat %q", b.selected)
+	}
+}
+
+func TestDeleteAllChats(t *testing.T) {
+	a, tt := newTester()
+	for _, q := range []string{"One", "Two"} {
+		a.newChat()
+		a.send(q)
+	}
+	tt.Frame()
+	a.openSettings()
+	tt.Frame()
+	if !tt.HasText("All 2 chats, and their messages. HyperAI asks first.") {
+		t.Fatalf("no row to delete them in %q", tt.Texts())
+	}
+
+	// It asks; Escape cancels the alert alone, the settings staying.
+	if err := tt.Click("Delete All…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if !tt.HasText("Delete all chats?") {
+		t.Fatalf("no alert in %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Advance(time.Second)
+	if len(a.threads) != 2 || !a.settings || a.confirming {
+		t.Fatalf("Escape: chats %d, settings %v, asking %v", len(a.threads), a.settings, a.confirming)
+	}
+
+	// Delete deletes them all, and the button has nothing left to do.
+	if err := tt.Click("Delete All…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if err := tt.Click("Delete"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if len(a.threads) != 0 || a.selected != "" || len(a.nav.back) != 0 || !tt.HasText("There are none.") {
+		t.Errorf("chats %d, chat %q, back %q, texts %q", len(a.threads), a.selected, a.nav.back, tt.Texts())
+	}
+	if err := tt.Click("Delete All…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.confirming {
+		t.Errorf("the disabled button asked")
+	}
+}
+
+func TestNotifyReply(t *testing.T) {
+	a, tt := newTester()
+	type note struct{ title, body string }
+	var notes []note
+	var click func()
+	var fail error
+	focused := false
+	a.focused = func() bool { return focused }
+	a.notify = func(title, body string, clicked func(), failed func(error)) {
+		notes = append(notes, note{title, body})
+		click = clicked
+		if fail != nil {
+			failed(fail)
+		}
+	}
+
+	// Off at first: nothing.
+	a.send("First")
+	if len(notes) != 0 {
+		t.Fatalf("notified with the setting off: %v", notes)
+	}
+
+	// On, in the background: the chat's title over the reply's start.
+	a.notifyDone = true
+	a.send("Second")
+	if len(notes) != 1 || notes[0].title != "First" || notes[0].body == "" || len([]rune(notes[0].body)) > 121 {
+		t.Fatalf("notes %q", notes)
+	}
+	// Which shows the chat as it is clicked.
+	first := a.selected
+	a.newChat()
+	click()
+	if a.selected != first {
+		t.Errorf("the click showed %q, want %q", a.selected, first)
+	}
+
+	// In front, none.
+	focused = true
+	a.send("Third")
+	if len(notes) != 1 {
+		t.Errorf("notified while in front: %q", notes)
+	}
+
+	// Where notifications are off, the setting turns off and says why.
+	focused, fail = false, errNotificationsOff
+	a.send("Fourth")
+	tt.Frame()
+	a.openSettings()
+	a.settingsPage = "general"
+	tt.Frame()
+	if a.notifyDone || !tt.HasText("Turned off: notifications from HyperAI are off in System Settings.") {
+		t.Errorf("notifications off: setting %v, texts %q", a.notifyDone, tt.Texts())
+	}
+}
+
 func TestSettingsSearchContents(t *testing.T) {
 	a := newApp(&demo{})
 	tt := ui.NewTester(a.view, 1120, 1500)
@@ -1567,14 +1800,23 @@ func TestSettingsSearchContents(t *testing.T) {
 		tt.Advance(time.Second)
 	}
 
+	// "send" finds the setting of the key that sends, first, and the
+	// shortcut; the page follows to the first.
+	search("send")
+	got := a.settingsMatches()
+	if len(got) != 2 || got[0].key != "general" || !slices.Equal(got[0].hits, []string{"Send with"}) ||
+		got[1].key != "shortcuts" || !slices.Equal(got[1].hits, []string{"Send"}) {
+		t.Errorf("for send, the pages %v", got)
+	}
+	if a.section().key != "general" {
+		t.Errorf("for send, the page %q", a.section().key)
+	}
+
 	// A shortcut finds its page, which says what it found there and shows
 	// it alone.
-	search("send")
-	if a.settingsPage != "shortcuts" || !tt.HasText("Matching “send”") || !tt.HasText("Send") || tt.HasText("Next result") {
-		t.Errorf("for send: page %q, texts %q", a.settingsPage, tt.Texts())
-	}
-	if got := a.settingsMatches(); len(got) != 1 || !slices.Equal(got[0].hits, []string{"Send"}) {
-		t.Errorf("for send, the pages %v", got)
+	search("stop")
+	if a.settingsPage != "shortcuts" || !tt.HasText("Matching “stop”") || !tt.HasText("Stop the reply") || tt.HasText("Next result") {
+		t.Errorf("for stop: page %q, texts %q", a.settingsPage, tt.Texts())
 	}
 	// Show all, the field cleared.
 	if err := tt.Click("Show all"); err != nil {
@@ -1617,7 +1859,7 @@ func TestAppearanceTerms(t *testing.T) {
 	a.settingsPage = "appearance"
 	tt.Frame()
 	texts := tt.Texts()
-	for _, term := range appearanceTerms() {
+	for _, term := range a.appearanceTerms() {
 		if !slices.Contains(texts, term.title) {
 			t.Errorf("no %q on the Appearance page", term.title)
 		}
@@ -1633,7 +1875,7 @@ func TestShortcutsPage(t *testing.T) {
 
 	// Every shortcut, by where it works, its keys drawn.
 	texts := tt.Texts()
-	for _, g := range shortcutGroups() {
+	for _, g := range a.shortcutGroups() {
 		if !slices.Contains(texts, g.title) {
 			t.Errorf("no group %q", g.title)
 		}
@@ -1795,6 +2037,30 @@ func TestReduceMotionSwitchSlides(t *testing.T) {
 	}
 	if !slices.Equal(mid, knob()) {
 		t.Errorf("a switch slid with motion reduced")
+	}
+}
+
+// TestPopUpWidth holds pop-up buttons to their titles' width, as macOS's,
+// so that the system's menu, as wide as its titles, opens as wide as them:
+// a short list's button short, a long one's popUpMax at most.
+func TestPopUpWidth(t *testing.T) {
+	a := newApp(&demo{})
+	a.fonts = []ui.FontFamily{{Name: "A Font Whose Name Runs Far Too Long To Fit"}}
+	tt := ui.NewTester(a.view, 1120, 1300)
+	a.openSettings()
+	tt.Frame()
+	launch := a.popUpWidths["On launch\x00\x00New chat"]
+	if launch <= popUpPad || launch >= popUpMax {
+		t.Errorf("On launch %v wide, want its titles' width, under %v", launch, popUpMax)
+	}
+	r, _ := tt.Find("New chat")
+	if launch < r.W+popUpPad {
+		t.Errorf("On launch %v wide, short of New chat, %v", launch, r.W)
+	}
+	a.settingsPage = "appearance"
+	tt.Frame()
+	if w := a.popUpWidths["Font\x00\x00System"]; w != popUpMax {
+		t.Errorf("Font %v wide with a long name, want %v", w, popUpMax)
 	}
 }
 

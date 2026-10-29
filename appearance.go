@@ -33,7 +33,7 @@ const motionSettle = 250 * time.Millisecond
 
 // appearanceTerms returns what the Appearance page holds, as the settings'
 // field finds it: its rows' titles, and what they offer.
-func appearanceTerms() []settingsTerm {
+func (a *app) appearanceTerms() []settingsTerm {
 	codes := []string{"Syntax", "Highlighting"}
 	for _, ct := range codeThemes {
 		codes = append(codes, ct.title)
@@ -72,7 +72,8 @@ func (a *app) setFont(font *string, family string) {
 }
 
 // fontFamilies returns the font families installed, for the settings to
-// choose from: asked of the system once, as a menu of them first opens.
+// choose from: asked of the system once, as Appearance first shows, whose
+// font buttons are as wide as the names.
 func (a *app) fontFamilies() []ui.FontFamily {
 	if a.fonts == nil {
 		a.fonts = ui.FontFamilies()
@@ -231,7 +232,21 @@ func (a *app) fontButton(c *ui.Context, label string, font *string, code bool) {
 	if name == "" {
 		name = "System"
 	}
-	a.popUpButton(c, label, name, func(m *ui.Menu) {
+	// The menu's titles: the families, but for code those not monospaced,
+	// in their submenu.
+	titles := func() []string {
+		out := []string{"System"}
+		for _, f := range a.fontFamilies() {
+			if !code || f.Monospaced {
+				out = append(out, f.Name)
+			}
+		}
+		if code {
+			out = append(out, "Other Fonts")
+		}
+		return out
+	}
+	a.popUpButton(c, label, name, titles, func(m *ui.Menu) {
 		item := func(m *ui.Menu, label, family string) {
 			if m.Item(label).Checked(*font == family).Chosen() {
 				a.setFont(font, family)
@@ -260,7 +275,14 @@ func (a *app) fontButton(c *ui.Context, label string, font *string, code bool) {
 // its groups apart, the one chosen checked.
 func (a *app) codeThemeButton(c *ui.Context) {
 	shown := codeThemeNamed(a.codeTheme)
-	a.popUpButton(c, "Code theme", shown.title, func(m *ui.Menu) {
+	titles := func() []string {
+		var out []string
+		for _, ct := range codeThemes {
+			out = append(out, ct.title)
+		}
+		return out
+	}
+	a.popUpButton(c, "Code theme", shown.title, titles, func(m *ui.Menu) {
 		for i, ct := range codeThemes {
 			if i > 0 && ct.group != codeThemes[i-1].group {
 				m.Separator()
@@ -275,19 +297,70 @@ func (a *app) codeThemeButton(c *ui.Context) {
 
 // popUpButton builds a pop-up button labeled label, as macOS's: what is
 // chosen, shown, over an arrow, which opens the system's menu that build
-// fills with the choices.
-func (a *app) popUpButton(c *ui.Context, label, shown string, build func(m *ui.Menu)) {
+// fills with the choices, titled titles. It is as wide as the widest of
+// them, as macOS's are, so that the menu opens about as wide as it: the
+// system's menu is as wide as its titles, and a button wider than them
+// had it open short of it.
+//
+// The menu opens at the bottom of the element that opens it, touching it:
+// that element is popUpGap taller than the button over and under it,
+// clear, so that the menu opens popUpGap under what shows, as macOS's
+// does; as much less margin keeps the row as tall as the button makes it.
+func (a *app) popUpButton(c *ui.Context, label, shown string, titles func() []string, build func(m *ui.Menu)) {
 	t := c.Theme()
-	btn := ui.ButtonBase(c.Key(label)).Width(200).Padding(5, 8, 5, 10).Gap(6).Radius(8).Justify(ui.Start).
-		Background(a.pal.composer).Border(1, t.Border).Label(label)
-	if btn.Hovered() {
-		btn.Background(a.pal.fg.Alpha(0.04).Over(a.pal.composer))
-	}
-	btn.Children(func() {
-		ui.Text(c, shown).Grow(1).MinWidth(0).SingleLine()
-		ui.Icon(c, chevronIcon).Size(14, 14).TextColor(t.TextMuted)
+	opener := ui.ButtonBase(c.Key(label)).Padding(popUpGap, 0).Margin(-popUpGap, 0).FocusRing(false).Label(label)
+	hover, focus := opener.Hovered(), opener.FocusVisible()
+	opener.Children(func() {
+		btn := ui.Row(c).Width(a.popUpWidth(c, label, shown, titles)).Padding(5, 8, 5, 10).Gap(6).Radius(8).
+			AlignItems(ui.Center).Background(a.pal.composer).Border(1, t.Border)
+		if hover {
+			btn.Background(a.pal.fg.Alpha(0.04).Over(a.pal.composer))
+		}
+		if focus {
+			// The ring the opener does not draw, round what shows.
+			btn.Border(2, t.Focus)
+		}
+		btn.Children(func() {
+			ui.Text(c, shown).Grow(1).MinWidth(0).SingleLine()
+			ui.Icon(c, chevronIcon).Size(14, 14).TextColor(t.TextMuted)
+		})
 	})
-	btn.Menu(build)
+	opener.Menu(build)
+}
+
+// Pop-up buttons are popUpPad wider than their widest title: their
+// padding, gap, arrow and border. They are popUpMax wide at most, the
+// longest titles cut short; a menu of fonts is wider than that, as it
+// opens past the button. Their menus open popUpGap under them.
+const (
+	popUpPad = 10 + 6 + 14 + 8 + 2
+	popUpMax = 200
+	popUpGap = 6
+)
+
+// popUpWidth returns how wide the pop-up button labeled label is, shown
+// showing: as its widest title, measured as the system's menu draws them,
+// in the system font at the window's size, and as wide as shown in the
+// app's font, which it draws in. The width is kept for the titles until
+// they or the app's font change, as measuring hundreds of fonts' names
+// each frame would cost.
+func (a *app) popUpWidth(c *ui.Context, label, shown string, titles func() []string) float32 {
+	if a.popUpWidths == nil {
+		a.popUpWidths = map[string]float32{}
+	}
+	key := label + "\x00" + a.font + "\x00" + shown
+	w, ok := a.popUpWidths[key]
+	if !ok {
+		size := c.Theme().FontSize
+		for _, title := range titles() {
+			tw, _ := c.MeasureText(0, ui.Span{Text: title, Font: "system-ui", Size: size})
+			w = max(w, tw)
+		}
+		sw, _ := c.MeasureText(0, ui.Span{Text: shown, Size: size})
+		w = min(max(w, sw)+popUpPad, popUpMax)
+		a.popUpWidths[key] = w
+	}
+	return w
 }
 
 // themePreview draws HyperAI small in p's colors: the sidebar, when side,

@@ -173,6 +173,15 @@ A small button that floats over the conversation (scroll to end) rests at
   to edge. It has no buttons for what the app cannot
   do (attachments, voice). Over a conversation it floats over the end, on
   the canvas, which fades the conversation out above it.
+- **Pop-up buttons** (`popUpButton`) choose one of a list, as macOS's:
+  the choice over a chevron, on `composer` with a hairline, radius 8,
+  opening the system's own menu, the choice checked. They are as wide as
+  their widest title, measured as the menu draws it, in the system font,
+  and 200 at most, as macOS's are: the menu opens as wide as its titles,
+  so a button wider than them had it open short of the button. The menu
+  opens 6 under the button, as macOS's, not touching it: MyGo opens it at
+  the bottom of the element that opens it, which is 6 taller than the
+  button over and under it, clear, and as much less margin.
 - **Fields**: no box of their own inside the composer and the search,
   which are the box; no focus ring; the placeholder at `fg/40`.
 - **Messages**: the user's in a `raised` bubble on the right; replies as
@@ -238,6 +247,24 @@ A small button that floats over the conversation (scroll to end) rests at
   measured). Code in a line
   keeps the accent. No sample cards: the preview under them, a question
   and a reply with code in a line and in a block, shows all of it.
+- **General** holds how the app starts and behaves, and only what it
+  does: Startup (Open at login, as the system has it, read again as the
+  settings open, and the row saying why where setting it failed; On
+  launch, New chat or Last chat), Composer (Send with, Return or
+  ⌘ Return, the other breaking the line, which the Keyboard shortcuts
+  page follows), each a pop-up button; Replies (a notification as a reply ends while the
+  window is in the background, the chat's title over the reply's start,
+  which shows the chat when clicked; none for a reply stopped; where the
+  system does not allow them, the switch turns off and its row says
+  where to allow them), and Chats (where they are saved, from `~`, and
+  Show in Finder, the folder before any is written; Delete All…, faded
+  where there are none). A setting's button is a pop-up button's box
+  without its arrow (`settingButton`).
+- **Deleting asks first**: a chat (Delete Chat…, its ellipsis saying it
+  asks) or all of them, in MyGo's alert over a scrim, in the theme's
+  colors: what goes, "This can't be undone.", Cancel and Delete, Delete
+  the default in the accent. Escape cancels the alert alone, not the
+  settings or a reply under it.
 - **Keyboard shortcuts** lists the keys, not yet changed there: by where
   they work (App, Going back and forth, Composer, Search), each a card of
   rows, what the keys do over when (12 `fg/70`, none for always), and the

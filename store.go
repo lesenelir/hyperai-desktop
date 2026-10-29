@@ -16,7 +16,18 @@ func (a *app) load() {
 	if err != nil {
 		return
 	}
+	a.loadFrom(dir)
+}
+
+// loadFrom reads the layout and the chats kept in dir, and shows the chat
+// shown last, where General says to and it is still there.
+func (a *app) loadFrom(dir string) {
 	a.loadLayout(dir)
+	defer func() {
+		if a.onLaunch == launchLast && a.thread(a.keptChat) != nil {
+			a.selected = a.keptChat
+		}
+	}()
 	a.path = filepath.Join(dir, "chats.json")
 	b, err := os.ReadFile(a.path)
 	if err != nil || json.Unmarshal(b, &a.threads) != nil {
