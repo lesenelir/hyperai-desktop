@@ -62,7 +62,9 @@ and the user's bubble. Borders are `fg` 12% over the canvas
 **The parametric rule.** No hex. Every color is a token from
 [theme.go](../theme.go), or a transparency of one (`fg.Alpha(0.07)`,
 `ac.Alpha(0.35)`). A hex value in view code is a bug: it will be right in
-one theme and wrong in the other.
+one theme and wrong in the other. The one exception is the code themes
+([codethemes.go](../codethemes.go)): other people's palettes, in their
+hex, each with a light side and a dark one.
 
 **The one accent rule.** The accent marks what acts and what is chosen:
 the send button, the chat shown in the sidebar, the caret and the
@@ -213,9 +215,16 @@ A small button that floats over the conversation (scroll to end) rests at
   pop-up button showing the family, which opens the system's own menu,
   as macOS's font settings — System, a separator, then every family
   installed, the one chosen checked; for code, the monospaced families,
-  and the rest under Other Fonts. No sample cards: the preview under
-  them, a question and a reply with code in a line and in a block,
-  shows both.
+  and the rest under Other Fonts. Under them, code's theme, as the
+  fonts': Default (MyGo's GitHub colors), One, Solarized, Catppuccin,
+  Gruvbox, Tokyo Night. A theme colors the tokens and nothing else: a
+  block keeps the app's surface, hairline and header, and the theme's
+  light side or dark one as the app is, so that code sits with the
+  conversation rather than as a patch of another app's window. A theme
+  with no light side (Nord, Dracula) has no place: its colors, made for
+  its dark background, do not read on the light app's. Code in a line
+  keeps the accent. No sample cards: the preview under them, a question
+  and a reply with code in a line and in a block, shows all of it.
 - **Search**: a card near the window's top over a scrim, its field over
   tabs (All, Chats, Projects, Artifacts, Settings), titled sections of
   rows in the sidebar's look, and the keys it takes in its footer.

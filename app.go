@@ -173,7 +173,8 @@ type app struct {
 	// for the system's, which winTheme, the palette winOf's theme, takes,
 	// and textFont the one the conversation was measured in; codeFont is
 	// code's, "" for the system's monospaced font; fonts are those
-	// installed, which the settings choose of.
+	// installed, which the settings choose of. codeTheme is the key of the
+	// code blocks' theme, of codeThemes, as mdTheme has mdCodeTheme.
 	theme          string
 	applyTheme     func(theme string)
 	textSize       int
@@ -187,6 +188,8 @@ type app struct {
 	font           string
 	textFont       string
 	codeFont       string
+	codeTheme      string
+	mdCodeTheme    string
 	fonts          []ui.FontFamily
 	winTheme       *ui.Theme
 	winOf          *palette

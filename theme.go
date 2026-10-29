@@ -101,17 +101,22 @@ func (a *app) windowTheme() *ui.Theme {
 }
 
 // markdownTheme returns the palette's Markdown at the size of the
-// conversation's text, in the app's font and code's: made again only as
-// any of them changes, as the Markdown lays out again when its theme does.
+// conversation's text, in the app's font and code's, its code blocks in
+// the code theme's colors: made again only as any of them changes, as the
+// Markdown lays out again when its theme does.
 func (a *app) markdownTheme() *markdown.Theme {
 	code := a.codeFont
 	if code == "" {
 		code = "monospace"
 	}
-	if a.mdOf != a.pal || a.mdTheme.FontSize != a.body || a.mdTheme.Font != a.font || a.mdTheme.CodeFont != code {
+	if a.mdOf != a.pal || a.mdTheme.FontSize != a.body || a.mdTheme.Font != a.font || a.mdTheme.CodeFont != code ||
+		a.mdCodeTheme != a.codeTheme {
 		md := *a.pal.md
 		md.FontSize, md.Font, md.CodeFont = a.body, a.font, code
-		a.mdTheme, a.mdOf = &md, a.pal
+		if cc := codeThemeNamed(a.codeTheme).colors(a.pal.theme.Dark); cc != nil {
+			md.CodeColors = cc.editorTheme(a.pal.theme)
+		}
+		a.mdTheme, a.mdOf, a.mdCodeTheme = &md, a.pal, a.codeTheme
 	}
 	return a.mdTheme
 }

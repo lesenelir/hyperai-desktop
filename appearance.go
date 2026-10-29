@@ -101,6 +101,10 @@ func (a *app) appearancePage(c *ui.Context) {
 			a.fontButton(c, "Code font", &a.codeFont, true)
 		})
 		settingDivider(c)
+		a.settingRow(c, "Code theme", "The colors of code, in the app's light or dark as the app is.", func() {
+			a.codeThemeButton(c)
+		})
+		settingDivider(c)
 		a.settingRow(c, "Text size", "Questions, replies and the composer. The rest of the window keeps its size.", func() {
 			if ui.Segmented(c.Key("text size"), &a.textSize, textSizeTitles[:]...).Label("Text size").Changed() {
 				a.saveLayout()
@@ -201,26 +205,15 @@ const previewReply = "A closure is a function that keeps the variables around it
 	"```go\nfunc counter() func() int {\n\tn := 0\n\treturn func() int { n++; return n }\n}\n```"
 
 // fontButton builds the pop-up button, labeled label, that chooses *font:
-// the family chosen, which opens the system's menu of them, as macOS's
-// font settings do: System, then every family installed, the one chosen
-// checked. For code, the monospaced families come first and the rest in a
-// submenu.
+// System, then every family installed, the one chosen checked, as macOS's
+// font settings do. For code, the monospaced families come first and the
+// rest in a submenu.
 func (a *app) fontButton(c *ui.Context, label string, font *string, code bool) {
-	t := c.Theme()
 	name := *font
 	if name == "" {
 		name = "System"
 	}
-	btn := ui.ButtonBase(c.Key(label)).Width(200).Padding(5, 8, 5, 10).Gap(6).Radius(8).Justify(ui.Start).
-		Background(a.pal.composer).Border(1, t.Border).Label(label)
-	if btn.Hovered() {
-		btn.Background(a.pal.fg.Alpha(0.04).Over(a.pal.composer))
-	}
-	btn.Children(func() {
-		ui.Text(c, name).Grow(1).MinWidth(0).SingleLine()
-		ui.Icon(c, chevronIcon).Size(14, 14).TextColor(t.TextMuted)
-	})
-	btn.Menu(func(m *ui.Menu) {
+	a.popUpButton(c, label, name, func(m *ui.Menu) {
 		item := func(m *ui.Menu, label, family string) {
 			if m.Item(label).Checked(*font == family).Chosen() {
 				a.setFont(font, family)
@@ -243,6 +236,40 @@ func (a *app) fontButton(c *ui.Context, label string, font *string, code bool) {
 			})
 		}
 	})
+}
+
+// codeThemeButton builds the pop-up button that chooses the code theme:
+// Default, then the others, the one chosen checked.
+func (a *app) codeThemeButton(c *ui.Context) {
+	shown := codeThemeNamed(a.codeTheme)
+	a.popUpButton(c, "Code theme", shown.title, func(m *ui.Menu) {
+		for i, ct := range codeThemes {
+			if i == 1 {
+				m.Separator() // after Default
+			}
+			if m.Item(ct.title).Checked(ct.key == a.codeTheme).Chosen() && ct.key != a.codeTheme {
+				a.codeTheme = ct.key
+				a.saveLayout()
+			}
+		}
+	})
+}
+
+// popUpButton builds a pop-up button labeled label, as macOS's: what is
+// chosen, shown, over an arrow, which opens the system's menu that build
+// fills with the choices.
+func (a *app) popUpButton(c *ui.Context, label, shown string, build func(m *ui.Menu)) {
+	t := c.Theme()
+	btn := ui.ButtonBase(c.Key(label)).Width(200).Padding(5, 8, 5, 10).Gap(6).Radius(8).Justify(ui.Start).
+		Background(a.pal.composer).Border(1, t.Border).Label(label)
+	if btn.Hovered() {
+		btn.Background(a.pal.fg.Alpha(0.04).Over(a.pal.composer))
+	}
+	btn.Children(func() {
+		ui.Text(c, shown).Grow(1).MinWidth(0).SingleLine()
+		ui.Icon(c, chevronIcon).Size(14, 14).TextColor(t.TextMuted)
+	})
+	btn.Menu(build)
 }
 
 // themePreview draws HyperAI small in p's colors: the sidebar, when side,

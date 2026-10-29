@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
 )
 
 // newTester runs the view without a window, where the demo's replies come
@@ -1483,6 +1485,68 @@ func TestAppFont(t *testing.T) {
 	b.loadLayout(dir)
 	if b.codeFont != "Avenir Next" || b.font != "" {
 		t.Errorf("after a restart: code %q, font %q", b.codeFont, b.font)
+	}
+}
+
+func TestCodeTheme(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&demo{})
+	a.loadLayout(dir)
+	tt := ui.NewTester(a.view, 1120, 1300)
+	a.openSettings()
+	a.settingsPage = "appearance"
+	tt.Frame()
+	keyword := func() ui.Color { return a.md.Theme.CodeColors.Tokens[editor.TokenKeyword].Color }
+
+	// The menu: Default, then the themes with a light and a dark side.
+	about := "The colors of code, in the app's light or dark as the app is."
+	toggle(t, tt, "Code theme", about)
+	want := []string{"Default", "-", "One", "Solarized", "Catppuccin", "Gruvbox", "Tokyo Night"}
+	if got := tt.Menu(); !slices.Equal(got, want) {
+		t.Fatalf("menu %q, want %q", got, want)
+	}
+
+	// One colors the tokens, on the app's surface, as Default's are.
+	surface := a.md.Theme.CodeBlockBackground
+	if err := tt.ChooseMenuItem("One"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.codeTheme != "one" || keyword() != ui.Hex("#a626a4") {
+		t.Errorf("theme %q, keywords %v, want One Light's", a.codeTheme, keyword())
+	}
+	if a.md.Theme.CodeBlockBackground != surface || a.md.CodeBlock != nil {
+		t.Errorf("code on %v, want the app's %v", a.md.Theme.CodeBlockBackground, surface)
+	}
+	// And follows the app's appearance.
+	tt.SetDark(true)
+	tt.Advance(time.Second)
+	if keyword() != ui.Hex("#c678dd") || a.md.Theme.CodeBlockBackground != darkPalette.md.CodeBlockBackground {
+		t.Errorf("in the dark app: keywords %v on %v, want One Dark's on the app's", keyword(), a.md.Theme.CodeBlockBackground)
+	}
+
+	// Kept for the next start; a theme no longer offered is Default.
+	a.layoutSaver.wait()
+	b := newApp(&demo{})
+	b.loadLayout(dir)
+	if b.codeTheme != "one" {
+		t.Errorf("after a restart: code theme %q", b.codeTheme)
+	}
+	os.WriteFile(filepath.Join(dir, "layout.json"), []byte(`{"codeTheme":"nord"}`), 0o644)
+	b = newApp(&demo{})
+	b.loadLayout(dir)
+	if b.codeTheme != "" {
+		t.Errorf("Nord, gone, loaded as %q", b.codeTheme)
+	}
+
+	// Default again: MyGo's colors.
+	toggle(t, tt, "Code theme", about)
+	if err := tt.ChooseMenuItem("Default"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.codeTheme != "" || a.md.Theme.CodeColors != darkPalette.md.CodeColors {
+		t.Errorf("theme %q, colors not MyGo's", a.codeTheme)
 	}
 }
 
