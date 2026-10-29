@@ -157,6 +157,11 @@ type app struct {
 	searchSel   int
 	searchHover int
 	searchMoved bool // the keys chose a hit, which comes into view
+	// settings shows the settings (settings.go) in place of the chats, on
+	// the page settingsPage, which settingsQuery narrows the sidebar to.
+	settings      bool
+	settingsPage  string
+	settingsQuery string
 }
 
 func newApp(p provider) *app {
@@ -312,11 +317,21 @@ func (a *app) view(c *ui.Context) {
 	if c.Shortcut(ui.Cmd, ui.KeyF) {
 		a.toggleSearch()
 	}
+	if c.Shortcut(ui.Cmd, ui.KeyComma) {
+		if a.settings {
+			a.closeSettings()
+		} else {
+			a.openSettings()
+		}
+	}
 	a.historyKeys(c)
 	// Once a frame, for the composer and the room the conversation leaves it.
 	th := a.current()
 	a.pill = a.composerPill(c, th == nil || len(th.Messages) == 0)
-	if a.busy != nil && c.Shortcut(0, ui.KeyEscape) {
+	switch {
+	case a.settings && !a.searching && c.Shortcut(0, ui.KeyEscape):
+		a.closeSettings()
+	case a.busy != nil && c.Shortcut(0, ui.KeyEscape):
 		a.stop()
 	}
 	// The window's material shows wherever the view draws no background:
@@ -350,7 +365,11 @@ func (a *app) view(c *ui.Context) {
 			ui.Box(c).Width(1).Background(t.Border)
 		}
 		// Clear of the toggle, Back and Forward as the sidebar hides.
-		a.pane(c, 20+(1-shown)*(bar.Left+108))
+		if left := 20 + (1-shown)*(bar.Left+108); a.settings {
+			a.settingsPane(c, left)
+		} else {
+			a.pane(c, left)
+		}
 		if shown == 1 {
 			a.resizer(c, w, lo, hi)
 		}
@@ -372,8 +391,13 @@ func (a *app) view(c *ui.Context) {
 }
 
 // sidebar builds, as Waku's does, New chat and Search over the chats by
-// when they were last updated, each with its model and age.
+// when they were last updated, each with its model and age, and Settings
+// at its foot; or the settings' own, while they show.
 func (a *app) sidebar(c *ui.Context) {
+	if a.settings {
+		a.settingsSidebar(c)
+		return
+	}
 	t := c.Theme()
 	ui.Box(c).Height(titleBarHeight).Shrink(0).DragWindow()
 
@@ -385,6 +409,7 @@ func (a *app) sidebar(c *ui.Context) {
 	}
 	if len(a.threads) == 0 {
 		ui.Text(c, "Your chats show here.").FontSize(13).TextColor(t.TextMuted).Padding(16, 20).Grow(1)
+		a.settingsRow(c)
 		return
 	}
 	// A list, so that a frame builds only the rows that show: every frame of
@@ -403,7 +428,8 @@ func (a *app) sidebar(c *ui.Context) {
 		} else {
 			ui.Text(c, rows[i].group).FontSize(12).TextColor(t.TextMuted).Padding(14, 20, 6, 20)
 		}
-	}).Grow(1).Padding(6, 0, 12, 0).Label("Chats")
+	}).Grow(1).MinHeight(0).Padding(6, 0, 12, 0).Label("Chats")
+	a.settingsRow(c)
 }
 
 // chatRow is a row of the sidebar: a chat, or the title of a group of them

@@ -66,20 +66,20 @@ func (h *history) remove(id, cur string) {
 // open shows the chat id ("" for a new one), which Back then returns from.
 func (a *app) open(id string) {
 	a.nav.visit(a.selected, id)
-	a.selected, a.focusDraft = id, true
+	a.selected, a.focusDraft, a.settings = id, true, false
 }
 
 // goBack shows the chat shown before, if any.
 func (a *app) goBack() {
 	if id, ok := a.nav.goBack(a.selected); ok {
-		a.selected, a.focusDraft = id, true
+		a.selected, a.focusDraft, a.settings = id, true, false
 	}
 }
 
 // goForward shows again the chat gone back from, if any.
 func (a *app) goForward() {
 	if id, ok := a.nav.goForward(a.selected); ok {
-		a.selected, a.focusDraft = id, true
+		a.selected, a.focusDraft, a.settings = id, true, false
 	}
 }
 

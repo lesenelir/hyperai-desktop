@@ -102,8 +102,11 @@ func (a *app) outline(c *ui.Context, th *thread, area ui.Rect) {
 	hovered := -1
 	var hoveredBox ui.Rect
 	bars := make([]ui.Element, len(turns))
+	// As tall as the area, to center the ticks; the pointer goes through it
+	// to the conversation, as the messages' buttons under its left edge in
+	// a narrow window, and only the ticks take it.
 	ui.Column(c.Key("outline")).Absolute().Left(12).Top(16).Bottom(16).Width(40).
-		Justify(ui.Center).AlignItems(ui.Start).Label("Conversation outline").
+		Justify(ui.Center).AlignItems(ui.Start).Label("Conversation outline").PassThrough().
 		Children(func() {
 			for i, tu := range turns {
 				b := ui.ButtonBase(c.Key(tu.row)).Height(14).WidthPercent(100).Justify(ui.Start).Radius(4).

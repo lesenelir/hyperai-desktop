@@ -516,6 +516,34 @@ func TestCopyMessage(t *testing.T) {
 	}
 }
 
+// A reply's button lies under the outline's left edge where the window
+// leaves the conversation little room beside it: the outline takes the
+// pointer only over its ticks.
+func TestCopyReplyBesideOutline(t *testing.T) {
+	a, tt := newTester()
+	for _, q := range []string{"How do I cache?", "And evict?"} {
+		tt.Type(q)
+		tt.Key(0, ui.KeyEnter)
+		tt.Advance(2 * time.Second)
+	}
+	if !tt.HasText("Conversation outline") {
+		t.Fatalf("no outline in %q", tt.Texts())
+	}
+	th := a.threads[0]
+	i := len(th.Messages) - 1
+	// The button is the first of the reply's actions, at its foot, 6 DIPs
+	// out of the column's left.
+	b := th.boxes[i]
+	x, y := b.X+max(0, (b.W-maxWidth)/2)-6+15, b.Y+b.H-14
+	if in := x - th.listBox.X; in > 12+40 {
+		t.Fatalf("the button %v in from the pane is clear of the outline", in)
+	}
+	tt.ClickAt(x, y)
+	if tt.Clipboard() != th.Messages[i].Text {
+		t.Errorf("clipboard %.40q, want the reply", tt.Clipboard())
+	}
+}
+
 func TestComposerFloats(t *testing.T) {
 	a, tt := newTester()
 	for _, s := range suggestions {
@@ -1236,5 +1264,73 @@ func TestLongQuestionCollapses(t *testing.T) {
 	tt.Advance(time.Second)
 	if m.wrapWidth != bubbleMaxWidth-2*bubblePadX || tt.HasText("Show more") {
 		t.Errorf("wide: wrapped at %v, %d lines, with the button %v", m.wrapWidth, m.lines, tt.HasText("Show more"))
+	}
+}
+
+func TestSettings(t *testing.T) {
+	a, tt := newTester()
+	tt.Type("How do I cache?")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	chat := a.selected
+
+	// Settings, at the sidebar's foot, turn it into theirs: back to the
+	// app, and their pages, the first shown.
+	if err := tt.Click("Settings"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if !tt.HasText("Back to app") || tt.HasText("How do I cache?") || !tt.HasText("How HyperAI starts") {
+		t.Fatalf("settings show %q", tt.Texts())
+	}
+	if err := tt.Click("Appearance"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if !tt.HasText("Light, dark") {
+		t.Fatalf("no Appearance page in %q", tt.Texts())
+	}
+
+	// The field narrows the pages by title or group.
+	if err := tt.Click("Search settings"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("model")
+	tt.Advance(time.Second)
+	if !tt.HasText("Default model") || tt.HasText("Keyboard shortcuts") || !tt.HasText("Providers") {
+		t.Errorf("for %q, the pages %q", a.settingsQuery, tt.Texts())
+	}
+	tt.Type("zzz")
+	tt.Advance(time.Second)
+	if !tt.HasText("No settings match.") {
+		t.Errorf("no word that none match in %q", tt.Texts())
+	}
+
+	// Back to the chat shown before, and again on the page shown last.
+	if err := tt.Click("Back to app"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.settings || a.selected != chat || !tt.HasText("How do I cache?") {
+		t.Fatalf("back: settings %v, chat %q, want %q", a.settings, a.selected, chat)
+	}
+	tt.Key(ui.Cmd, ui.KeyComma)
+	tt.Advance(time.Second)
+	if !a.settings || a.settingsQuery != "" || !tt.HasText("Light, dark") {
+		t.Fatalf("⌘,: settings %v, query %q, texts %q", a.settings, a.settingsQuery, tt.Texts())
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Advance(time.Second)
+	if a.settings {
+		t.Fatalf("Escape left the settings showing")
+	}
+
+	// Showing a chat, however, leaves them.
+	a.openSettings()
+	tt.Frame()
+	tt.Key(ui.Cmd, ui.KeyN)
+	tt.Advance(time.Second)
+	if a.settings || a.selected != "" {
+		t.Errorf("new chat: settings %v, chat %q", a.settings, a.selected)
 	}
 }

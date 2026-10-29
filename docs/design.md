@@ -185,6 +185,13 @@ A small button that floats over the conversation (scroll to end) rests at
   composer's text, 14 at `fg/70`; the pointer brings the text to `fg` and
   the icon to the accent. A click writes it in the composer, the caret at
   its end, to send as it is or changed. No grid of cards.
+- **Settings**: a row at the sidebar's foot (⌘,) turns the sidebar into
+  theirs, as Codex's: "Back to app" (muted, as Escape), a field of its
+  own — 34 tall, radius 8, on `composer` with a hairline, since the
+  sidebar is no box — and the pages by group, in the chat rows' look,
+  the one shown on the 7% wash with its label at 500. The pane shows the
+  page, 640 wide at most: its title at 20/500 over what it holds at
+  `fg/70`. Showing a chat leaves them.
 - **Search**: a card near the window's top over a scrim, its field over
   tabs (All, Chats, Projects, Artifacts, Settings), titled sections of
   rows in the sidebar's look, and the keys it takes in its footer.
