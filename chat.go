@@ -91,7 +91,7 @@ func (a *app) prompts(c *ui.Context) {
 				// Its icon under the composer's text, as hyperai-next's: no
 				// card, no wash; the pointer brings the text up the ladder,
 				// and the icon to the accent.
-				row := ui.ButtonBase(c.Key(s.prompt)).Padding(7, 17).Gap(12).Radius(8).Justify(ui.Start).
+				row := ui.ButtonBase(c.Key(s.prompt)).Padding(7, fieldPadX+1).Gap(12).Radius(8).Justify(ui.Start).
 					AlignItems(ui.Center).Label(s.prompt)
 				on := row.Hovered()
 				row.Children(func() {
@@ -394,34 +394,88 @@ func (a *app) composer(c *ui.Context, th *thread) {
 	outer.Children(func() { a.composerColumn(c, th, ready) })
 }
 
+// On an empty chat, the composer is a pill while the draft is a line that
+// fits beside its buttons, as ChatGPT's is, and opens into a box as the
+// draft breaks a line or outgrows it, the field across the box over a row
+// of the buttons; over a conversation, it is that box. Its
+// heights are these, so that the conversation's end knows them in the
+// frame the composer takes them (composerRoom).
+const (
+	composerRadius = 24 // a pill's, one line tall; the box keeps it
+	fieldPadX      = 20 // the field's text in from the box's left
+	pillPadY       = 12 // the field's padding over and under its line, as a pill
+	boxPadTop      = 16 // and as a box: room for the fade (fieldFadeGap)
+	boxPadBottom   = 6
+	toolbarHeight  = 44 // the row of the buttons under the field of a box
+	sendSize       = 32
+	floatPadTop    = 8  // the room over the composer floating over a conversation
+	composerPadEnd = 16 // and under it
+)
+
+// The fade over the field's top lies in the room over its text, and only
+// there: text at rest under it is never faded, however far the field is
+// scrolled. The box's color over the room's first fieldFadeGap, which text
+// scrolled up never shows in, then a fade to clear by the room's end.
+const fieldFadeGap = 6
+
+// fieldFade returns how strong the fade over the field's text is: none at
+// its top, and full once it scrolled as far as the room over the text, so
+// that it comes in with the scrolling rather than at once.
+func (a *app) fieldFade() float32 {
+	return max(0, min(a.fieldScroll.Y/boxPadTop, 1))
+}
+
+// composerPill reports whether the composer shows as a pill, as of the box's
+// width and its buttons' when it was laid out last: on an empty chat
+// (welcome), while the draft is one line that fits beside them.
+func (a *app) composerPill(c *ui.Context, welcome bool) bool {
+	if !welcome || strings.Contains(a.draft, "\n") {
+		return false
+	}
+	if a.draft == "" || a.boxWidth == 0 {
+		return true
+	}
+	if a.draft != a.measured {
+		a.measured = a.draft
+		a.measuredWidth, _ = c.MeasureText(0, ui.Span{Text: a.draft, Size: bodySize})
+	}
+	return a.measuredWidth <= a.pillWidth()
+}
+
+// pillWidth and boxWidthText are how wide the field's text is as a pill,
+// beside the buttons, and as a box, across it, less the caret's room.
+func (a *app) pillWidth() float32    { return a.boxWidth - 2 - fieldPadX - 8 - a.toolsWidth - 4 }
+func (a *app) boxTextWidth() float32 { return a.boxWidth - 2 - 2*fieldPadX }
+
 // composerRoom builds, at the end of a conversation, room as tall as the
 // composer floating over it, in the layout of the frame the composer is
 // laid out in: the field's text laid out again, as the field lays it out,
-// and the rest as tall as it was laid out last, which the text does not
-// change. So the end of the conversation moves with the field as it grows
-// or shrinks, rather than a frame after, which showed an empty band as tall
-// as the lines just deleted.
+// and the rest as tall as the composer's heights make it as a pill or as a
+// box. So the end of the conversation moves with the field as it grows or
+// shrinks, and as it opens or closes, rather than a frame after, which
+// showed an empty band as tall as the lines just deleted.
 func (a *app) composerRoom(c *ui.Context) {
-	const pad = 14 + 6 // the field's padding over and under its text
 	text := a.draft
 	if text == "" || strings.HasSuffix(text, "\n") {
 		text += "\u200b" // the line the caret is on, empty
 	}
-	lines := a.field.H - pad
-	ui.Column(c).Padding(0, 0, max(0, a.footer-lines), 0).Children(func() {
-		ui.Text(c, text).Width(max(0, a.field.W-32)).FontSize(bodySize).LineHeight(bodyLineHeight).
+	rest, w := float32(floatPadTop+composerPadEnd+2+boxPadTop+boxPadBottom+toolbarHeight), a.boxTextWidth()
+	if a.pill {
+		rest, w = floatPadTop+composerPadEnd+2+2*pillPadY, a.pillWidth()
+	}
+	ui.Column(c).Padding(0, 0, rest, 0).Children(func() {
+		ui.Text(c, text).Width(max(0, w)).FontSize(bodySize).LineHeight(bodyLineHeight).
 			MaxLines(10).Opacity(0)
 	})
 }
 
-// composerColumn builds the composer's column: the field and its buttons,
-// and the status under them.
+// composerColumn builds the composer's column: the field and its buttons.
 func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 	t := c.Theme()
-	col := ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Padding(0, 0, 16, 0)
+	col := ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Padding(0, 0, composerPadEnd, 0)
 	if th != nil {
 		box := col.Bounds()
-		col.Padding(8, 0, 16, 0).Background(t.Background).HandleInput(func(ev ui.InputEvent) bool {
+		col.Padding(floatPadTop, 0, composerPadEnd, 0).Background(t.Background).HandleInput(func(ev ui.InputEvent) bool {
 			// Scrolling over it scrolls the conversation, as over
 			// hyperai-next's footer, which is in the conversation; but over
 			// the field with more text than it shows, the field, to its
@@ -443,65 +497,123 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 			ui.Box(c).Absolute().Left(0).Right(0).Top(-16).Height(16).PassThrough().
 				LinearGradient(ui.LinearGradient{From: t.Background.Alpha(0), To: t.Background, Angle: 180})
 		}
-		box := ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Radius(16).Border(1, t.Border).
+		// Its line is drawn over what is in it (the last child), which the
+		// fade over the field would otherwise draw over, where the corners
+		// round; its own is clear, for the room it takes.
+		box := ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Radius(composerRadius).Border(1, ui.Transparent).
 			Background(a.pal.composer).Shadow(0, 4, 16, -4, a.pal.shadow(0.12))
+		if b := box.Bounds(); !empty(b) {
+			a.boxWidth = b.W
+		}
+		pill := a.pill
 		box.Children(func() {
-			// Enter sends, Shift+Enter breaks the line.
-			draft := ui.TextAreaBase(c.Key("draft"), &a.draft).Lines(1, 10).FontSize(bodySize).LineHeight(bodyLineHeight).Padding(14, 16, 6, 16).
-				TrackScroll(&a.fieldScroll).
-				Label("Message").AutoFocus().
-				OnTextKey(func(k ui.TextKey) bool {
-					if k.Key != ui.KeyEnter || k.Mods != 0 {
-						return false
+			// The field's row, the field first in it either way, so that it
+			// keeps its place in the tree, and with it the focus and the
+			// caret, as the composer opens; as a pill, the buttons after it.
+			ui.Row(c).AlignItems(ui.Center).Children(func() {
+				top, right, bottom := float32(boxPadTop), float32(fieldPadX), float32(boxPadBottom)
+				if pill {
+					top, right, bottom = pillPadY, 8, pillPadY
+				}
+				// The field, and over it its placeholder and the fade at its
+				// top.
+				ui.Box(c).Grow(1).MinWidth(0).Children(func() {
+					// Enter sends, Shift+Enter breaks the line.
+					draft := ui.TextAreaBase(c.Key("draft"), &a.draft).WidthPercent(100).Lines(1, 10).
+						FontSize(bodySize).LineHeight(bodyLineHeight).Padding(top, right, bottom, fieldPadX).
+						TrackScroll(&a.fieldScroll).
+						Label("Message").AutoFocus().
+						OnTextKey(func(k ui.TextKey) bool {
+							if k.Key != ui.KeyEnter || k.Mods != 0 {
+								return false
+							}
+							if a.busy == nil && strings.TrimSpace(k.Text()) != "" {
+								a.send(k.Text())
+								k.SetText("")
+							}
+							return true
+						})
+					a.placeholder(c, "Ask anything…", a.draft == "" && !draft.Composing(), top, fieldPadX, bodySize, bodyLineHeight)
+					if b := draft.Bounds(); !empty(b) {
+						a.field = b
 					}
-					if a.busy == nil && strings.TrimSpace(k.Text()) != "" {
-						a.send(k.Text())
-						k.SetText("")
+					// Text scrolled up fades out as it goes into the room over
+					// it, as the conversation does over the composer, and is
+					// gone short of the box's edge, which keeps its room: the
+					// box's color over the room's first fieldFadeGap, then a
+					// fade to clear by the room's end, where text rests. It
+					// keeps off the box's rounded corner, left of the text,
+					// and off the scroll bar.
+					if k := a.fieldFade(); k > 0 {
+						// Two pieces, the solid one and the fade: a gradient's
+						// Start and Stops drew as a plain fade, edge to edge.
+						solid := a.pal.composer.Alpha(k)
+						ui.Box(c).Absolute().Top(0).Left(fieldPadX).Right(right + barClear).
+							Height(fieldFadeGap).PassThrough().Background(solid)
+						ui.Box(c).Absolute().Top(fieldFadeGap).Left(fieldPadX).Right(right + barClear).
+							Height(top - fieldFadeGap).PassThrough().LinearGradient(ui.LinearGradient{
+							From: solid, To: a.pal.composer.Alpha(0), Angle: 180,
+						})
 					}
-					return true
+					// Back to writing after choosing a chat, or a prompt: at the
+					// end of what is there, where the app's text leaves the
+					// caret at its start.
+					if a.focusDraft {
+						n := utf8.RuneCountInString(a.draft)
+						draft.Focus().SetTextSelection(n, n)
+						a.focusDraft = false
+					}
 				})
-			a.placeholder(c, "Ask anything…", a.draft == "" && !draft.Composing(), 14, 16, bodySize, bodyLineHeight)
-			if b := draft.Bounds(); !empty(b) {
-				a.field = b
-			}
-			// Back to writing after choosing a chat, or a prompt: at the end
-			// of what is there, where the app's text leaves the caret at its
-			// start.
-			if a.focusDraft {
-				n := utf8.RuneCountInString(a.draft)
-				draft.Focus().SetTextSelection(n, n)
-				a.focusDraft = false
-			}
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(4, 8, 8, 10).Children(func() {
-				a.modelPicker(c)
-				ui.Spacer(c)
-				label, svg := "Send", arrowUpIcon
-				if a.busy != nil {
-					label, svg = "Stop", stopIcon
-				}
-				send := ui.ButtonBase(c.Key("send")).Size(30, 30).Radius(15).Label(label).Tooltip(label).
-					Disabled(a.busy == nil && !ready)
-				// Sending is the one primary action: the accent, with a hint
-				// of it under; stopping is fg, and nothing to send a wash.
-				switch {
-				case a.busy != nil:
-					send.Background(a.pal.fg).TextColor(a.pal.bg)
-				case ready:
-					send.Background(a.pal.ac).TextColor(a.pal.bg).Shadow(0, 3, 8, -2, a.pal.ac.Alpha(0.35))
-				default:
-					send.Background(a.pal.fg.Alpha(0.08)).TextColor(a.pal.fg.Alpha(0.35))
-				}
-				send.Children(func() { ui.Icon(c, svg).Size(16, 16) })
-				if send.Clicked() {
-					if a.busy != nil {
-						a.stop()
-					} else {
-						a.send(a.draft)
+				if pill {
+					if b := a.composerTools(c, ready).Padding(0, 8, 0, 0).Bounds(); !empty(b) {
+						a.toolsWidth = b.W
 					}
 				}
 			})
+			if !pill {
+				ui.Row(c).Height(toolbarHeight).Shrink(0).Children(func() {
+					ui.Spacer(c)
+					a.composerTools(c, ready).Padding(0, 8, 0, 0)
+				})
+			}
+			ui.Box(c).Absolute().Top(-1).Left(-1).Right(-1).Bottom(-1).Radius(composerRadius).
+				Border(1, t.Border).PassThrough()
 		})
 	})
+}
+
+// composerTools builds the composer's buttons, in a row: the model to ask,
+// and the button that sends, or stops the reply.
+func (a *app) composerTools(c *ui.Context, ready bool) ui.Element {
+	row := ui.Row(c).Shrink(0).Gap(6).AlignItems(ui.Center)
+	row.Children(func() {
+		a.modelPicker(c)
+		label, svg := "Send", arrowUpIcon
+		if a.busy != nil {
+			label, svg = "Stop", stopIcon
+		}
+		send := ui.ButtonBase(c.Key("send")).Size(sendSize, sendSize).Radius(sendSize / 2).Label(label).Tooltip(label).
+			Disabled(a.busy == nil && !ready)
+		// Sending is the one primary action: the accent, with a hint of it
+		// under; stopping is fg, and nothing to send a wash.
+		switch {
+		case a.busy != nil:
+			send.Background(a.pal.fg).TextColor(a.pal.bg)
+		case ready:
+			send.Background(a.pal.ac).TextColor(a.pal.bg).Shadow(0, 3, 8, -2, a.pal.ac.Alpha(0.35))
+		default:
+			send.Background(a.pal.fg.Alpha(0.08)).TextColor(a.pal.fg.Alpha(0.35))
+		}
+		send.Children(func() { ui.Icon(c, svg).Size(16, 16) })
+		if send.Clicked() {
+			if a.busy != nil {
+				a.stop()
+			} else {
+				a.send(a.draft)
+			}
+		}
+	})
+	return row
 }
 
 // modelPicker builds the button that chooses the model to ask.

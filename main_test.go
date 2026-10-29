@@ -531,7 +531,7 @@ func TestComposerFloats(t *testing.T) {
 		t.Errorf("list ends at %v, want the window's bottom %v", bottom, h)
 	}
 	last := th.box(len(th.Messages) - 1)
-	if top := h - a.footer; a.footer < 100 || last.Y+last.H > top-listPadBottom+0.5 {
+	if top := h - a.footer; a.footer < 60 || last.Y+last.H > top-listPadBottom+0.5 {
 		t.Errorf("last row ends at %v, the composer (%v tall) starts at %v", last.Y+last.H, a.footer, top)
 	}
 	// Scrolling over the composer scrolls the conversation.
@@ -1110,5 +1110,70 @@ func TestLayoutKept(t *testing.T) {
 func TestMark(t *testing.T) {
 	if strings.Count(logoSVG, `fill="#FF6096"`) != 1 {
 		t.Errorf("resources/logo.svg no longer fills its mark with #FF6096 once: update markIcon")
+	}
+}
+
+// TestComposerPill checks when the composer is a pill and when a box: a
+// line that fits beside the buttons keeps it a pill; a line break, or a
+// line that outgrows it, opens it; and the field keeps the focus through.
+func TestComposerPill(t *testing.T) {
+	a, tt := newTester()
+	is := func(when string, pill bool) {
+		t.Helper()
+		tt.Frame()
+		if a.pill != pill {
+			t.Errorf("%s: pill %v, want %v", when, a.pill, pill)
+		}
+	}
+	is("empty", true)
+	tt.Type("A short question")
+	is("a short line", true)
+	tt.Key(ui.Shift, ui.KeyEnter)
+	is("a line broken", false)
+	tt.Key(0, ui.KeyBackspace)
+	is("the break deleted", true)
+	tt.Type(strings.Repeat(" and more", 30))
+	is("a line past the buttons", false)
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Key(0, ui.KeyBackspace)
+	is("all deleted", true)
+	// Typing still goes to the field, after it opened and closed.
+	tt.Type("still here")
+	if a.draft != "still here" {
+		t.Errorf("draft %q after the composer opened and closed", a.draft)
+	}
+
+	// Over a conversation, it is a box, a short line or none.
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	is("over a conversation, empty", false)
+	tt.Type("A short question")
+	is("over a conversation, a short line", false)
+}
+
+// TestFieldScrollsUnderItsPadding checks that a draft longer than the field
+// fades out as it scrolls up into the room over its text, rather than
+// running up to the box's edge: the fade comes in with the scrolling, and
+// is gone at the field's top.
+func TestFieldScrollsUnderItsPadding(t *testing.T) {
+	a, tt := newTester()
+	a.send("Hi")
+	tt.Frame()
+	for i := 0; i < 20; i++ {
+		tt.Type("line")
+		tt.Key(ui.Shift, ui.KeyEnter)
+	}
+	tt.Advance(time.Second)
+	if a.fieldScroll.MaxY <= 0 || a.fieldScroll.Y <= 0 {
+		t.Fatalf("the field does not scroll: %+v", a.fieldScroll)
+	}
+	// Scrolled, its text fades out at its top; at its top, it does not.
+	if a.fieldFade() != 1 {
+		t.Errorf("fade %v scrolled %v, want 1", a.fieldFade(), a.fieldScroll.Y)
+	}
+	tt.Scroll(a.field.X+40, a.field.Y+20, 0, -5000)
+	tt.Advance(time.Second)
+	if a.fieldScroll.Y != 0 || a.fieldFade() != 0 {
+		t.Errorf("at the field's top: scrolled %v, fade %v, want none", a.fieldScroll.Y, a.fieldFade())
 	}
 }

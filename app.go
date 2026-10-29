@@ -108,6 +108,13 @@ type app struct {
 	footer      float32
 	field       ui.Rect
 	fieldScroll ui.ScrollState
+	// pill tells whether the composer is a pill this frame (composerPill),
+	// as of its box's width and its buttons' when laid out last; measured
+	// is the draft whose text is measuredWidth wide.
+	pill                 bool
+	boxWidth, toolsWidth float32
+	measured             string
+	measuredWidth        float32
 	// copied is the message last copied, which shows a check until
 	// copiedUntil.
 	copied      int
@@ -300,6 +307,9 @@ func (a *app) view(c *ui.Context) {
 		a.toggleSearch()
 	}
 	a.historyKeys(c)
+	// Once a frame, for the composer and the room the conversation leaves it.
+	th := a.current()
+	a.pill = a.composerPill(c, th == nil || len(th.Messages) == 0)
 	if a.busy != nil && c.Shortcut(0, ui.KeyEscape) {
 		a.stop()
 	}

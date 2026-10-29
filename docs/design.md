@@ -105,7 +105,8 @@ attention; move it up the ladder instead.
 
 - **Radii.** 4 for keys, 6 for icon buttons, 8 for rows, tabs and menus,
   12 for cards (the outline's card), 14 for the user's
-  bubble, 16 for the composer and the search. Round things are round: the
+  bubble, 16 for the search, 24 for the composer — a pill one line tall,
+  on an empty chat. Round things are round: the
   send and scroll-to-end buttons.
 - **Rows** of a list are 7–8 DIPs over and under their text, 12 to its
   sides, 8 in from the list's left, and 12 in from its right (`barClear`)
@@ -147,9 +148,26 @@ A small button that floats over the conversation (scroll to end) rests at
   list. The chat shown takes a 7% wash and its title the accent, at 500.
   The sidebar shows the desktop's material where it can, tinted with its
   own warm color (`sidebarTint`) so that it sits with the canvas.
-- **Composer**: on `composer`, radius 16, a hairline and the rest shadow;
-  it floats over the conversation's end, on the canvas, which fades the
-  conversation out above it.
+- **Composer**: on `composer`, radius 24, a hairline and the rest shadow.
+  Over a conversation it is a box: the field across, over a row with the
+  model and the send button on the right. On an empty chat, as ChatGPT's,
+  it is a pill while the draft is a line that fits beside those buttons,
+  and opens into the box as the draft breaks a line or outgrows it. Its
+  text is 20 in from its left, and 16 under its top. A long draft
+  scrolls up into that room and fades out in it, as the conversation does
+  over the composer, but keeps clear of the edge: the box's color over
+  the room's first 6, then a fade to clear by the room's end. The fade
+  stays in the room: text at rest under it is never greyed, however far
+  the field is scrolled (a fade reaching into the text greyed the whole
+  first line at the end of a long draft). The box's line is drawn last,
+  over what is in it, its own border clear for the room it takes: the
+  fade, drawn over a line drawn first, cut it where the corners round. The fade comes in
+  with the scrolling (none at the field's top) and keeps off the rounded
+  corner and the scroll bar. It is two pieces, a solid one and a plain
+  fade: MyGo draws a gradient's `Start` and `Stops` as a plain fade, edge
+  to edge. It has no buttons for what the app cannot
+  do (attachments, voice). Over a conversation it floats over the end, on
+  the canvas, which fades the conversation out above it.
 - **Fields**: no box of their own inside the composer and the search,
   which are the box; no focus ring; the placeholder at `fg/40`.
 - **Messages**: the user's in a `raised` bubble on the right; replies as
