@@ -60,6 +60,7 @@ func main() {
 			Vibrancy: mygo.VibrancySidebar,
 			Content:  ui.View(a.view),
 		})
+		a.post = a.win.Update
 		startTeX(a)
 		if bench > 0 {
 			go a.bench(bench)

@@ -308,5 +308,7 @@
   "modelAddProvider": "Anbieter hinzufügen",
   "defaultModelNone": "Noch hat kein Anbieter einen API-Schlüssel.",
   "noProviderTitle": "Noch kein Anbieter",
-  "noProviderAbout": "Füge einen API-Schlüssel von OpenAI, Anthropic, OpenRouter oder DeepSeek hinzu, um Nachrichten zu senden."
+  "noProviderAbout": "Füge einen API-Schlüssel von OpenAI, Anthropic, OpenRouter oder DeepSeek hinzu, um Nachrichten zu senden.",
+  "sidebarReplying": "Antwortet",
+  "sidebarUnread": "Neue Antwort"
 }

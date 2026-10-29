@@ -607,5 +607,9 @@
   "noProviderTitle": "No provider yet",
   "@noProviderTitle": { "description": "The title of the toast that shows as the user sends while no provider has an API key." },
   "noProviderAbout": "Add an API key of OpenAI, Anthropic, OpenRouter or DeepSeek to send messages.",
-  "@noProviderAbout": { "description": "Under the title of the toast that shows as the user sends while no provider has an API key." }
+  "@noProviderAbout": { "description": "Under the title of the toast that shows as the user sends while no provider has an API key." },
+  "sidebarReplying": "Replying",
+  "@sidebarReplying": { "description": "Names, for assistive technologies, the spinner of a chat in the sidebar whose reply is streaming in." },
+  "sidebarUnread": "New reply",
+  "@sidebarUnread": { "description": "Names, for assistive technologies, the dot of a chat in the sidebar whose reply ended while it was not shown." }
 }

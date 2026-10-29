@@ -64,12 +64,19 @@ type message struct {
 type thread struct {
 	ID       int        `json:"id"`
 	Title    string     `json:"title"`
-	Updated  time.Time  `json:"updated"`
+	Updated  time.Time  `json:"updated"`            // when the user last sent in it, which orders the sidebar
 	Model    string     `json:"model,omitempty"`    // the model asked last
 	Provider string     `json:"provider,omitempty"` // Model's, "" in chats kept before it
 	Draft    string     `json:"draft,omitempty"`    // what its composer held as it was left
 	Messages []*message `json:"messages"`
 	list     ui.ListState
+	// busy is the reply streaming in, nil when none, and cancel stops it:
+	// each chat's its own, so that chats stream at once.
+	busy   *message
+	cancel context.CancelFunc
+	// unread tells that a reply ended while the chat was not in view,
+	// which the sidebar marks until it is.
+	unread bool
 	// scroll is where list is scrolled, which the button bringing the end
 	// back into view glides.
 	scroll ui.ScrollState
@@ -96,13 +103,17 @@ func (th *thread) turns() []turn {
 
 // app is the window's state.
 type app struct {
-	win      *mygo.Window // nil in tests, where replies come at once
+	win      *mygo.Window // nil in tests
 	threads  []*thread
 	selected string // the ID of the chat shown, "" for a new chat
 	next     int    // the last ID given to a chat or a message
 	draft    string // what the composer holds, of the chat shown (nav.go)
 	newDraft string // what a new chat's composer held as it was left
 	model    string // the model asked, of prov
+	// post runs f on the main thread, in order, as Window.Update does,
+	// for what comes on a goroutine: nil in tests, where replies and the
+	// providers' models come at once, but for those that post themselves.
+	post func(f func())
 	// provs are the providers the composer offers the models of, those
 	// with an API key and a model (providers.go), or fallback where none
 	// is, which is the demo in tests and HYPERAI_BENCH, and none in the
@@ -169,10 +180,7 @@ type app struct {
 	// at all, which General turns off to show its LaTeX.
 	tex        *ratex.Engine
 	renderMath bool
-	// busy is the reply streaming in, nil when none, and cancel stops it.
-	busy   *message
-	cancel context.CancelFunc
-	// onFinish, when set, runs once as the reply ends (HYPERAI_BENCH).
+	// onFinish, when set, runs once as a reply ends (HYPERAI_BENCH).
 	onFinish func()
 	path     string // where the chats are saved, "" in tests
 	saver    saver
@@ -305,13 +313,13 @@ func (a *app) newChat() {
 }
 
 // send sends text in the chat shown, starting one when it is new, and
-// streams the reply in.
+// streams the reply in, while the other chats stream theirs.
 func (a *app) send(text string) {
 	text = strings.TrimSpace(text)
-	if text == "" || a.busy != nil || a.prov == nil {
+	th := a.current()
+	if text == "" || a.prov == nil || th != nil && th.busy != nil {
 		return
 	}
-	th := a.current()
 	if th == nil {
 		a.next++
 		th = &thread{ID: a.next, Title: title(text)}
@@ -333,9 +341,8 @@ func (a *app) send(text string) {
 	th.Updated, th.Model, th.Provider = time.Now(), a.model, a.prov.ID()
 	a.rev++
 	a.draft, th.Draft = "", ""
-	a.busy = reply
 	ctx, cancel := context.WithCancel(context.Background())
-	a.cancel = cancel
+	th.busy, th.cancel = reply, cancel
 
 	// finish ends the reply, on the main thread.
 	finish := func(err error) {
@@ -344,8 +351,13 @@ func (a *app) send(text string) {
 		if err != nil && !errors.Is(err, context.Canceled) {
 			reply.Error = err.Error()
 		}
-		a.busy, a.cancel = nil, nil
-		th.Updated = time.Now()
+		th.busy, th.cancel = nil, nil
+		if strconv.Itoa(th.ID) != a.selected || a.settings {
+			th.unread = true
+		}
+		// The chat stays where it is in the sidebar, as of when it was
+		// sent in (Updated): a reply that ends after another's moves
+		// nothing. The search finds what came.
 		a.rev++
 		a.save()
 		if !errors.Is(err, context.Canceled) {
@@ -356,9 +368,11 @@ func (a *app) send(text string) {
 			f()
 		}
 	}
-	model := a.model
-	if a.win == nil {
-		finish(a.prov.Stream(ctx, model, turns, func(s string) { reply.Text += s }))
+	// The provider and model asked, as of now: showing another chat
+	// chooses another for the composer while this one streams.
+	prov, model := a.prov, a.model
+	if a.post == nil {
+		finish(prov.Stream(ctx, model, turns, func(s string) { reply.Text += s }))
 		return
 	}
 	// The model streams on a goroutine of its own, and the view shows what
@@ -366,15 +380,15 @@ func (a *app) send(text string) {
 	// in batches, so that tens of chunks a second commit some 20 times.
 	go func() {
 		batch := newBatcher(func(s string) {
-			a.win.Update(func() {
+			a.post(func() {
 				if reply.streaming {
 					reply.Text += s
 				}
 			})
 		})
-		err := a.prov.Stream(ctx, model, turns, batch.add)
+		err := prov.Stream(ctx, model, turns, batch.add)
 		batch.close()
-		a.win.Update(func() {
+		a.post(func() {
 			if reply.streaming {
 				finish(err)
 			}
@@ -389,19 +403,28 @@ func (m *message) end() {
 	m.Elapsed = m.Time.Sub(m.started).Seconds()
 }
 
-// stop stops the reply streaming in, keeping what came.
-func (a *app) stop() {
-	reply := a.busy
-	if reply == nil {
+// stop stops the reply streaming in th, if any, keeping what came.
+func (a *app) stop(th *thread) {
+	if th == nil || th.busy == nil {
 		return
 	}
-	a.cancel()
+	reply := th.busy
+	th.cancel()
 	reply.end()
 	if reply.Text == "" {
 		reply.Error = errStopped
 	}
-	a.busy, a.cancel = nil, nil
+	th.busy, th.cancel = nil, nil
 	a.save()
+}
+
+// shownReply returns the reply streaming in the chat shown, nil for none,
+// which the composer's button and Escape stop.
+func (a *app) shownReply() *message {
+	if th := a.current(); th != nil {
+		return th.busy
+	}
+	return nil
 }
 
 // errStopped is the Error of a reply stopped before it said anything, as
@@ -450,9 +473,11 @@ func (a *app) deleteAlert(c *ui.Context) {
 	}
 }
 
-// removeAll deletes every chat, stopping the reply.
+// removeAll deletes every chat, stopping their replies.
 func (a *app) removeAll() {
-	a.stop()
+	for _, th := range a.threads {
+		a.stop(th)
+	}
 	if a.selected != "" {
 		a.draft = a.newDraft
 	}
@@ -464,9 +489,7 @@ func (a *app) removeAll() {
 
 // remove deletes th, stopping its reply.
 func (a *app) remove(th *thread) {
-	if a.busy != nil && slices.Contains(th.Messages, a.busy) {
-		a.stop()
-	}
+	a.stop(th)
 	a.threads = slices.DeleteFunc(a.threads, func(t *thread) bool { return t == th })
 	a.rev++
 	id := strconv.Itoa(th.ID)
@@ -489,6 +512,10 @@ func title(text string) string {
 
 func (a *app) view(c *ui.Context) {
 	a.followChat()
+	// The chat in view is read.
+	if th := a.current(); th != nil && !a.settings {
+		th.unread = false
+	}
 	// The colors are hyperai-next's, in the system's appearance.
 	a.pal = paletteFor(c.Theme())
 	c.SetTheme(a.windowTheme())
@@ -531,8 +558,8 @@ func (a *app) view(c *ui.Context) {
 		// Escape is the alert's, which it cancels.
 	case a.settings && !a.searching && c.Shortcut(0, ui.KeyEscape):
 		a.closeSettings()
-	case a.busy != nil && c.Shortcut(0, ui.KeyEscape):
-		a.stop()
+	case a.shownReply() != nil && c.Shortcut(0, ui.KeyEscape):
+		a.stop(a.current())
 	}
 	// The window's material shows wherever the view draws no background:
 	// under the sidebar, where the window has one.
@@ -677,7 +704,8 @@ func (a *app) navRow(c *ui.Context, key string, svg *ui.SVG, label, shortcut str
 }
 
 // threadRow builds th's row: its title, and under it the model it asked
-// and how long ago. The chat shown is on a wash of fg, its title at 500,
+// and how long ago, or a spinner as a reply streams in, the mark of one
+// that ended out of view before it. The chat shown is on a wash of fg, its title at 500,
 // as the settings' pages are: the wash says it, without the accent too.
 func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 	t := c.Theme()
@@ -703,6 +731,15 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 					model = locales.SidebarModelNone()
 				}
 				ui.Text(c, model).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1)
+				// A reply streaming in, in place of the age; one that ended
+				// out of view, marked before it.
+				if th.busy != nil {
+					ui.Spinner(c).Size(12, 12).Label(locales.SidebarReplying())
+					return
+				}
+				if th.unread {
+					ui.Box(c).Size(7, 7).Radius(3.5).Background(a.pal.ac).Label(locales.SidebarUnread())
+				}
 				ui.Text(c, ago(th.Updated, now)).FontSize(12).TextColor(t.TextMuted)
 			})
 		})

@@ -3649,3 +3649,35 @@ func NoProviderAbout() string { return In(i18n.Locale()).NoProviderAbout() }
 func (msgs Messages) NoProviderAbout() string {
 	return Catalog.Format(msgs.locale, "noProviderAbout", nil)
 }
+
+// SidebarReplying says "Replying"
+// in the language the app shows.
+//
+// Names, for assistive technologies, the spinner of a chat in the sidebar
+// whose reply is streaming in.
+func SidebarReplying() string { return In(i18n.Locale()).SidebarReplying() }
+
+// SidebarReplying says "Replying"
+// in the language of msgs.
+//
+// Names, for assistive technologies, the spinner of a chat in the sidebar
+// whose reply is streaming in.
+func (msgs Messages) SidebarReplying() string {
+	return Catalog.Format(msgs.locale, "sidebarReplying", nil)
+}
+
+// SidebarUnread says "New reply"
+// in the language the app shows.
+//
+// Names, for assistive technologies, the dot of a chat in the sidebar whose
+// reply ended while it was not shown.
+func SidebarUnread() string { return In(i18n.Locale()).SidebarUnread() }
+
+// SidebarUnread says "New reply"
+// in the language of msgs.
+//
+// Names, for assistive technologies, the dot of a chat in the sidebar whose
+// reply ended while it was not shown.
+func (msgs Messages) SidebarUnread() string {
+	return Catalog.Format(msgs.locale, "sidebarUnread", nil)
+}

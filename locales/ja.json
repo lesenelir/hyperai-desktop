@@ -259,5 +259,7 @@
   "modelAddProvider": "プロバイダを追加",
   "defaultModelNone": "API キーが設定されたプロバイダはまだありません。",
   "noProviderTitle": "プロバイダがまだありません",
-  "noProviderAbout": "メッセージを送信するには、OpenAI、Anthropic、OpenRouter、DeepSeek のいずれかの API キーを追加してください。"
+  "noProviderAbout": "メッセージを送信するには、OpenAI、Anthropic、OpenRouter、DeepSeek のいずれかの API キーを追加してください。",
+  "sidebarReplying": "返信中",
+  "sidebarUnread": "新しい返信"
 }

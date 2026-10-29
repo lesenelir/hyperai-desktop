@@ -204,6 +204,180 @@ func TestDrafts(t *testing.T) {
 	}
 }
 
+// held is a provider whose replies say their first word, then hold until
+// let go, by the question they answer.
+type held struct {
+	mu   sync.Mutex
+	gate map[string]chan struct{}
+}
+
+func (p *held) ID() string                                 { return "held" }
+func (p *held) Name() string                               { return "Held" }
+func (p *held) Models() []string                           { return []string{"held"} }
+func (p *held) List(ctx context.Context) ([]string, error) { return p.Models(), nil }
+
+func (p *held) Stream(ctx context.Context, model string, turns []turn, delta func(string)) error {
+	q := turns[len(turns)-1].Content
+	delta("Reply to " + q)
+	select {
+	case <-p.release(q):
+		delta(", done.")
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// release returns the channel that lets go of the reply to q.
+func (p *held) release(q string) chan struct{} {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.gate[q] == nil {
+		p.gate[q] = make(chan struct{})
+	}
+	return p.gate[q]
+}
+
+func TestChatsStreamAtOnce(t *testing.T) {
+	p := &held{gate: map[string]chan struct{}{}}
+	a := newApp(p)
+	// What the streams post runs as the frames do, on this goroutine.
+	posts := make(chan func(), 100)
+	a.post = func(f func()) { posts <- f }
+	run := func(until func() bool) {
+		t.Helper()
+		deadline := time.After(5 * time.Second)
+		for !until() {
+			select {
+			case f := <-posts:
+				f()
+			case <-deadline:
+				t.Fatal("the stream posted nothing")
+			}
+		}
+	}
+	tt := ui.NewTester(a.view, 1120, 760)
+	ask := func(q string) *thread {
+		t.Helper()
+		a.newChat()
+		tt.Frame()
+		tt.Type(q)
+		tt.Key(0, ui.KeyEnter)
+		th := a.current()
+		run(func() bool { return th.busy != nil && th.busy.Text != "" })
+		return th
+	}
+	chatA := ask("A")
+	// Another chat sends while A streams, and both stream.
+	chatB := ask("B")
+	if chatA == chatB || chatA.busy == nil || chatB.busy == nil {
+		t.Fatalf("A streams %v, B streams %v", chatA.busy != nil, chatB.busy != nil)
+	}
+	tt.Frame()
+	if !tt.HasText("Stop") {
+		t.Errorf("no Stop in B, which streams: %q", tt.Texts())
+	}
+
+	// A new chat, while both stream, sends rather than stops.
+	a.newChat()
+	tt.Frame()
+	if tt.HasText("Stop") {
+		t.Errorf("a new chat stops a reply: %q", tt.Texts())
+	}
+
+	// B's Stop stops B's reply, and A streams on.
+	a.open(strconv.Itoa(chatB.ID))
+	tt.Frame()
+	if err := tt.Click("Stop"); err != nil {
+		t.Fatal(err)
+	}
+	if chatB.busy != nil || chatA.busy == nil {
+		t.Fatalf("after B's Stop: A streams %v, B streams %v", chatA.busy != nil, chatB.busy != nil)
+	}
+	if got := chatB.Messages[1].Text; got != "Reply to B" {
+		t.Errorf("B's reply %q, want what came before it stopped", got)
+	}
+	tt.Frame()
+	if tt.HasText("Stop") {
+		t.Errorf("B shows Stop once stopped")
+	}
+
+	// The sidebar shows that A replies still.
+	texts := func(s string) int { return strings.Count(strings.Join(tt.Texts(), "\n"), s) }
+	if texts("Replying") != 1 || texts("New reply") != 0 {
+		t.Errorf("the sidebar marks %d chats replying and %d unread, want A replying", texts("Replying"), texts("New reply"))
+	}
+
+	// A's ends as it comes, in A, marked unread while B shows, until A
+	// does; and A sends again.
+	close(p.release("A"))
+	run(func() bool { return chatA.busy == nil })
+	if got := chatA.Messages[1].Text; got != "Reply to A, done." {
+		t.Errorf("A's reply %q", got)
+	}
+	tt.Frame()
+	// It stays under B, sent in later, though it ended last.
+	if rows := a.chatRows(time.Now()); len(rows) < 3 || rows[1].th != chatB || rows[2].th != chatA {
+		t.Errorf("the sidebar lists B then A? %+v", rows)
+	}
+	if !chatA.unread || chatB.unread || texts("Replying") != 0 || texts("New reply") != 1 {
+		t.Errorf("A unread %v, B unread %v, marks: %d replying, %d unread", chatA.unread, chatB.unread, texts("Replying"), texts("New reply"))
+	}
+	a.open(strconv.Itoa(chatA.ID))
+	tt.Frame()
+	if chatA.unread || texts("New reply") != 0 {
+		t.Errorf("A still unread once shown")
+	}
+	tt.Type("A again")
+	tt.Key(0, ui.KeyEnter)
+	if len(chatA.Messages) != 4 || chatA.busy == nil {
+		t.Fatalf("A sends again: %d messages, streams %v", len(chatA.Messages), chatA.busy != nil)
+	}
+	// Sent in, A goes to the top.
+	if rows := a.chatRows(time.Now()); rows[1].th != chatA {
+		t.Errorf("A not at the top once sent in again")
+	}
+
+	// Escape stops the chat shown's reply only; deleting a chat stops its own.
+	chatC := ask("C")
+	a.open(strconv.Itoa(chatA.ID))
+	tt.Frame()
+	tt.Key(0, ui.KeyEscape)
+	if chatA.busy != nil || chatC.busy == nil {
+		t.Errorf("after Escape in A: A streams %v, C streams %v", chatA.busy != nil, chatC.busy != nil)
+	}
+	// A reply that ends in view is read; behind the settings, it is not.
+	a.open(strconv.Itoa(chatC.ID))
+	tt.Frame()
+	close(p.release("C"))
+	run(func() bool { return chatC.busy == nil })
+	tt.Frame()
+	if chatC.unread {
+		t.Errorf("C, shown, unread as its reply ended")
+	}
+	tt.Type("C again")
+	tt.Key(0, ui.KeyEnter)
+	a.openSettings()
+	tt.Frame()
+	close(p.release("C again"))
+	run(func() bool { return chatC.busy == nil })
+	tt.Frame()
+	if !chatC.unread {
+		t.Errorf("C read, its reply ending behind the settings")
+	}
+	a.closeSettings()
+	tt.Frame()
+	if chatC.unread {
+		t.Errorf("C unread once the settings closed")
+	}
+	tt.Type("C once more")
+	tt.Key(0, ui.KeyEnter)
+	a.remove(chatC)
+	if chatC.busy != nil {
+		t.Errorf("C streams once deleted")
+	}
+}
+
 func TestRemove(t *testing.T) {
 	a, tt := newTester()
 	tt.Type("Hello")
@@ -2235,7 +2409,7 @@ func TestShownInLanguage(t *testing.T) {
 	if short != "2025年10月28日 23:05" || full != "2025年10月28日 23:05" {
 		t.Errorf("formatTime in Chinese: %q, %q", short, full)
 	}
-	a.stop()
+	a.stop(a.current())
 	a.openSettings()
 	tt.Frame()
 	for _, s := range []string{"通用", "应用语言", "跟随系统", "启动", "这 1 个对话及其消息。HyperAI 会先询问。"} {

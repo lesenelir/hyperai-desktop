@@ -630,7 +630,7 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 								return false
 							}
 							switch {
-							case a.busy != nil || strings.TrimSpace(k.Text()) == "":
+							case a.shownReply() != nil || strings.TrimSpace(k.Text()) == "":
 							case a.prov == nil:
 								// Out of the frame: the toast shows in the next.
 								a.needProvider = true
@@ -693,18 +693,19 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 // and the button that sends, or stops the reply.
 func (a *app) composerTools(c *ui.Context, ready bool) ui.Element {
 	row := ui.Row(c).Shrink(0).Gap(6).AlignItems(ui.Center)
+	busy := a.shownReply() != nil
 	row.Children(func() {
 		a.modelPicker(c)
 		label, svg := locales.Send(), arrowUpIcon
-		if a.busy != nil {
+		if busy {
 			label, svg = locales.Stop(), stopIcon
 		}
 		send := tooltip(c, ui.ButtonBase(c.Key("send")).Size(sendSize, sendSize).Radius(sendSize/2).Label(label), label).
-			Disabled(a.busy == nil && !ready)
+			Disabled(!busy && !ready)
 		// Sending is the one primary action: the accent, with a hint of it
 		// under; stopping is fg, and nothing to send a wash.
 		switch {
-		case a.busy != nil:
+		case busy:
 			send.Background(a.pal.fg).TextColor(a.pal.bg)
 		case ready:
 			send.Background(a.pal.ac).TextColor(a.pal.bg).Shadow(0, 3, 8, -2, a.pal.ac.Alpha(0.35))
@@ -718,8 +719,8 @@ func (a *app) composerTools(c *ui.Context, ready bool) ui.Element {
 		}
 		if send.Clicked() {
 			switch {
-			case a.busy != nil:
-				a.stop()
+			case busy:
+				a.stop(a.current())
 			case a.prov == nil:
 				a.askForProvider(c)
 			default:

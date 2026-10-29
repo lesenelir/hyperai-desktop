@@ -219,7 +219,7 @@ func (a *app) removeModel(id, model string) {
 const listTimeout = 20 * time.Second
 
 // listModels asks the provider id for its models, on a goroutine where
-// the app has a window, and keeps those that chat, by name, for the
+// the app posts (app.post), and keeps those that chat, by name, for the
 // Providers page to add of. The composer offers no more of its own models
 // than it lists.
 func (a *app) listModels(id string) {
@@ -260,13 +260,13 @@ func (a *app) listModels(id string) {
 		defer cancel()
 		return p.List(ctx)
 	}
-	if a.win == nil {
+	if a.post == nil {
 		done(list())
 		return
 	}
 	go func() {
 		models, err := list()
-		a.win.Update(func() { done(models, err) })
+		a.post(func() { done(models, err) })
 	}()
 }
 

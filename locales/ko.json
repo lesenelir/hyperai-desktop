@@ -308,5 +308,7 @@
   "modelAddProvider": "제공업체 추가",
   "defaultModelNone": "아직 API 키가 설정된 제공업체가 없습니다.",
   "noProviderTitle": "아직 제공업체가 없습니다",
-  "noProviderAbout": "메시지를 보내려면 OpenAI, Anthropic, OpenRouter 또는 DeepSeek의 API 키를 추가하세요."
+  "noProviderAbout": "메시지를 보내려면 OpenAI, Anthropic, OpenRouter 또는 DeepSeek의 API 키를 추가하세요.",
+  "sidebarReplying": "응답 중",
+  "sidebarUnread": "새 응답"
 }
