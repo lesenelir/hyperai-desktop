@@ -41,6 +41,8 @@ type layout struct {
 	Notify bool `json:"notify,omitempty"`
 	// Language is the tag of the language chosen, "" for the system's.
 	Language string `json:"language,omitempty"`
+	// MathSource shows math in replies as its LaTeX, rather than set.
+	MathSource bool `json:"mathSource,omitempty"`
 }
 
 // loadLayout reads the layout kept in dir, if any.
@@ -74,7 +76,7 @@ func (a *app) loadLayout(dir string) {
 	if l.SendWith == "cmd" {
 		a.sendWith = sendCmdReturn
 	}
-	a.keptChat, a.notifyDone = l.Chat, l.Notify
+	a.keptChat, a.notifyDone, a.renderMath = l.Chat, l.Notify, !l.MathSource
 	if slices.ContainsFunc(languages, func(lang struct{ tag, name string }) bool { return lang.tag == l.Language }) {
 		a.language = l.Language
 	}
@@ -88,7 +90,8 @@ func (a *app) saveLayout() {
 	}
 	l := layout{SidebarWidth: a.sideWidth, Theme: a.theme, TextSize: textSizes[a.textSize],
 		OpaqueSidebar: !a.translucent, ReduceMotion: a.reduceMotion,
-		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme, Chat: a.keptChat, Notify: a.notifyDone, Language: a.language}
+		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme, Chat: a.keptChat, Notify: a.notifyDone, Language: a.language,
+		MathSource: !a.renderMath}
 	if a.onLaunch == launchLast {
 		l.OnLaunch = "last"
 	}

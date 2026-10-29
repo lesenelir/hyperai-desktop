@@ -23,6 +23,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown/parser"
 
 	"hyperai-desktop/locales"
+	"hyperai-desktop/ratex"
 )
 
 // newTester runs the view without a window, where the demo's replies come
@@ -2331,11 +2332,146 @@ func TestMathInReply(t *testing.T) {
 	// The block set, stacked: its TeX names it, and shows as no text.
 	set := false
 	for key, f := range a.formulas {
-		if strings.HasPrefix(key, `\frac{a}{b}`+"\x00") && strings.HasSuffix(key, "display") {
+		if strings.HasPrefix(key, "text\x00"+`\frac{a}{b}`+"\x00") && strings.HasSuffix(key, "display") {
 			set = f != nil && len(f.rules) == 1
 		}
 	}
 	if !set {
 		t.Errorf("the block is not set stacked: %v", a.formulas)
+	}
+}
+
+var (
+	texOnce   sync.Once
+	texEngine *ratex.Engine
+	texErr    error
+)
+
+// startedTeX returns a RaTeX engine for the tests, started once: compiling
+// it takes a second.
+func startedTeX(t *testing.T) *ratex.Engine {
+	t.Helper()
+	texOnce.Do(func() { texEngine, texErr = ratex.New(context.Background(), "") })
+	if texErr != nil {
+		t.Fatal(texErr)
+	}
+	return texEngine
+}
+
+// TestTeXInReply sets a reply's math as KaTeX does, once RaTeX started:
+// within text, in a block, in the colors TeX gives, in the KaTeX fonts;
+// what TeX cannot lay out shows as TeX.
+func TestTeXInReply(t *testing.T) {
+	a, tt := newTester()
+	tt.SetSize(1120, 1400)
+	a.tex = startedTeX(t)
+	a.threads = []*thread{{ID: 1, Title: "Math", Updated: time.Now(), Messages: []*message{
+		{ID: 2, Role: "user", Text: "Explain"},
+		{ID: 3, Role: "assistant", Text: "The loss $x_i^2$ grows, but $\\unknown{q}$ does not.\n\n" +
+			"$$\n\\begin{aligned} a &= b \\\\ &= \\color{red}{c} \\end{aligned}\n$$\n"},
+	}}}
+	a.next, a.selected, a.rev = 3, "1", 1
+	tt.Frame()
+	if !tt.HasText("The loss \uFFFC grows, but \\unknown{q} does not.") {
+		t.Errorf("the math within text is not set, or the unknown not TeX: %q", tt.Texts())
+	}
+	inline, block := a.formulas["ratex\x00x_i^2\x00"+strconv.FormatFloat(float64(a.body), 'f', 2, 32)+"\x00"], (*mathBox)(nil)
+	for key, f := range a.formulas {
+		if strings.HasPrefix(key, "ratex\x00\\begin{aligned}") {
+			block = f
+		}
+	}
+	// RaTeX draws the superscript before the subscript.
+	if inline == nil || inline.text != "x2i" || inline.asc <= a.body*0.5 {
+		t.Fatalf("x_i^2 set as %+v", inline)
+	}
+	// Larger than the text, as KaTeX: x at 1.21 of it, its scripts at 0.7.
+	if s := inline.runs[0].glyphs[0].Advance; s <= 0 {
+		t.Errorf("x drawn %v wide", s)
+	}
+	if block == nil || block.text != "a=b=c" {
+		t.Fatalf("the aligned block set as %+v", block)
+	}
+	red := 0
+	for _, r := range block.runs {
+		if r.ink.set && r.ink.color.R == 255 && r.ink.color.G == 0 {
+			red++
+		}
+	}
+	if red != 1 {
+		t.Errorf("%d red glyphs, want c", red)
+	}
+	if texFamily("Math-Italic") == "" {
+		t.Error("the KaTeX fonts are not registered")
+	}
+}
+
+// TestMathSetting copies a block of math's LaTeX from its menu, and math
+// within text as its TeX with the selection; and with General's switch
+// off, shows all of it as LaTeX, as the next start does too.
+func TestMathSetting(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&demo{})
+	a.loadFrom(dir)
+	a.tex = startedTeX(t)
+	tt := ui.NewTester(a.view, 1120, 1400)
+	block := `\sum_{i=1}^{n} i = \frac{n(n+1)}{2}`
+	a.threads = []*thread{{ID: 1, Title: "Math", Updated: time.Now(), Messages: []*message{
+		{ID: 2, Role: "user", Text: "Explain"},
+		{ID: 3, Role: "assistant", Text: "The loss $x_i^2$ grows.\n\n$$\n" + block + "\n$$\n"},
+	}}}
+	a.next, a.selected, a.rev = 3, "1", 1
+	tt.Frame()
+
+	// The block's menu copies its LaTeX.
+	if err := tt.RightClick(block); err != nil {
+		t.Fatalf("%v in %q", err, tt.Texts())
+	}
+	if got := tt.Menu(); !slices.Contains(got, "Copy Expression") {
+		t.Fatalf("the formula's menu %q", got)
+	}
+	if err := tt.ChooseMenuItem("Copy Expression"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if got := tt.Clipboard(); got != block {
+		t.Errorf("copied %q, want %q", got, block)
+	}
+
+	// Math within text copies as its TeX, as part of the selection.
+	r, ok := tt.Find("The loss ￼ grows.")
+	if !ok {
+		t.Fatalf("no math within text in %q", tt.Texts())
+	}
+	tt.ClickAt(r.X+2, r.Y+r.H/2)
+	tt.Command("selectAll")
+	tt.Command("copy")
+	if got := tt.Clipboard(); !strings.Contains(got, "The loss $x_i^2$ grows.") {
+		t.Errorf("copied %q", got)
+	}
+
+	// Off: LaTeX, within text and in blocks.
+	a.openSettings()
+	tt.Frame()
+	toggle(t, tt, "Render math expressions", "Show formatted math in replies. Turn off to show LaTeX source.")
+	if a.renderMath {
+		t.Fatal("the switch did not turn math off")
+	}
+	a.closeSettings()
+	tt.Frame()
+	if !tt.HasText("The loss x_i^2 grows.") || !tt.HasText(block) {
+		t.Errorf("math set with the switch off: %q", tt.Texts())
+	}
+	a.layoutSaver.wait()
+	b := newApp(&demo{})
+	b.loadFrom(dir)
+	if b.renderMath {
+		t.Error("math set again after a restart")
+	}
+	// The field finds the switch.
+	a.settingsQuery = "LaTeX"
+	tt.Frame()
+	if m := a.settingsMatches(); len(m) != 1 || m[0].key != "general" || !slices.Equal(m[0].hits, []string{"Render math expressions"}) {
+		t.Errorf("LaTeX finds %+v", m)
 	}
 }

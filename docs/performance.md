@@ -99,6 +99,20 @@ The main thread builds frames, so anything slow there drops them:
   read, and a [`saver`](../store.go) writes them on a goroutine, one write
   at a time, only the latest of those waiting. The app waits for the last
   write as it quits (`mygo.App.OnQuit`).
+- RaTeX, which lays math out ([katex.go](../katex.go)), compiles on a
+  goroutine as the app starts: 1.3 s the first time, 22 ms after, from
+  wazero's cache in the app's cache directory. It reaches the main thread
+  through `Window.Update`; until then math is set as text.
+
+Laying a formula out stays on the main thread: 28 µs once RaTeX is warm
+(17 µs at the median, 0.1 ms at the 90th percentile of 122 formulas as
+models write them), and each formula is laid out once, kept by its TeX,
+size and font (`maxFormulas`), failures too, so that a paragraph
+streaming in asks for its math every frame for a lookup. A formula is at
+most 8 KiB of TeX (`ratex.MaxSource`). Its glyphs are text, drawn from
+the glyph cache as the rest of the window's: a frame of a reply with a
+dozen blocks of math took 0.24 ms, and 1.37 ms with the glyphs drawn as
+their outlines (`BenchmarkTeXFrame`, removed with them).
 
 ## Measuring
 

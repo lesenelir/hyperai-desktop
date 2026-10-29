@@ -1848,6 +1848,66 @@ func (msgs Messages) NotifyTerms() string {
 	return Catalog.Format(msgs.locale, "notifyTerms", nil)
 }
 
+// RenderMath says "Render math expressions"
+// in the language the app shows.
+//
+// The General page's switch that shows math in replies set, rather than as
+// its LaTeX.
+func RenderMath() string { return In(i18n.Locale()).RenderMath() }
+
+// RenderMath says "Render math expressions"
+// in the language of msgs.
+//
+// The General page's switch that shows math in replies set, rather than as
+// its LaTeX.
+func (msgs Messages) RenderMath() string {
+	return Catalog.Format(msgs.locale, "renderMath", nil)
+}
+
+// RenderMathAbout says "Show formatted math in replies. Turn off to show LaTeX source."
+// in the language the app shows.
+//
+// Under the switch that sets math.
+func RenderMathAbout() string { return In(i18n.Locale()).RenderMathAbout() }
+
+// RenderMathAbout says "Show formatted math in replies. Turn off to show LaTeX source."
+// in the language of msgs.
+//
+// Under the switch that sets math.
+func (msgs Messages) RenderMathAbout() string {
+	return Catalog.Format(msgs.locale, "renderMathAbout", nil)
+}
+
+// RenderMathTerms says "Math, LaTeX, TeX, KaTeX, Formula, Equation"
+// in the language the app shows.
+//
+// Words the settings' field finds the switch that sets math by, separated
+// by commas.
+func RenderMathTerms() string { return In(i18n.Locale()).RenderMathTerms() }
+
+// RenderMathTerms says "Math, LaTeX, TeX, KaTeX, Formula, Equation"
+// in the language of msgs.
+//
+// Words the settings' field finds the switch that sets math by, separated
+// by commas.
+func (msgs Messages) RenderMathTerms() string {
+	return Catalog.Format(msgs.locale, "renderMathTerms", nil)
+}
+
+// CopyExpression says "Copy Expression"
+// in the language the app shows.
+//
+// The item of a formula's menu that copies its LaTeX.
+func CopyExpression() string { return In(i18n.Locale()).CopyExpression() }
+
+// CopyExpression says "Copy Expression"
+// in the language of msgs.
+//
+// The item of a formula's menu that copies its LaTeX.
+func (msgs Messages) CopyExpression() string {
+	return Catalog.Format(msgs.locale, "copyExpression", nil)
+}
+
 // Chats says "Chats"
 // in the language the app shows.
 //

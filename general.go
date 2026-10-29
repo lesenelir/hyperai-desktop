@@ -89,14 +89,15 @@ func (a *app) generalTerms() []settingsTerm {
 		{locales.OnLaunch(), append(terms(locales.OnLaunchTerms()), launchTitles()...)},
 		{locales.SendWith(), append(terms(locales.SendWithTerms()), sendTitles[:]...)},
 		{locales.Notify(), terms(locales.NotifyTerms())},
+		{locales.RenderMath(), terms(locales.RenderMathTerms())},
 		{locales.ChatsSaved(platform()), terms(locales.ChatsTerms())},
 		{locales.DeleteAll(), terms(locales.DeleteAllTerms())},
 	}
 }
 
 // generalPage builds the General page: the app's language, how HyperAI
-// starts, the key that sends, the notification of a reply, and where the
-// chats are kept, and deleting them.
+// starts, the key that sends, replies (their notification, and their math
+// set or as LaTeX), and where the chats are kept, and deleting them.
 func (a *app) generalPage(c *ui.Context) {
 	a.settingsCard(c, locales.LanguageCard(), func() {
 		a.settingRow(c, locales.Language(), locales.LanguageAbout(), func() { a.languageButton(c) })
@@ -137,6 +138,12 @@ func (a *app) generalPage(c *ui.Context) {
 		a.settingRow(c, locales.Notify(), about, func() {
 			if ui.Switch(c.Key("notify"), &a.notifyDone).Label(locales.Notify()).Changed() {
 				a.notifyError = ""
+				a.saveLayout()
+			}
+		})
+		settingDivider(c)
+		a.settingRow(c, locales.RenderMath(), locales.RenderMathAbout(), func() {
+			if ui.Switch(c.Key("render math"), &a.renderMath).Label(locales.RenderMath()).Changed() {
 				a.saveLayout()
 			}
 		})

@@ -9,6 +9,8 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 	"github.com/egoist/mygo/ui/markdown/parser"
+
+	"hyperai-desktop/locales"
 )
 
 // Math in replies is TeX, which the app sets as text, as a chat app shows
@@ -66,15 +68,34 @@ func (s mathStyle) inline() mathStyle {
 }
 
 // mathRun is text of a formula, shaped: from x, on a baseline y below the
-// formula's.
+// formula's, in the text's color, or ink's, where TeX gave one.
 type mathRun struct {
 	glyphs []ui.Glyph
 	x, y   float32
+	ink    mathInk
+}
+
+// mathInk is the color TeX gave what it draws, as \color{red}; the zero
+// value is none, which draws in the text's color.
+type mathInk struct {
+	color ui.Color
+	set   bool
+}
+
+// or returns the ink's color, or text where it has none.
+func (k mathInk) or(text ui.Color) ui.Color {
+	if k.set {
+		return k.color
+	}
+	return text
 }
 
 // mathRule is a line of a formula, a fraction's or an overline: its top
 // y below the formula's baseline.
-type mathRule struct{ x, y, w, h float32 }
+type mathRule struct {
+	x, y, w, h float32
+	ink        mathInk
+}
 
 // mathBox is math set: w wide, reaching asc above its baseline and desc
 // below it, its text and lines placed from its left on its baseline.
@@ -87,20 +108,24 @@ type mathBox struct {
 	text         string
 }
 
-// mathStroke is a delimiter drawn as a line, as one taller than the text
-// is: its path, below the formula's baseline, and how wide it strokes,
-// its corners sharp where miter.
+// mathStroke is a path of a formula: a delimiter drawn as a line, as one
+// taller than the text is, or what TeX draws, filled where fill: its
+// path, below the formula's baseline, and how wide it strokes, its
+// corners sharp where miter.
 type mathStroke struct {
 	cmds  []mathCmd
 	width float32
 	miter bool
+	fill  bool
+	ink   mathInk
 }
 
 // mathCmd is a step of a mathStroke's path: 'M' moves to pts[0], 'L'
-// draws a line to it, 'Q' a curve to pts[1] bent by pts[0].
+// draws a line to it, 'Q' a curve to pts[1] bent by pts[0], 'C' a curve
+// to pts[2] bent by pts[0] and pts[1], 'Z' closes the subpath.
 type mathCmd struct {
 	op  byte
-	pts [2][2]float32
+	pts [3][2]float32
 }
 
 // place puts o in b, its left at x and its baseline y below b's.
@@ -134,13 +159,13 @@ func (b *mathBox) draw(p *ui.Painter, r ui.Rect) {
 	color := p.Theme().Text
 	base := r.Y + b.asc
 	for _, run := range b.runs {
-		p.Glyphs(run.glyphs, r.X+run.x, base+run.y, color)
+		p.Glyphs(run.glyphs, r.X+run.x, base+run.y, run.ink.or(color))
 	}
 	for _, rule := range b.rules {
 		x, y := r.X+rule.x, base+rule.y
 		var path ui.Path
 		path.MoveTo(x, y).LineTo(x+rule.w, y).LineTo(x+rule.w, y+rule.h).LineTo(x, y+rule.h).Close()
-		p.FillPath(&path, color)
+		p.FillPath(&path, rule.ink.or(color))
 	}
 	for _, st := range b.strokes {
 		var path ui.Path
@@ -148,18 +173,30 @@ func (b *mathBox) draw(p *ui.Painter, r ui.Rect) {
 		if st.miter {
 			path.Join(ui.MiterJoin)
 		}
+		at := func(pt [2]float32) (float32, float32) { return r.X + pt[0], base + pt[1] }
 		for _, c := range st.cmds {
-			x0, y0 := r.X+c.pts[0][0], base+c.pts[0][1]
+			x0, y0 := at(c.pts[0])
 			switch c.op {
 			case 'M':
 				path.MoveTo(x0, y0)
 			case 'L':
 				path.LineTo(x0, y0)
 			case 'Q':
-				path.QuadTo(x0, y0, r.X+c.pts[1][0], base+c.pts[1][1])
+				x1, y1 := at(c.pts[1])
+				path.QuadTo(x0, y0, x1, y1)
+			case 'C':
+				x1, y1 := at(c.pts[1])
+				x2, y2 := at(c.pts[2])
+				path.CubeTo(x0, y0, x1, y1, x2, y2)
+			case 'Z':
+				path.Close()
 			}
 		}
-		p.StrokePath(&path, st.width, color)
+		if st.fill {
+			p.FillPath(&path, st.ink.or(color))
+		} else {
+			p.StrokePath(&path, st.width, st.ink.or(color))
+		}
 	}
 }
 
@@ -503,10 +540,10 @@ func (p *texParser) command(st mathStyle) []mathAtom {
 		out := mathBox{w: b.w, asc: b.asc, desc: b.desc}
 		out.place(b, 0, 0)
 		if name == "underline" {
-			out.rules = append(out.rules, mathRule{0, b.desc + 0.04*st.size, b.w, t})
+			out.rules = append(out.rules, mathRule{x: 0, y: b.desc + 0.04*st.size, w: b.w, h: t})
 			out.desc += 0.04*st.size + t
 		} else {
-			out.rules = append(out.rules, mathRule{0.04 * st.size, -(b.asc + 0.06*st.size + t), b.w, t})
+			out.rules = append(out.rules, mathRule{x: 0.04 * st.size, y: -(b.asc + 0.06*st.size + t), w: b.w, h: t})
 			out.asc += 0.06*st.size + t
 		}
 		out.text = b.text + "̅"
@@ -613,10 +650,10 @@ func delimiterBox(d string, asc, desc float32, st mathStyle) mathBox {
 	pad := 0.08 * s
 	var w float32
 	var cmds []mathCmd
-	move := func(x, y float32) { cmds = append(cmds, mathCmd{op: 'M', pts: [2][2]float32{{x, y}}}) }
-	line := func(x, y float32) { cmds = append(cmds, mathCmd{op: 'L', pts: [2][2]float32{{x, y}}}) }
+	move := func(x, y float32) { cmds = append(cmds, mathCmd{op: 'M', pts: [3][2]float32{{x, y}}}) }
+	line := func(x, y float32) { cmds = append(cmds, mathCmd{op: 'L', pts: [3][2]float32{{x, y}}}) }
 	curve := func(cx, cy, x, y float32) {
-		cmds = append(cmds, mathCmd{op: 'Q', pts: [2][2]float32{{cx, cy}, {x, y}}})
+		cmds = append(cmds, mathCmd{op: 'Q', pts: [3][2]float32{{cx, cy}, {x, y}}})
 	}
 	miter := false
 	// Each is drawn as it opens, on the left; one that closes mirrors it.
@@ -701,7 +738,7 @@ func delimiterBox(d string, asc, desc float32, st mathStyle) mathBox {
 			}
 		}
 	}
-	return mathBox{w: w, asc: asc, desc: desc, strokes: []mathStroke{{cmds, t, miter}}, text: d}
+	return mathBox{w: w, asc: asc, desc: desc, strokes: []mathStroke{{cmds: cmds, width: t, miter: miter}}, text: d}
 }
 
 // delimiterMirrors are the delimiters that close, by the one that opens
@@ -917,7 +954,7 @@ func stackFrac(num, den mathBox, st mathStyle) mathBox {
 	var b mathBox
 	b.place(num, (w-num.w)/2, -(axis + t/2 + gap + num.desc))
 	b.place(den, (w-den.w)/2, -axis+t/2+gap+den.asc)
-	b.rules = append(b.rules, mathRule{pad / 2, -axis - t/2, w - pad, t})
+	b.rules = append(b.rules, mathRule{x: pad / 2, y: -axis - t/2, w: w - pad, h: t})
 	b.w = w
 	b.text = "(" + num.text + ")/(" + den.text + ")"
 	return b
@@ -1279,10 +1316,17 @@ var texNegated = map[string]string{
 // them again: a reply streaming asks for its paragraph's every frame.
 const maxFormulas = 512
 
-// formula returns tex set in the conversation's font at size DIPs, in a
-// block of its own or within text, kept; nil where the app cannot set it.
+// formula returns tex set for text of size DIPs around it, in a block of
+// its own or within text, kept; nil where the app cannot set it, which
+// shows as TeX. RaTeX sets it once its engine is ready (katex.go), as
+// KaTeX does; until then, the app sets it as text, in the conversation's
+// font, a block larger than the text.
 func (a *app) formula(tex string, size float32, display bool) *mathBox {
-	key := tex + "\x00" + strconv.FormatFloat(float64(size), 'f', 2, 32) + "\x00" + a.font
+	engine := "text"
+	if a.tex != nil {
+		engine = "ratex"
+	}
+	key := engine + "\x00" + tex + "\x00" + strconv.FormatFloat(float64(size), 'f', 2, 32) + "\x00" + a.font
 	if display {
 		key += "\x00display"
 	}
@@ -1293,21 +1337,35 @@ func (a *app) formula(tex string, size float32, display bool) *mathBox {
 		a.formulas = map[string]*mathBox{}
 	}
 	var f *mathBox
-	if b, ok := setTeX(tex, mathStyle{size: size, root: size, display: display, family: a.font}); ok {
-		f = &b
+	switch {
+	case a.tex != nil:
+		f = a.typeset(tex, size, display)
+	case display:
+		size *= displayMathScale
+		fallthrough
+	default:
+		if b, ok := setTeX(tex, mathStyle{size: size, root: size, display: display, family: a.font}); ok {
+			f = &b
+		}
 	}
 	a.formulas[key] = f
 	return f
 }
 
-// displayMathScale is how much larger than the text a block of math is.
+// displayMathScale is how much larger than the text a block of math the
+// app sets as text is.
 const displayMathScale = 1.15
 
 // setMath makes the replies' Markdown set math: within text as objects
-// of the line, and blocks of it, once whole, centered; what the app
-// cannot set shows as TeX.
+// of the line, and blocks of it, once whole, centered, their menu copying
+// their LaTeX; what the app cannot set shows as TeX, and so does all of it
+// where General turns renderMath off. Math within text is copied as its
+// TeX as MyGo copies it, with its delimiters, as part of the selection.
 func (a *app) setMath() {
 	a.md.InlineMath = func(tex string, size float32) (markdown.InlineObject, bool) {
+		if !a.renderMath {
+			return markdown.InlineObject{}, false
+		}
 		f := a.formula(tex, size, false)
 		if f == nil {
 			return markdown.InlineObject{}, false
@@ -1316,11 +1374,11 @@ func (a *app) setMath() {
 	}
 	a.md.Block = func(c *ui.Context, d *parser.Document, i int) bool {
 		b := d.Block(i)
-		if b.Kind != parser.MathBlock || b.Open {
+		if b.Kind != parser.MathBlock || b.Open || !a.renderMath {
 			return false
 		}
 		tex := strings.TrimSpace(d.Lines(i))
-		f := a.formula(tex, a.body*displayMathScale, true)
+		f := a.formula(tex, a.body, true)
 		if f == nil {
 			return false
 		}
@@ -1329,7 +1387,16 @@ func (a *app) setMath() {
 		col := ui.Column(c).AlignSelf(ui.Stretch).Padding(4, 0)
 		wide := col.Bounds().W > 0 && f.w > col.Bounds().W
 		col.Children(func() {
-			formula := func() { ui.Box(c).Width(f.w).Height(f.asc + f.desc).Shrink(0).Label(tex).Draw(f.draw) }
+			formula := func() {
+				ui.Box(c).Width(f.w).Height(f.asc + f.desc).Shrink(0).Label(tex).Draw(f.draw).ContextMenu(func(m *ui.Menu) {
+					if m.Item(locales.CopyExpression()).Chosen() {
+						c.Services().WriteClipboard(tex)
+						c.Toast(locales.Copied())
+					}
+					m.Separator()
+					m.EditItems()
+				})
+			}
 			if wide {
 				ui.ScrollHorizontal(c).AlignSelf(ui.Stretch).Children(formula)
 			} else {

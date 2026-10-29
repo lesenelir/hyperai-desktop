@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log"
 	"math/rand/v2"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"hyperai-desktop/ratex"
 )
 
 func main() {
@@ -62,6 +65,7 @@ func main() {
 			Vibrancy: mygo.VibrancySidebar,
 			Content:  ui.View(a.view),
 		})
+		startTeX(a)
 		if bench > 0 {
 			go a.bench(bench)
 		} else {
@@ -79,6 +83,26 @@ func main() {
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// startTeX starts RaTeX, which lays math out as KaTeX does, for a's
+// replies: on a goroutine, as compiling it takes a second the first time,
+// and keeps what it compiled in the cache, for the next launches to start
+// it in tens of milliseconds. Until it is ready, and where it cannot
+// start, the app sets math as text.
+func startTeX(a *app) {
+	cache := ""
+	if dir, err := mygo.App.Path(mygo.PathCache); err == nil {
+		cache = filepath.Join(dir, "ratex-"+ratex.Version)
+	}
+	go func() {
+		e, err := ratex.New(context.Background(), cache)
+		if err != nil {
+			log.Printf("math: %v", err)
+			return
+		}
+		a.win.Update(func() { a.tex = e })
+	}()
 }
 
 // notifyReply shows a notification titled title, saying body, which brings

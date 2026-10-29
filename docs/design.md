@@ -193,27 +193,33 @@ A small button that floats over the conversation (scroll to end) rests at
   reply's stay. A question past 8 lines shows 6, fading out from 70% of
   their height, over a muted "Show more" that takes the accent under the
   pointer, as hyperai-next's agent does.
-- **Math** in replies ([math.go](../math.go)) is set as text, as MyGo
-  has no TeX typesetter: `$…$`, `\(…\)`, `$$…$$` and `\[…\]`, but not
-  dollars of money ($5). Symbols are Unicode (\alpha α, \leq ≤,
-  \mathbb{R} ℝ, \mathcal{L} ℒ), letters and lower-case Greek italic as
-  TeX sets them, functions upright (sin, log, lim), accents combining
-  marks (ŷ); scripts are the text's own glyphs at 70%, raised and
-  lowered, spaced by TeX's classes. Within text a fraction is a/b, in
-  the parentheses it needs ((a+b)/2, 1/(2π)); a block of math, 1.15 of
-  the text, centered, stacks its fractions over a line on the math
-  axis, its sums' limits over and under them, and grows `\left( \right)`
-  to what they hold. A root is √x, √(x+1), ∛x. Matrices (`matrix`,
-  `pmatrix`, `bmatrix`, `Bmatrix`, `vmatrix`, `Vmatrix`, `smallmatrix`)
-  and `cases` (`dcases`, `rcases`) are grids, a quad between columns,
-  rows a line of their text apart at least, centered on the math axis:
-  a matrix centers its cells, cases sets them from the left. A delimiter
-  taller than a line of text is drawn, not set, its stroke 0.07 of the
-  text, as KaTeX draws its tall ones: a glyph made larger thickens as it
-  grows. Everything is `fg`. What it cannot set — `aligned` and the
-  other environments, \binom, commands it does not know, TeX half
-  written as a reply streams — shows as its TeX in the code font, as
-  MyGo shows it. Copied, math is its TeX.
+- **Math** in replies — `$…$`, `\(…\)`, `$$…$$` and `\[…\]`, but not
+  dollars of money ($5) — is set as KaTeX sets it, by RaTeX
+  ([ratex/](../ratex), [katex.go](../katex.go)), a KaTeX-compatible
+  engine in Rust run as WebAssembly in wazero: KaTeX's rules and
+  metrics, in the KaTeX fonts, 1.21 of the text as KaTeX's CSS has it
+  (Computer Modern's x-height is an interface font's less), within text
+  on its baseline, and a block centered, scrolling sideways where wider.
+  Its glyphs are text drawn without the system's font smoothing, as
+  browsers draw KaTeX: smoothed, they read semibold; as outlines, they
+  weighed the same and cost six times the frame. Its ink is `fg`, but
+  for the colors TeX gives (\color). What TeX cannot lay out — a command
+  it does not know, TeX half written as a reply streams — shows as its
+  TeX in the code font, as MyGo shows it. Math within text is copied as
+  its TeX with the selection (`$x_i$`); a block's menu (Copy Expression)
+  copies its LaTeX, and Copy as Markdown keeps it in what it copies,
+  though the selection's plain text leaves it out: MyGo copies the
+  blocks it builds itself, not one an app builds (`Options.Block`), as
+  plain text. General's Render math expressions, on by default, shows all
+  of it as LaTeX when off.
+
+  Until RaTeX has compiled, a second at the first launch, and where it
+  cannot start, the app sets math as text ([math.go](../math.go)), in the
+  conversation's font: symbols as Unicode (\alpha α, \leq ≤, \mathbb{R}
+  ℝ), letters italic as TeX sets them, scripts at 70% raised and lowered,
+  a fraction a/b within text and stacked in a block of 1.15 of the text,
+  a root √x, matrices and cases as grids, and a delimiter taller than a
+  line drawn, its stroke 0.07 of the text.
 - **Empty chat**: as hyperai-next's agent page, the composer in the
   middle — the greeting over it (the HyperAI mark from
   `resources/logo.svg`, 48, in the accent as hyperai-next fills its Logo,
@@ -285,7 +291,8 @@ A small button that floats over the conversation (scroll to end) rests at
   window is in the background, the chat's title over the reply's start,
   which shows the chat when clicked; none for a reply stopped; where the
   system does not allow them, the switch turns off and its row says
-  where to allow them), and Chats (where they are saved, from `~`, and
+  where to allow them; and Render math expressions, set as KaTeX or as
+  LaTeX), and Chats (where they are saved, from `~`, and
   Show in Finder, the folder before any is written; Delete All…, faded
   where there are none). A setting's button is a pop-up button's box
   without its arrow (`settingButton`).

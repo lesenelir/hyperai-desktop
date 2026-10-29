@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown/parser"
 
 	"hyperai-desktop/locales"
+	"hyperai-desktop/ratex"
 )
 
 const (
@@ -132,7 +133,12 @@ type app struct {
 	copiedUntil time.Time
 	pal         *palette // the frame's colors
 	md          markdown.Options
-	formulas    map[string]*mathBox // math set, by its TeX, size and font (math.go)
+	formulas    map[string]*mathBox // math set, by its engine, TeX, size and font (math.go)
+	// tex lays math out as KaTeX does (katex.go), once it started: nil
+	// until then, and in tests that do not start it. renderMath sets math
+	// at all, which General turns off to show its LaTeX.
+	tex        *ratex.Engine
+	renderMath bool
 	// busy is the reply streaming in, nil when none, and cancel stops it.
 	busy   *message
 	cancel context.CancelFunc
@@ -238,7 +244,7 @@ type app struct {
 
 func newApp(p provider) *app {
 	a := &app{prov: p, model: p.Models()[0], sideWidth: sidebarWidth, theme: "system",
-		textSize: defaultTextSize, body: bodySize, translucent: true}
+		textSize: defaultTextSize, body: bodySize, translucent: true, renderMath: true}
 	// Math between single dollars too, as models write it within text:
 	// $x^2$, but not $5 and $10, which read as money.
 	a.md.Extensions = parser.Default | parser.ExtDollarMath
