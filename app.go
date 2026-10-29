@@ -600,8 +600,8 @@ func (a *app) navRow(c *ui.Context, key string, svg *ui.SVG, label, shortcut str
 }
 
 // threadRow builds th's row: its title, and under it the model it asked
-// and how long ago. The chat shown is on a wash of fg, its title in the
-// accent.
+// and how long ago. The chat shown is on a wash of fg, its title at 500,
+// as the settings' pages are: the wash says it, without the accent too.
 func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 	t := c.Theme()
 	id := strconv.Itoa(th.ID)
@@ -617,7 +617,7 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
 			title := ui.Text(c, th.Title).SingleLine()
 			if selected {
-				title.TextColor(a.pal.ac).FontWeight(500)
+				title.FontWeight(500)
 			}
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, messageIcon).Size(12, 12).TextColor(t.TextMuted)

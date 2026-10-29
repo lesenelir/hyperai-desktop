@@ -67,8 +67,10 @@ one theme and wrong in the other. The one exception is the code themes
 hex, each with a light side and a dark one.
 
 **The one accent rule.** The accent marks what acts and what is chosen:
-the send button, the chat shown in the sidebar, the caret and the
-selection, links. Beyond those, it marks HyperAI itself — its mark over
+the send button, the caret and the selection, links. A row shown in a
+list (the chat in the sidebar, a settings page) is chosen by its wash
+and its weight, not the accent: red on the grey wash said it twice, in
+two voices, and read as an alert. Beyond those, it marks HyperAI itself — its mark over
 an empty chat, the sparkle by the model — and inline code, as Waku colors
 it. Nothing else: no accent
 backgrounds, no accent for flavor, no accent on what is inactive.
@@ -150,7 +152,8 @@ A small button that floats over the conversation (scroll to end) rests at
   under the pointer, a 6% wash and the text color. Disabled ones fade to
   35%.
 - **Sidebar rows**: a title over the model and age, as the rows of every
-  list. The chat shown takes a 7% wash and its title the accent, at 500.
+  list. The chat shown takes a 7% wash and its title 500, in `fg`, as a
+  settings page shown does.
   The sidebar shows the desktop's material where it can, tinted with its
   own warm color (`sidebarTint`) so that it sits with the canvas.
 - **Composer**: on `composer`, radius 24, a hairline and the rest shadow.
