@@ -18,7 +18,7 @@ type settingsSection struct {
 // group, as Codex's.
 var settingsSections = []settingsSection{
 	{"general", "Personal", "General", settingsIcon, "How HyperAI starts and behaves: its language, new chats, and sending with Enter.", nil},
-	{"appearance", "Personal", "Appearance", sunIcon, "How HyperAI looks: its theme, the conversation's text, and the window.", (*app).appearancePage},
+	{"appearance", "Personal", "Appearance", sunIcon, "How HyperAI looks: its theme and font, the conversation's text, and the window.", (*app).appearancePage},
 	{"shortcuts", "Personal", "Keyboard shortcuts", keyboardIcon, "The keys that do what HyperAI does, and changing them.", nil},
 	{"providers", "Models", "Providers", plugIcon, "Where replies come from: OpenRouter and its API key, and other providers.", nil},
 	{"model", "Models", "Default model", logoIcon, "The model a new chat asks, until it is changed in the composer.", nil},

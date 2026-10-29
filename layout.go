@@ -27,6 +27,7 @@ type layout struct {
 	TextSize      float32 `json:"textSize,omitempty"`
 	OpaqueSidebar bool    `json:"opaqueSidebar,omitempty"`
 	ReduceMotion  bool    `json:"reduceMotion,omitempty"`
+	Font          string  `json:"font,omitempty"`
 }
 
 // loadLayout reads the layout kept in dir, if any.
@@ -50,6 +51,7 @@ func (a *app) loadLayout(dir string) {
 		a.textSize = i
 	}
 	a.translucent, a.reduceMotion = !l.OpaqueSidebar, l.ReduceMotion
+	a.font = l.Font
 }
 
 // saveLayout keeps the layout, where the app has a place for it (not in
@@ -59,7 +61,7 @@ func (a *app) saveLayout() {
 		return
 	}
 	b, err := json.Marshal(layout{SidebarWidth: a.sideWidth, Theme: a.theme, TextSize: textSizes[a.textSize],
-		OpaqueSidebar: !a.translucent, ReduceMotion: a.reduceMotion})
+		OpaqueSidebar: !a.translucent, ReduceMotion: a.reduceMotion, Font: a.font})
 	if err != nil {
 		return
 	}

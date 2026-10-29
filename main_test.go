@@ -1341,7 +1341,8 @@ func TestAppearance(t *testing.T) {
 	a.loadLayout(dir)
 	var applied []string
 	a.applyTheme = func(theme string) { applied = append(applied, theme) }
-	tt := ui.NewTester(a.view, 1120, 900)
+	// Tall enough for the whole page, which the switches are at the foot of.
+	tt := ui.NewTester(a.view, 1120, 1200)
 	tt.Type("How do I cache?")
 	tt.Key(0, ui.KeyEnter)
 	tt.Advance(time.Second)
@@ -1401,6 +1402,55 @@ func TestAppearance(t *testing.T) {
 	b.loadLayout(dir)
 	if b.theme != "dark" || textSizes[b.textSize] != 17 || b.translucent || !b.reduceMotion {
 		t.Errorf("after a restart: theme %q, text %v, translucent %v, still %v", b.theme, textSizes[b.textSize], b.translucent, b.reduceMotion)
+	}
+}
+
+func TestAppFont(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&demo{})
+	a.loadLayout(dir)
+	a.fonts = []string{"Avenir Next", "Test Sans"}
+	tt := ui.NewTester(a.view, 1120, 1200)
+	a.openSettings()
+	a.settingsPage = "appearance"
+	tt.Frame()
+
+	// The button opens the menu of fonts: the system's, chosen, then those
+	// installed.
+	about := "All of the window's text. Code keeps its monospaced font."
+	toggle(t, tt, "Font", about)
+	if got, want := tt.Menu(), []string{"System", "-", "Avenir Next", "Test Sans"}; !slices.Equal(got, want) {
+		t.Fatalf("menu %q, want %q", got, want)
+	}
+	if err := tt.ChooseMenuItem("Test Sans"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	// Which the window, the conversation and its Markdown take, and the
+	// button shows.
+	if a.font != "Test Sans" || a.winTheme.Font != "Test Sans" || a.md.Theme.Font != "Test Sans" || a.textFont != "Test Sans" {
+		t.Errorf("font %q, window %q, Markdown %q, measured in %q", a.font, a.winTheme.Font, a.md.Theme.Font, a.textFont)
+	}
+	if !tt.HasText("Test Sans") {
+		t.Errorf("the button does not show the font: %q", tt.Texts())
+	}
+
+	// Kept for the next start.
+	a.layoutSaver.wait()
+	b := newApp(&demo{})
+	b.loadLayout(dir)
+	if b.font != "Test Sans" {
+		t.Errorf("after a restart: font %q", b.font)
+	}
+
+	// The system's again.
+	toggle(t, tt, "Font", about)
+	if err := tt.ChooseMenuItem("System"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.font != "" || a.winTheme.Font != "" {
+		t.Errorf("font %q, window %q, want the system's", a.font, a.winTheme.Font)
 	}
 }
 

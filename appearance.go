@@ -33,13 +33,36 @@ func (a *app) setTheme(theme string) {
 	a.saveLayout()
 }
 
-// setBody makes the conversation's text size DIPs, as the settings chose:
-// its questions and the draft are measured again.
-func (a *app) setBody(size float32) {
-	if size == a.body {
+// setFont shows the app in the font family ("" for the system's), as the
+// settings chose.
+func (a *app) setFont(family string) {
+	if family == a.font {
 		return
 	}
-	a.body, a.measured = size, ""
+	a.font = family
+	a.saveLayout()
+}
+
+// fontFamilies returns the font families installed, for the settings to
+// choose from: asked of the system once, as their menu first opens.
+func (a *app) fontFamilies() []string {
+	if a.fonts == nil {
+		a.fonts = []string{}
+		for _, f := range ui.FontFamilies() {
+			a.fonts = append(a.fonts, f.Name)
+		}
+	}
+	return a.fonts
+}
+
+// setText makes the conversation's text size DIPs, and the app's font
+// family, as the settings chose: its questions and the draft are measured
+// again.
+func (a *app) setText(size float32, family string) {
+	if size == a.body && family == a.textFont {
+		return
+	}
+	a.body, a.textFont, a.measured = size, family, ""
 	for _, th := range a.threads {
 		for _, m := range th.Messages {
 			m.wrapWidth = 0
@@ -48,9 +71,9 @@ func (a *app) setBody(size float32) {
 }
 
 // appearancePage builds the Appearance page: the theme, chosen of three
-// small windows drawn in it, as macOS's; the conversation's text, with a
-// question and a reply at its size, since the settings hide the
-// conversation; and the window, a switch a row.
+// small windows drawn in it, as macOS's; the text, its font and the
+// conversation's size, over a question and a reply in them, since the
+// settings hide the conversation; and the window, a switch a row.
 func (a *app) appearancePage(c *ui.Context) {
 	settingsGroup(c, "Theme", func() {
 		ui.Row(c).Gap(12).Children(func() {
@@ -59,7 +82,11 @@ func (a *app) appearancePage(c *ui.Context) {
 			}
 		})
 	})
-	a.settingsCard(c, "Conversation", func() {
+	a.settingsCard(c, "Text", func() {
+		a.settingRow(c, "Font", "All of the window's text. Code keeps its monospaced font.", func() {
+			a.fontButton(c)
+		})
+		settingDivider(c)
 		a.settingRow(c, "Text size", "Questions, replies and the composer. The rest of the window keeps its size.", func() {
 			if ui.Segmented(c.Key("text size"), &a.textSize, textSizeTitles[:]...).Label("Text size").Changed() {
 				a.saveLayout()
@@ -148,6 +175,38 @@ func (a *app) themeCard(c *ui.Context, theme, title string) {
 	if card.Clicked() {
 		a.setTheme(theme)
 	}
+}
+
+// fontButton builds the pop-up button that chooses the app's font: the
+// family chosen, which opens the system's menu of them, as macOS's font
+// settings do: System, then every family installed, the one chosen
+// checked.
+func (a *app) fontButton(c *ui.Context) {
+	t := c.Theme()
+	name := a.font
+	if name == "" {
+		name = "System"
+	}
+	btn := ui.ButtonBase(c.Key("font")).Width(200).Padding(5, 8, 5, 10).Gap(6).Radius(8).Justify(ui.Start).
+		Background(a.pal.composer).Border(1, t.Border).Label("Font")
+	if btn.Hovered() {
+		btn.Background(a.pal.fg.Alpha(0.04).Over(a.pal.composer))
+	}
+	btn.Children(func() {
+		ui.Text(c, name).Grow(1).MinWidth(0).SingleLine()
+		ui.Icon(c, chevronIcon).Size(14, 14).TextColor(t.TextMuted)
+	})
+	btn.Menu(func(m *ui.Menu) {
+		if m.Item("System").Checked(a.font == "").Chosen() {
+			a.setFont("")
+		}
+		m.Separator()
+		for _, f := range a.fontFamilies() {
+			if m.Item(f).Checked(a.font == f).Chosen() {
+				a.setFont(f)
+			}
+		}
+	})
 }
 
 // themePreview draws HyperAI small in p's colors: the sidebar, when side,

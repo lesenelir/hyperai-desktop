@@ -167,7 +167,10 @@ type app struct {
 	// tests); the size of the conversation's text, of textSizes, which is
 	// body DIPs, as mdTheme, the palette mdOf's Markdown, takes it; whether
 	// the sidebar lets the desktop's material through; and whether nothing
-	// moves, whatever the desktop asks.
+	// moves, whatever the desktop asks. font is the app's font family, ""
+	// for the system's, which winTheme, the palette winOf's theme, takes,
+	// and textFont the one the conversation was measured in; fonts are
+	// those installed, which the settings choose of.
 	theme        string
 	applyTheme   func(theme string)
 	textSize     int
@@ -176,6 +179,11 @@ type app struct {
 	mdOf         *palette
 	translucent  bool
 	reduceMotion bool
+	font         string
+	textFont     string
+	fonts        []string
+	winTheme     *ui.Theme
+	winOf        *palette
 }
 
 func newApp(p provider) *app {
@@ -320,8 +328,8 @@ func title(text string) string {
 func (a *app) view(c *ui.Context) {
 	// The colors are hyperai-next's, in the system's appearance.
 	a.pal = paletteFor(c.Theme())
-	c.SetTheme(a.pal.theme)
-	a.setBody(textSizes[a.textSize])
+	c.SetTheme(a.windowTheme())
+	a.setText(textSizes[a.textSize], a.font)
 	a.md.Theme = a.markdownTheme()
 	if a.reduceMotion {
 		c.DisableAnimations()

@@ -79,7 +79,9 @@ user must read to act.
 
 The system font, as macOS and Windows draw their own apps: it renders
 Chinese, Japanese and Latin natively, which a brand font would have to
-prove it can. Code is the system monospace.
+prove it can. Code is the system monospace. The Appearance settings can
+set another for the whole window (`Theme.Font`), code aside; the sizes
+and weights below stay as they are.
 
 Sizes are DIPs. The window's theme size is the platform's (13 on macOS,
 14 elsewhere); the conversation is larger, for reading.
@@ -203,9 +205,13 @@ A small button that floats over the conversation (scroll to end) rests at
   Light, Dark, each a card drawing HyperAI small in its palette (System
   half light, half dark), ringed in the accent at 2 while chosen, as the
   app follows it, window controls too (`mygo.Theme.SetSource`); the
-  conversation's text, 14, 15 or 17, over a question and a reply at that
-  size, since the settings hide the conversation; the translucent
+  font and the conversation's text, 14, 15 or 17, over a question and a
+  reply in them, since the settings hide the conversation; the translucent
   sidebar; and reduce motion. No accent picker: there is one accent.
+  The font is a row of the Text card, over the size: a pop-up button
+  showing the family, which opens the system's own menu, as macOS's
+  font settings — System, a separator, then every family installed, the
+  one chosen checked. No sample cards: the preview under them shows it.
 - **Search**: a card near the window's top over a scrim, its field over
   tabs (All, Chats, Projects, Artifacts, Settings), titled sections of
   rows in the sidebar's look, and the keys it takes in its footer.

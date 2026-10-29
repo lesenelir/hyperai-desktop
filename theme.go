@@ -89,13 +89,24 @@ func newPalette(dark bool) *palette {
 	return p
 }
 
+// windowTheme returns the palette's theme in the app's font: made again
+// only as either changes.
+func (a *app) windowTheme() *ui.Theme {
+	if a.winOf != a.pal || a.winTheme.Font != a.font {
+		t := *a.pal.theme
+		t.Font = a.font
+		a.winTheme, a.winOf = &t, a.pal
+	}
+	return a.winTheme
+}
+
 // markdownTheme returns the palette's Markdown at the size of the
-// conversation's text: made again only as either changes, as the Markdown
-// lays out again when its theme does.
+// conversation's text, in the app's font: made again only as any of them
+// changes, as the Markdown lays out again when its theme does.
 func (a *app) markdownTheme() *markdown.Theme {
-	if a.mdOf != a.pal || a.mdTheme.FontSize != a.body {
+	if a.mdOf != a.pal || a.mdTheme.FontSize != a.body || a.mdTheme.Font != a.font {
 		md := *a.pal.md
-		md.FontSize = a.body
+		md.FontSize, md.Font = a.body, a.font
 		a.mdTheme, a.mdOf = &md, a.pal
 	}
 	return a.mdTheme
