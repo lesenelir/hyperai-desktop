@@ -169,8 +169,9 @@ type app struct {
 	// the sidebar lets the desktop's material through; and whether nothing
 	// moves, whatever the desktop asks. font is the app's font family, ""
 	// for the system's, which winTheme, the palette winOf's theme, takes,
-	// and textFont the one the conversation was measured in; fonts are
-	// those installed, which the settings choose of.
+	// and textFont the one the conversation was measured in; codeFont is
+	// code's, "" for the system's monospaced font; fonts are those
+	// installed, which the settings choose of.
 	theme        string
 	applyTheme   func(theme string)
 	textSize     int
@@ -181,7 +182,8 @@ type app struct {
 	reduceMotion bool
 	font         string
 	textFont     string
-	fonts        []string
+	codeFont     string
+	fonts        []ui.FontFamily
 	winTheme     *ui.Theme
 	winOf        *palette
 }

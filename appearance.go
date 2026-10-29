@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 )
 
 // themes are the appearances the settings choose from, as
@@ -33,23 +34,23 @@ func (a *app) setTheme(theme string) {
 	a.saveLayout()
 }
 
-// setFont shows the app in the font family ("" for the system's), as the
-// settings chose.
-func (a *app) setFont(family string) {
-	if family == a.font {
+// setFont makes *font, the app's font or code's, the family ("" for the
+// system's), as the settings chose.
+func (a *app) setFont(font *string, family string) {
+	if family == *font {
 		return
 	}
-	a.font = family
+	*font = family
 	a.saveLayout()
 }
 
 // fontFamilies returns the font families installed, for the settings to
-// choose from: asked of the system once, as their menu first opens.
-func (a *app) fontFamilies() []string {
+// choose from: asked of the system once, as a menu of them first opens.
+func (a *app) fontFamilies() []ui.FontFamily {
 	if a.fonts == nil {
-		a.fonts = []string{}
-		for _, f := range ui.FontFamilies() {
-			a.fonts = append(a.fonts, f.Name)
+		a.fonts = ui.FontFamilies()
+		if a.fonts == nil {
+			a.fonts = []ui.FontFamily{}
 		}
 	}
 	return a.fonts
@@ -83,8 +84,12 @@ func (a *app) appearancePage(c *ui.Context) {
 		})
 	})
 	a.settingsCard(c, "Text", func() {
-		a.settingRow(c, "Font", "All of the window's text. Code keeps its monospaced font.", func() {
-			a.fontButton(c)
+		a.settingRow(c, "Font", "All of the window's text, but code.", func() {
+			a.fontButton(c, "Font", &a.font, false)
+		})
+		settingDivider(c)
+		a.settingRow(c, "Code font", "Code blocks and code in a line, in replies.", func() {
+			a.fontButton(c, "Code font", &a.codeFont, true)
 		})
 		settingDivider(c)
 		a.settingRow(c, "Text size", "Questions, replies and the composer. The rest of the window keeps its size.", func() {
@@ -100,8 +105,7 @@ func (a *app) appearancePage(c *ui.Context) {
 				ui.Text(c, "Can you explain closures in Go?").FontSize(a.body).LineHeight(bodyLineHeight).
 					Padding(bubblePadY, bubblePadX).Radius(14).Background(a.pal.raised)
 			})
-			ui.Text(c, "A closure is a function that keeps the variables around it alive, so it can read and change them after they go out of scope.").
-				FontSize(a.body).LineHeight(bodyLineHeight)
+			markdown.View(c, previewReply, &a.md)
 		})
 	})
 	a.settingsCard(c, "Window", func() {
@@ -177,18 +181,24 @@ func (a *app) themeCard(c *ui.Context, theme, title string) {
 	}
 }
 
-// fontButton builds the pop-up button that chooses the app's font: the
-// family chosen, which opens the system's menu of them, as macOS's font
-// settings do: System, then every family installed, the one chosen
-// checked.
-func (a *app) fontButton(c *ui.Context) {
+// previewReply is the reply of the Text card's preview: prose, code in a
+// line, and a block of it, to show both fonts.
+const previewReply = "A closure is a function that keeps the variables around it alive, as `n` here, so it can read and change them after they go out of scope:\n\n" +
+	"```go\nfunc counter() func() int {\n\tn := 0\n\treturn func() int { n++; return n }\n}\n```"
+
+// fontButton builds the pop-up button, labeled label, that chooses *font:
+// the family chosen, which opens the system's menu of them, as macOS's
+// font settings do: System, then every family installed, the one chosen
+// checked. For code, the monospaced families come first and the rest in a
+// submenu.
+func (a *app) fontButton(c *ui.Context, label string, font *string, code bool) {
 	t := c.Theme()
-	name := a.font
+	name := *font
 	if name == "" {
 		name = "System"
 	}
-	btn := ui.ButtonBase(c.Key("font")).Width(200).Padding(5, 8, 5, 10).Gap(6).Radius(8).Justify(ui.Start).
-		Background(a.pal.composer).Border(1, t.Border).Label("Font")
+	btn := ui.ButtonBase(c.Key(label)).Width(200).Padding(5, 8, 5, 10).Gap(6).Radius(8).Justify(ui.Start).
+		Background(a.pal.composer).Border(1, t.Border).Label(label)
 	if btn.Hovered() {
 		btn.Background(a.pal.fg.Alpha(0.04).Over(a.pal.composer))
 	}
@@ -197,14 +207,26 @@ func (a *app) fontButton(c *ui.Context) {
 		ui.Icon(c, chevronIcon).Size(14, 14).TextColor(t.TextMuted)
 	})
 	btn.Menu(func(m *ui.Menu) {
-		if m.Item("System").Checked(a.font == "").Chosen() {
-			a.setFont("")
+		item := func(m *ui.Menu, label, family string) {
+			if m.Item(label).Checked(*font == family).Chosen() {
+				a.setFont(font, family)
+			}
 		}
+		item(m, "System", "")
 		m.Separator()
 		for _, f := range a.fontFamilies() {
-			if m.Item(f).Checked(a.font == f).Chosen() {
-				a.setFont(f)
+			if !code || f.Monospaced {
+				item(m, f.Name, f.Name)
 			}
+		}
+		if code {
+			m.Submenu("Other Fonts", func(m *ui.Menu) {
+				for _, f := range a.fontFamilies() {
+					if !f.Monospaced {
+						item(m, f.Name, f.Name)
+					}
+				}
+			})
 		}
 	})
 }

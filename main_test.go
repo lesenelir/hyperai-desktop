@@ -1409,17 +1409,17 @@ func TestAppFont(t *testing.T) {
 	dir := t.TempDir()
 	a := newApp(&demo{})
 	a.loadLayout(dir)
-	a.fonts = []string{"Avenir Next", "Test Sans"}
-	tt := ui.NewTester(a.view, 1120, 1200)
+	a.fonts = []ui.FontFamily{{Name: "Avenir Next"}, {Name: "Test Mono", Monospaced: true}, {Name: "Test Sans"}}
+	tt := ui.NewTester(a.view, 1120, 1300)
 	a.openSettings()
 	a.settingsPage = "appearance"
 	tt.Frame()
 
 	// The button opens the menu of fonts: the system's, chosen, then those
 	// installed.
-	about := "All of the window's text. Code keeps its monospaced font."
+	about := "All of the window's text, but code."
 	toggle(t, tt, "Font", about)
-	if got, want := tt.Menu(), []string{"System", "-", "Avenir Next", "Test Sans"}; !slices.Equal(got, want) {
+	if got, want := tt.Menu(), []string{"System", "-", "Avenir Next", "Test Mono", "Test Sans"}; !slices.Equal(got, want) {
 		t.Fatalf("menu %q, want %q", got, want)
 	}
 	if err := tt.ChooseMenuItem("Test Sans"); err != nil {
@@ -1451,6 +1451,38 @@ func TestAppFont(t *testing.T) {
 	tt.Advance(time.Second)
 	if a.font != "" || a.winTheme.Font != "" {
 		t.Errorf("font %q, window %q, want the system's", a.font, a.winTheme.Font)
+	}
+
+	// Code's: the system's monospaced font at first, which Markdown names.
+	if a.md.Theme.CodeFont != "monospace" {
+		t.Errorf("code in %q, want monospace", a.md.Theme.CodeFont)
+	}
+	codeAbout := "Code blocks and code in a line, in replies."
+	toggle(t, tt, "Code font", codeAbout)
+	if got, want := tt.Menu(), []string{"System", "-", "Test Mono", "Other Fonts"}; !slices.Equal(got, want) {
+		t.Fatalf("code menu %q, want %q", got, want)
+	}
+	if err := tt.ChooseMenuItem("Test Mono"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.codeFont != "Test Mono" || a.md.Theme.CodeFont != "Test Mono" || a.winTheme.Font != "" {
+		t.Errorf("code %q, Markdown's %q, window %q", a.codeFont, a.md.Theme.CodeFont, a.winTheme.Font)
+	}
+	// Any other, of the submenu.
+	toggle(t, tt, "Code font", codeAbout)
+	if err := tt.ChooseMenuItem("Other Fonts", "Avenir Next"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.codeFont != "Avenir Next" || a.md.Theme.CodeFont != "Avenir Next" {
+		t.Errorf("code %q, Markdown's %q, want Avenir Next", a.codeFont, a.md.Theme.CodeFont)
+	}
+	a.layoutSaver.wait()
+	b = newApp(&demo{})
+	b.loadLayout(dir)
+	if b.codeFont != "Avenir Next" || b.font != "" {
+		t.Errorf("after a restart: code %q, font %q", b.codeFont, b.font)
 	}
 }
 
