@@ -251,7 +251,12 @@ A small button that floats over the conversation (scroll to end) rests at
   keeps the accent. No sample cards: the preview under them, a question
   and a reply with code in a line and in a block, shows all of it.
 - **General** holds how the app starts and behaves, and only what it
-  does: Startup (Open at login, as the system has it, read again as the
+  does: Language (App language, a pop-up button: System, which follows
+  the system's languages, a separator, then English, 简体中文, 日本語,
+  한국어, Français and Deutsch, each named in itself, as macOS's list
+  does; the whole window changes at once, MyGo's own controls and menus
+  too, and replies keep the language they are written in); Startup
+  (Open at login, as the system has it, read again as the
   settings open, and the row saying why where setting it failed; On
   launch, New chat or Last chat), Composer (Send with, Return or
   ⌘ Return, the other breaking the line, which the Keyboard shortcuts
@@ -281,7 +286,39 @@ A small button that floats over the conversation (scroll to end) rests at
   tabs (All, Chats, Projects, Artifacts, Settings), titled sections of
   rows in the sidebar's look, and the keys it takes in its footer.
 
-## 6. Motion
+## 6. Languages
+
+Every word the app shows is a message of [locales/](../locales), a
+catalog per language (`en.json`, the source, which describes each
+message; `zh-Hans`, `ja`, `ko`, `fr`, `de`), said through the functions
+`mygo generate` writes into `catalog_gen.go`. Write a new string there,
+in every catalog, not in Go: `TestCatalogsWhole` fails on a message a
+language lacks. What is not a word stays as it is: HyperAI, model and
+code theme names, key caps (⌘, Return, Esc), the demo's replies and
+what the user and the model wrote.
+
+- **Dates and times** are written by `i18n.FormatDate` in the app's
+  language, from skeletons (`jm`, `MMMdjm`), so that each has its own
+  order and clock: "Oct 28, 11:05 PM", "10月28日 23:05", "28 oct.,
+  23:05".
+- **Counts** are ICU plurals, `=0` and `=1` where the sentence changes,
+  not a number glued to a word.
+- **Platforms** choose by a `select` on `platform` (`mac` or `other`),
+  as "Show in Finder" and "Show in Folder".
+- **Typography** is each language's: “” in Chinese, 「」 in Japanese,
+  « » and no-break spaces before `:` `?` `;` in French, „“ and a space
+  before … in German.
+- What is kept (chats.json) is never a translation: a stopped reply
+  keeps `errStopped` and shows it in the language of the moment.
+- **Layout**: try a page in German and French, the longest, and in
+  Japanese, the densest; a row's text wraps under its title rather than
+  pushing its control.
+
+MyGo translates its own strings (menus, a field's menu, Markdown's copy
+button) to Japanese and Chinese; the Korean, French and German catalogs
+give those the app shows as `mygo.<key>`.
+
+## 7. Motion
 
 State changes move for 150–300 ms and then stop: actions fading in
 (150 ms), the outline's ticks (200 ms), the sidebar sliding (220 ms), a
@@ -290,7 +327,7 @@ there at once where the desktop asks for less motion. Nothing loops while
 the app is idle, and nothing moves for as long as a reply streams but its
 words ([performance.md](performance.md)).
 
-## 7. Do and don't
+## 8. Do and don't
 
 **Do**
 - Take every color from the palette, muted tones and lines as `fg`
@@ -300,7 +337,9 @@ words ([performance.md](performance.md)).
   room for the scroll bar, the gap.
 - Give every control its states: under the pointer, pressed, focused,
   disabled.
-- Try a layout with a long Chinese title and a long English one.
+- Try a layout with a long Chinese title and a long English one, and
+  in German.
+- Say every word through `locales`, in every catalog.
 
 **Don't**
 - Write a hex color, or a grey that is not `fg` at some alpha.
@@ -309,3 +348,5 @@ words ([performance.md](performance.md)).
 - Copy another app's sizes as they are: take its structure, and size it
   to this one (13 for the UI, 15 to read, 12 for labels).
 - Animate on a loop, or for as long as a reply streams.
+- Build a sentence of pieces (`"All " + n + " chats"`): a translation
+  cannot reorder them.

@@ -2,9 +2,10 @@ package main
 
 import (
 	"slices"
-	"strconv"
 
 	"github.com/egoist/mygo/ui"
+
+	"hyperai-desktop/locales"
 )
 
 // settingsSection is a page of the settings, under its group in the
@@ -51,25 +52,29 @@ type settingsMatch struct {
 	hits []string
 }
 
-// settingsSections are the settings' pages, in the sidebar's order: by
-// group, as Codex's.
-var settingsSections = []settingsSection{
-	{"general", "Personal", "General", settingsIcon, "How HyperAI starts and behaves: at login and on launch, sending, replies in the background, and your chats.", (*app).generalPage, (*app).generalTerms},
-	{"appearance", "Personal", "Appearance", sunIcon, "How HyperAI looks: its theme and font, the conversation's text, and the window.", (*app).appearancePage, (*app).appearanceTerms},
-	{"shortcuts", "Personal", "Keyboard shortcuts", keyboardIcon, "The keys that do what HyperAI does, by where they work.", (*app).shortcutsPage, (*app).shortcutTerms},
-	{"providers", "Models", "Providers", plugIcon, "Where replies come from: OpenRouter and its API key, and other providers.", nil, nil},
-	{"model", "Models", "Default model", logoIcon, "The model a new chat asks, until it is changed in the composer.", nil, nil},
-	{"about", "App", "About", infoIcon, "HyperAI's version, and what changed in it.", nil, nil},
+// settingsSections returns the settings' pages, in the sidebar's order: by
+// group, as Codex's; their titles in the app's language.
+func settingsSections() []settingsSection {
+	personal, models := locales.GroupPersonal(), locales.GroupModels()
+	return []settingsSection{
+		{"general", personal, locales.PageGeneral(), settingsIcon, locales.PageGeneralAbout(), (*app).generalPage, (*app).generalTerms},
+		{"appearance", personal, locales.PageAppearance(), sunIcon, locales.PageAppearanceAbout(), (*app).appearancePage, (*app).appearanceTerms},
+		{"shortcuts", personal, locales.PageShortcuts(), keyboardIcon, locales.PageShortcutsAbout(), (*app).shortcutsPage, (*app).shortcutTerms},
+		{"providers", models, locales.PageProviders(), plugIcon, locales.PageProvidersAbout(), nil, nil},
+		{"model", models, locales.PageModel(), logoIcon, locales.PageModelAbout(), nil, nil},
+		{"about", locales.GroupApp(), locales.PageAbout(), infoIcon, locales.PageAboutAbout(), nil, nil},
+	}
 }
 
 // section returns the settings' page shown, the first when none is.
 func (a *app) section() settingsSection {
-	for _, s := range settingsSections {
+	sections := settingsSections()
+	for _, s := range sections {
 		if s.key == a.settingsPage {
 			return s
 		}
 	}
-	return settingsSections[0]
+	return sections[0]
 }
 
 // openSettings shows the settings, on the page shown last, with the
@@ -90,7 +95,7 @@ func (a *app) closeSettings() {
 // settingsRow builds the row at the sidebar's foot that opens the
 // settings.
 func (a *app) settingsRow(c *ui.Context) {
-	if a.navRow(c, "settings", settingsIcon, "Settings", settingsKeys.String()).Margin(rowGap/2, barClear, 8, 8).Clicked() {
+	if a.navRow(c, "settings", settingsIcon, locales.Settings(), settingsKeys.String()).Margin(rowGap/2, barClear, 8, 8).Clicked() {
 		a.openSettings()
 	}
 }
@@ -103,13 +108,13 @@ func (a *app) settingsSidebar(c *ui.Context) {
 	ui.Box(c).Height(titleBarHeight).Shrink(0).DragWindow()
 
 	back := ui.ButtonBase(c.Key("back to app")).Margin(rowGap/2, barClear, rowGap/2, 8).Padding(7, 12).Gap(10).Radius(8).
-		Justify(ui.Start).TextColor(t.TextMuted).Label("Back to app")
+		Justify(ui.Start).TextColor(t.TextMuted).Label(locales.SettingsBack())
 	if back.Hovered() {
 		back.Background(a.pal.fg.Alpha(0.05)).TextColor(t.Text)
 	}
 	back.Children(func() {
 		ui.Icon(c, arrowLeftIcon).Size(16, 16)
-		ui.Text(c, "Back to app").Grow(1)
+		ui.Text(c, locales.SettingsBack()).Grow(1)
 	})
 	if back.Clicked() {
 		a.closeSettings()
@@ -122,8 +127,8 @@ func (a *app) settingsSidebar(c *ui.Context) {
 		ui.Icon(c, searchIcon).Size(14, 14).TextColor(t.TextMuted)
 		ui.Box(c).Grow(1).MinWidth(0).Children(func() {
 			field := ui.TextInputBase(c.Key("settings query"), &a.settingsQuery).WidthPercent(100).
-				Label("Search settings").FocusRing(false)
-			a.placeholder(c, "Search settings…", a.settingsQuery == "" && !field.Composing(), 0, 0, t.FontSize, 0)
+				Label(locales.SettingsSearch()).FocusRing(false)
+			a.placeholder(c, locales.SettingsSearchPlaceholder(), a.settingsQuery == "" && !field.Composing(), 0, 0, t.FontSize, 0)
 		})
 	})
 
@@ -134,9 +139,9 @@ func (a *app) settingsSidebar(c *ui.Context) {
 		!slices.ContainsFunc(sections, func(m settingsMatch) bool { return m.key == a.section().key }) {
 		a.settingsPage = sections[0].key
 	}
-	ui.Scroll(c.Key("settings pages")).Grow(1).MinHeight(0).Padding(0, 0, 12, 0).Label("Settings").Children(func() {
+	ui.Scroll(c.Key("settings pages")).Grow(1).MinHeight(0).Padding(0, 0, 12, 0).Label(locales.Settings()).Children(func() {
 		if len(sections) == 0 {
-			ui.Text(c, "No settings match.").FontSize(13).TextColor(t.TextMuted).Padding(14, 20)
+			ui.Text(c, locales.SettingsNoMatch()).FontSize(13).TextColor(t.TextMuted).Padding(14, 20)
 			return
 		}
 		shown := a.section().key
@@ -182,7 +187,7 @@ func (a *app) settingsSidebar(c *ui.Context) {
 func (a *app) settingsMatches() []settingsMatch {
 	q := lowerRunes([]rune(a.settingsQuery))
 	var out []settingsMatch
-	for _, s := range settingsSections {
+	for _, s := range settingsSections() {
 		if len(q) == 0 || holds(s.title, q) || holds(s.group, q) {
 			out = append(out, settingsMatch{settingsSection: s})
 			continue
@@ -209,7 +214,7 @@ func hitsText(hits []string) string {
 	if len(hits) == 1 {
 		return hits[0]
 	}
-	return hits[0] + " and " + strconv.Itoa(len(hits)-1) + " more"
+	return locales.SettingsHits(hits[0], len(hits)-1)
 }
 
 // settingsPane builds the page of the settings shown, beside their
@@ -222,7 +227,7 @@ func (a *app) settingsPane(c *ui.Context, titleLeft float32) {
 	ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
 		ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Padding(0, bar.Right+12, 0, titleLeft).
 			DragWindow().Children(func() {
-			ui.Text(c, "Settings").FontSize(14).FontWeight(500).SingleLine()
+			ui.Text(c, locales.Settings()).FontSize(14).FontWeight(500).SingleLine()
 		})
 		ui.Scroll(c.Key("settings page")).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).AlignItems(ui.Center).Padding(28, 24).Children(func() {
@@ -234,7 +239,7 @@ func (a *app) settingsPane(c *ui.Context, titleLeft float32) {
 						if s.page != nil {
 							s.page(a, c)
 						} else {
-							ui.Text(c, "Nothing to change here yet.").FontSize(13).TextColor(t.TextMuted).
+							ui.Text(c, locales.SettingsEmpty()).FontSize(13).TextColor(t.TextMuted).
 								Padding(16).Radius(12).Border(1, t.Border)
 						}
 					})

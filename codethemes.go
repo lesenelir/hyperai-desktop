@@ -5,6 +5,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
+
+	"hyperai-desktop/locales"
 )
 
 // codeColors is a code theme in one appearance, as its authors publish
@@ -24,7 +26,8 @@ type codeColors struct {
 }
 
 // codeTheme is a theme the settings offer for code: its light side and
-// its dark one, for the app's appearances.
+// its dark one, for the app's appearances. title is its name, but for
+// Default's, which name says in the app's language.
 type codeTheme struct {
 	key, title  string
 	group       int
@@ -406,6 +409,14 @@ func codeThemeNamed(key string) *codeTheme {
 		}
 	}
 	return nil
+}
+
+// name returns what the settings call the theme.
+func (ct *codeTheme) name() string {
+	if ct.key == "" {
+		return locales.CodeThemeDefault()
+	}
+	return ct.title
 }
 
 // colors returns the theme's colors in the appearance dark, nil for

@@ -7,6 +7,8 @@ import (
 	"slices"
 
 	"github.com/egoist/mygo/ui"
+
+	"hyperai-desktop/locales"
 )
 
 // The sidebar's width is the user's to drag, as Waku's is: from sidebarMin
@@ -20,7 +22,7 @@ const (
 )
 
 // layout is what layout.json holds: the sidebar's width, and the
-// appearance chosen in the settings.
+// appearance and the behavior chosen in the settings.
 type layout struct {
 	SidebarWidth  float32 `json:"sidebarWidth,omitempty"`
 	Theme         string  `json:"theme,omitempty"`
@@ -37,6 +39,8 @@ type layout struct {
 	SendWith string `json:"sendWith,omitempty"`
 	// Notify shows a notification as a reply ends in the background.
 	Notify bool `json:"notify,omitempty"`
+	// Language is the tag of the language chosen, "" for the system's.
+	Language string `json:"language,omitempty"`
 }
 
 // loadLayout reads the layout kept in dir, if any.
@@ -71,6 +75,9 @@ func (a *app) loadLayout(dir string) {
 		a.sendWith = sendCmdReturn
 	}
 	a.keptChat, a.notifyDone = l.Chat, l.Notify
+	if slices.ContainsFunc(languages, func(lang struct{ tag, name string }) bool { return lang.tag == l.Language }) {
+		a.language = l.Language
+	}
 }
 
 // saveLayout keeps the layout, where the app has a place for it (not in
@@ -81,7 +88,7 @@ func (a *app) saveLayout() {
 	}
 	l := layout{SidebarWidth: a.sideWidth, Theme: a.theme, TextSize: textSizes[a.textSize],
 		OpaqueSidebar: !a.translucent, ReduceMotion: a.reduceMotion,
-		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme, Chat: a.keptChat, Notify: a.notifyDone}
+		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme, Chat: a.keptChat, Notify: a.notifyDone, Language: a.language}
 	if a.onLaunch == launchLast {
 		l.OnLaunch = "last"
 	}
@@ -117,7 +124,7 @@ func (a *app) resetSidebar() {
 // the pointer from past the bounds; it keeps the width as it ends.
 func (a *app) resizer(c *ui.Context, x, lo, hi float32) {
 	edge := ui.Box(c.Key("resize sidebar")).Absolute().Left(x - 5).Top(0).Bottom(0).Width(10).
-		Cursor(ui.CursorResizeEW).Label("Resize sidebar")
+		Cursor(ui.CursorResizeEW).Label(locales.ResizeSidebar())
 	// Pressing, wherever the pointer is: Pressed tells only while the
 	// pointer is over the edge, which it leaves as it drags.
 	dx, _, pressing := edge.Dragged()

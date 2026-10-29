@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -16,8 +17,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
+
+	"hyperai-desktop/locales"
 )
 
 // newTester runs the view without a window, where the demo's replies come
@@ -61,15 +65,15 @@ func TestShiftEnterBreaksLine(t *testing.T) {
 func TestSuggestionAndNewChat(t *testing.T) {
 	a, tt := newTester()
 	// A prompt goes to the composer, to send as it is or changed.
-	if err := tt.Click(suggestions[0].prompt); err != nil {
+	if err := tt.Click(suggestions[0].prompt()); err != nil {
 		t.Fatal(err)
 	}
-	if len(a.threads) != 0 || a.draft != suggestions[0].prompt {
+	if len(a.threads) != 0 || a.draft != suggestions[0].prompt() {
 		t.Fatalf("after a click on a prompt: %d chats, draft %q", len(a.threads), a.draft)
 	}
 	tt.Type(" With tests.")
 	tt.Key(0, ui.KeyEnter)
-	if len(a.threads) != 1 || !tt.HasText(suggestions[0].prompt+" With tests.") {
+	if len(a.threads) != 1 || !tt.HasText(suggestions[0].prompt()+" With tests.") {
 		t.Fatalf("prompt not sent: %q", tt.Texts())
 	}
 	if err := tt.Click("New chat"); err != nil {
@@ -82,7 +86,7 @@ func TestSuggestionAndNewChat(t *testing.T) {
 	if err := tt.Click(a.threads[0].Title); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText(suggestions[0].prompt) {
+	if !tt.HasText(suggestions[0].prompt()) {
 		t.Errorf("chat not shown again: %q", tt.Texts())
 	}
 }
@@ -305,7 +309,7 @@ func TestScrollToEnd(t *testing.T) {
 	a, tt := newTester()
 	// Enough replies to scroll.
 	for _, s := range suggestions {
-		tt.Type(s.prompt)
+		tt.Type(s.prompt())
 		tt.Key(0, ui.KeyEnter)
 	}
 	tt.Advance(time.Second)
@@ -357,12 +361,12 @@ func TestPinQuestionToTop(t *testing.T) {
 	a, tt := newTester()
 	tt.SetSize(1120, 1000) // tall enough for each reply under its question
 	for _, s := range suggestions[:3] {
-		tt.Type(s.prompt)
+		tt.Type(s.prompt())
 		tt.Key(0, ui.KeyEnter)
 		tt.Advance(time.Second)
 		// The question just sent shows at the top, its reply under it.
-		if ok, y := atTop(t, tt, s.prompt); !ok {
-			t.Errorf("%q %v below the top, want %v", s.prompt, y, listPadTop)
+		if ok, y := atTop(t, tt, s.prompt()); !ok {
+			t.Errorf("%q %v below the top, want %v", s.prompt(), y, listPadTop)
 		}
 	}
 	// The last reply is short: room after it holds the question up, and the
@@ -379,7 +383,7 @@ func TestPinOutgrown(t *testing.T) {
 	tt := ui.NewTester(a.view, 1120, 520)
 	tt.Type("Hi")
 	tt.Key(0, ui.KeyEnter)
-	tt.Type(suggestions[0].prompt)
+	tt.Type(suggestions[0].prompt())
 	tt.Key(0, ui.KeyEnter)
 	tt.Advance(time.Second)
 	// The question lets go, and the list follows the reply's end.
@@ -426,13 +430,13 @@ func TestPinStreaming(t *testing.T) {
 
 func TestOutline(t *testing.T) {
 	a, tt := newTester()
-	tt.Type(suggestions[0].prompt)
+	tt.Type(suggestions[0].prompt())
 	tt.Key(0, ui.KeyEnter)
-	if _, ok := tt.Find("Message 1: " + suggestions[0].prompt); ok {
+	if _, ok := tt.Find("Message 1: " + suggestions[0].prompt()); ok {
 		t.Error("an outline for one turn")
 	}
 	for _, s := range suggestions[1:3] {
-		tt.Type(s.prompt)
+		tt.Type(s.prompt())
 		tt.Key(0, ui.KeyEnter)
 	}
 	tt.Advance(time.Second)
@@ -441,7 +445,7 @@ func TestOutline(t *testing.T) {
 	if len(turns) != 3 {
 		t.Fatalf("%d turns", len(turns))
 	}
-	tick, ok := tt.Find("Message 1: " + suggestions[0].prompt)
+	tick, ok := tt.Find("Message 1: " + suggestions[0].prompt())
 	if !ok {
 		t.Fatalf("no tick for the first turn in %q", tt.Texts())
 	}
@@ -463,7 +467,7 @@ func TestOutline(t *testing.T) {
 		t.Errorf("50 ms after the click: scrolling %v, from %v to %v", th.scroll.Scrolling(), from, th.scroll.Y)
 	}
 	tt.Advance(time.Second)
-	if ok, y := atTop(t, tt, suggestions[0].prompt); !ok {
+	if ok, y := atTop(t, tt, suggestions[0].prompt()); !ok {
 		t.Errorf("first question %v below the top after the click, want %v", y, listPadTop)
 	}
 }
@@ -576,7 +580,7 @@ func TestCopyReplyBesideOutline(t *testing.T) {
 func TestComposerFloats(t *testing.T) {
 	a, tt := newTester()
 	for _, s := range suggestions {
-		tt.Type(s.prompt)
+		tt.Type(s.prompt())
 		tt.Key(0, ui.KeyEnter)
 	}
 	tt.Advance(time.Second)
@@ -653,7 +657,7 @@ func TestComposerResizes(t *testing.T) {
 
 	a, tt := newTester()
 	for _, s := range suggestions {
-		tt.Type(s.prompt)
+		tt.Type(s.prompt())
 		tt.Key(0, ui.KeyEnter)
 	}
 	tt.Advance(time.Second)
@@ -694,7 +698,7 @@ func TestComposerResizes(t *testing.T) {
 func TestScrollOverComposer(t *testing.T) {
 	a, tt := newTester()
 	for _, s := range suggestions {
-		tt.Type(s.prompt)
+		tt.Type(s.prompt())
 		tt.Key(0, ui.KeyEnter)
 	}
 	tt.Advance(time.Second)
@@ -871,7 +875,7 @@ func TestBackForward(t *testing.T) {
 func TestSearch(t *testing.T) {
 	a, tt := newTester()
 	for _, s := range suggestions[:3] {
-		if err := tt.Click(s.prompt); err != nil {
+		if err := tt.Click(s.prompt()); err != nil {
 			t.Fatal(err)
 		}
 		tt.Key(0, ui.KeyEnter)
@@ -1637,7 +1641,7 @@ func TestGeneral(t *testing.T) {
 		tt.Advance(time.Second)
 	}
 	choose("Send with", "The other breaks the line, as Shift with either does.", sendTitles[sendCmdReturn], sendTitles[:])
-	choose("On launch", "The chat HyperAI shows as it opens.", "Last chat", launchTitles[:])
+	choose("On launch", "The chat HyperAI shows as it opens.", "Last chat", launchTitles())
 	if !tt.HasText(sendTitles[sendCmdReturn]) || !tt.HasText("Last chat") {
 		t.Errorf("the buttons do not show what was chosen: %q", tt.Texts())
 	}
@@ -1687,6 +1691,7 @@ func TestGeneral(t *testing.T) {
 
 func TestDeleteAllChats(t *testing.T) {
 	a, tt := newTester()
+	tt.SetSize(1120, 1200) // the General page shows whole
 	for _, q := range []string{"One", "Two"} {
 		a.newChat()
 		a.send(q)
@@ -2049,7 +2054,7 @@ func TestPopUpWidth(t *testing.T) {
 	tt := ui.NewTester(a.view, 1120, 1300)
 	a.openSettings()
 	tt.Frame()
-	launch := a.popUpWidths["On launch\x00\x00New chat"]
+	launch := a.popUpWidths["On launch\x00\x00New chat\x00en"]
 	if launch <= popUpPad || launch >= popUpMax {
 		t.Errorf("On launch %v wide, want its titles' width, under %v", launch, popUpMax)
 	}
@@ -2059,7 +2064,7 @@ func TestPopUpWidth(t *testing.T) {
 	}
 	a.settingsPage = "appearance"
 	tt.Frame()
-	if w := a.popUpWidths["Font\x00\x00System"]; w != popUpMax {
+	if w := a.popUpWidths["Font\x00\x00System\x00en"]; w != popUpMax {
 		t.Errorf("Font %v wide with a long name, want %v", w, popUpMax)
 	}
 }
@@ -2077,4 +2082,117 @@ func toggle(t *testing.T, tt *ui.Tester, title, about string) {
 	right := r.X - 16 + settingsWidth - 1 - 16
 	tt.ClickAt(right-12, (r.Y+d.Y+d.H)/2)
 	tt.Advance(time.Second)
+}
+
+// TestLanguage chooses the app's language on the General page, of System
+// and each language in itself, which the app is given and keeps for the
+// next start.
+func TestLanguage(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&demo{})
+	a.loadFrom(dir)
+	var applied []string
+	a.applyLanguage = func(tag string) { applied = append(applied, tag) }
+	tt := ui.NewTester(a.view, 1120, 1300)
+	a.openSettings()
+	tt.Frame()
+
+	about := "Menus, settings and messages. Replies keep the language they are written in."
+	toggle(t, tt, "App language", about)
+	want := []string{"System", "-", "English", "简体中文", "日本語", "한국어", "Français", "Deutsch"}
+	if got := tt.Menu(); !slices.Equal(got, want) {
+		t.Fatalf("menu %q, want %q", got, want)
+	}
+	if err := tt.ChooseMenuItem("日本語"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.language != "ja" || !slices.Equal(applied, []string{"ja"}) || !tt.HasText("日本語") {
+		t.Fatalf("language %q, applied %q, texts %q", a.language, applied, tt.Texts())
+	}
+	a.layoutSaver.wait()
+	b := newApp(&demo{})
+	b.loadFrom(dir)
+	if b.language != "ja" {
+		t.Errorf("after a restart, language %q, want ja", b.language)
+	}
+
+	// Back to the system's languages.
+	toggle(t, tt, "App language", about)
+	if err := tt.ChooseMenuItem("System"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.language != "" || !slices.Equal(applied, []string{"ja", ""}) {
+		t.Errorf("language %q, applied %q, want the system's", a.language, applied)
+	}
+
+	// The field finds the row by a language's name.
+	a.settingsQuery = "Deutsch"
+	tt.Frame()
+	if m := a.settingsMatches(); len(m) != 1 || m[0].key != "general" || !slices.Equal(m[0].hits, []string{"App language"}) {
+		t.Errorf("Deutsch finds %+v", m)
+	}
+}
+
+// TestShownInLanguage shows the window in Chinese: the sidebar, a chat,
+// the settings and the time, as the language the app shows has them.
+func TestShownInLanguage(t *testing.T) {
+	i18n.SetLocaleFunc(func() string { return "zh-Hans" })
+	t.Cleanup(func() { i18n.SetLocaleFunc(func() string { return "en" }) })
+	a, tt := newTester()
+	for _, s := range []string{"新对话", "搜索", "设置", "你的对话会显示在这里。", "今天想用 AI 构建什么？", "用 Go 写一个并发安全的 LRU 缓存。"} {
+		if !tt.HasText(s) {
+			t.Errorf("no %q in %q", s, tt.Texts())
+		}
+	}
+	tt.Type("How do I cache?")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	if !tt.HasText("今天") || !tt.HasText("刚刚") {
+		t.Errorf("the sidebar's group and age are not in Chinese: %q", tt.Texts())
+	}
+	short, full := formatTime(time.Date(2025, 10, 28, 23, 5, 0, 0, time.UTC), time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC))
+	if short != "2025年10月28日 23:05" || full != "2025年10月28日 23:05" {
+		t.Errorf("formatTime in Chinese: %q, %q", short, full)
+	}
+	a.stop()
+	a.openSettings()
+	tt.Frame()
+	for _, s := range []string{"通用", "应用语言", "跟随系统", "启动", "这 1 个对话及其消息。HyperAI 会先询问。"} {
+		if !tt.HasText(s) {
+			t.Errorf("no %q in the settings: %q", s, tt.Texts())
+		}
+	}
+}
+
+// TestCatalogsWhole holds every language HyperAI is written in to every
+// message of the English catalog, so that none shows English in its
+// place, and the General page's menu to the catalogs' languages.
+func TestCatalogsWhole(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("locales", "en.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var en map[string]any
+	if err := json.Unmarshal(b, &en); err != nil {
+		t.Fatal(err)
+	}
+	var tags []string
+	for _, l := range languages {
+		tags = append(tags, l.tag)
+	}
+	if got := locales.Catalog.Languages(); !slices.Equal(slices.Sorted(slices.Values(got)), slices.Sorted(slices.Values(tags))) {
+		t.Errorf("the catalogs are in %q, the menu offers %q", got, tags)
+	}
+	for _, tag := range tags {
+		for key := range en {
+			if strings.HasPrefix(key, "@") {
+				continue
+			}
+			if _, lang, ok := locales.Catalog.Message(tag, key); !ok || lang != tag {
+				t.Errorf("%s: %q says %q's", tag, key, lang)
+			}
+		}
+	}
 }

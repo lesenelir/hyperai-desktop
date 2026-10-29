@@ -8,6 +8,8 @@ import (
 	"unicode"
 
 	"github.com/egoist/mygo/ui"
+
+	"hyperai-desktop/locales"
 )
 
 // The search finds what the app has, as Claude's does: a card over the
@@ -33,13 +35,19 @@ const (
 	tabSettings
 )
 
-var searchTabs = [...]string{"All", "Chats", "Projects", "Artifacts", "Settings"}
+// searchTabs is how many kinds the search looks through.
+const searchTabs = int(tabSettings) + 1
+
+// searchTabTitles name the kinds, in the app's language.
+func searchTabTitles() []string {
+	return []string{locales.TabAll(), locales.TabChats(), locales.TabProjects(), locales.TabArtifacts(), locales.Settings()}
+}
 
 // searchHit is a chat the search found: and, when a message of it matched
 // rather than its title, who said it and the words around the match.
 type searchHit struct {
 	th                   *thread
-	who                  string // "You" or "HyperAI"; "" when the title matched
+	who                  string // "You", in the app's language, or "HyperAI"; "" when the title matched
 	before, match, after string
 }
 
@@ -127,20 +135,20 @@ func (a *app) searchSections() []searchSection {
 	switch a.searchTab {
 	case tabAll:
 		if q == "" {
-			add("Recents", chats(recentChats))
+			add(locales.SearchRecents(), chats(recentChats))
 		} else {
-			add("Chats", chats(maxSearchHits))
-			add("Settings", a.settingItems(q))
+			add(locales.TabChats(), chats(maxSearchHits))
+			add(locales.Settings(), a.settingItems(q))
 		}
-		add("Actions", []searchItem{{key: "new chat", icon: newChatPlusIcon, title: "New chat", run: a.newChat}})
+		add(locales.SearchActions(), []searchItem{{key: "new chat", icon: newChatPlusIcon, title: locales.NewChat(), run: a.newChat}})
 	case tabChats:
-		title := "Chats"
+		title := locales.TabChats()
 		if q == "" {
-			title = "Recents"
+			title = locales.SearchRecents()
 		}
 		add(title, chats(maxChatHits))
 	case tabSettings:
-		add("Settings", a.settingItems(q))
+		add(locales.Settings(), a.settingItems(q))
 	}
 	return out
 }
@@ -150,12 +158,12 @@ func (a *app) searchSections() []searchSection {
 func (a *app) settingItems(q string) []searchItem {
 	var items []searchItem
 	for _, model := range a.prov.Models() {
-		items = append(items, searchItem{key: "model " + model, icon: logoIcon, tint: true, title: "Model: " + model,
+		items = append(items, searchItem{key: "model " + model, icon: logoIcon, tint: true, title: locales.SearchModel(model),
 			check: model == a.model, run: func() { a.model = model }})
 	}
-	sidebar := "Hide sidebar"
+	sidebar := locales.HideSidebar()
 	if a.collapsed {
-		sidebar = "Show sidebar"
+		sidebar = locales.ShowSidebar()
 	}
 	items = append(items, searchItem{key: "sidebar", icon: sidebarIcon, title: sidebar,
 		run: func() { a.collapsed = !a.collapsed }})
@@ -180,7 +188,7 @@ func saidIn(th *thread, q []rune) (searchHit, bool) {
 		}
 		h := snippet(th, text, at, len(q))
 		if m.Role == "user" {
-			h.who = "You"
+			h.who = locales.TranscriptYou()
 			return h, true
 		}
 		if !found {
@@ -282,7 +290,7 @@ func (a *app) moveSearch(d, n int) {
 
 // setSearchTab shows the tab, its first row chosen.
 func (a *app) setSearchTab(tab searchTab) {
-	n := searchTab(len(searchTabs))
+	n := searchTab(searchTabs)
 	a.searchTab = (tab%n + n) % n
 	a.searchSel, a.searchMoved = 0, true
 }
@@ -302,7 +310,7 @@ func (a *app) searchPalette(c *ui.Context) {
 		back.Background(a.pal.scrim).Justify(ui.Start).Padding(top, 24, 24, 24)
 		panel.WidthPercent(100).MaxWidth(searchWidth).MaxHeight(min(h-top-24, searchHeight)).Radius(16).
 			Background(a.pal.composer).Border(1, t.Border).Shadow(0, 16, 40, -12, a.pal.shadow(0.28)).
-			Clip().Label("Search")
+			Clip().Label(locales.Search())
 
 		// A change of the query chooses the first row.
 		if q := strings.TrimSpace(a.query); q != a.searchQuery {
@@ -320,7 +328,7 @@ func (a *app) searchPalette(c *ui.Context) {
 				ui.Icon(c, searchIcon).Size(16, 16).TextColor(t.TextMuted)
 				ui.Box(c).Grow(1).MinWidth(0).Children(func() {
 					field := ui.TextInputBase(c.Key("query"), &a.query).WidthPercent(100).FontSize(14).
-						Label("Search").FocusRing(false).
+						Label(locales.Search()).FocusRing(false).
 						OnTextKey(func(k ui.TextKey) bool {
 							empty := k.Text() == ""
 							switch {
@@ -343,21 +351,21 @@ func (a *app) searchPalette(c *ui.Context) {
 							}
 							return true
 						})
-					a.placeholder(c, "Search", a.query == "" && !field.Composing(), 0, 0, 14, 0)
+					a.placeholder(c, locales.Search(), a.query == "" && !field.Composing(), 0, 0, 14, 0)
 					if a.focusSearch {
 						field.Focus()
 						a.focusSearch = false
 					}
 				})
-				if iconButton(c.Key("close"), closeIcon, "Close").Clicked() {
+				if iconButton(c.Key("close"), closeIcon, locales.Close()).Clicked() {
 					a.searching = false
 				}
 			})
 			// The kinds, as the sidebar's rows: muted, and on a wash chosen.
 			ui.Row(c).Gap(2).Padding(0, 4).Children(func() {
-				for i, name := range searchTabs {
+				for i, name := range searchTabTitles() {
 					on := searchTab(i) == a.searchTab
-					tab := ui.ButtonBase(c.Key("tab "+name)).Padding(5, 10).Radius(8).Label(name)
+					tab := ui.ButtonBase(c.Key("tab "+strconv.Itoa(i))).Padding(5, 10).Radius(8).Label(name)
 					switch {
 					case on:
 						tab.Background(a.pal.fg.Alpha(0.07))
@@ -463,14 +471,14 @@ func (a *app) searchRow(c *ui.Context, it searchItem, chosen bool) bool {
 // being none of the tab's kind, or none matching.
 func (a *app) searchEmpty(c *ui.Context) {
 	t := c.Theme()
-	icon, title, hint := searchIcon, "No results", "Try other words, or another tab"
+	icon, title, hint := searchIcon, locales.SearchNoResults(), locales.SearchTryAgain()
 	switch {
 	case a.searchTab == tabProjects:
-		icon, title, hint = folderIcon, "No projects yet", "Projects will show here"
+		icon, title, hint = folderIcon, locales.SearchNoProjects(), locales.SearchProjectsHint()
 	case a.searchTab == tabArtifacts:
-		icon, title, hint = artifactIcon, "No artifacts yet", "Artifacts will show here"
+		icon, title, hint = artifactIcon, locales.SearchNoArtifacts(), locales.SearchArtifactsHint()
 	case strings.TrimSpace(a.query) != "":
-		title = "No results for “" + strings.TrimSpace(a.query) + "”"
+		title = locales.SearchNoResultsFor(strings.TrimSpace(a.query))
 	}
 	ui.Column(c).Height(160).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Gap(4).Padding(0, 24).Children(func() {
 		ui.Icon(c, icon).Size(18, 18).TextColor(t.TextMuted).Margin(0, 0, 6, 0)
@@ -491,14 +499,14 @@ func (a *app) searchKeys(c *ui.Context) {
 		})
 	}
 	ui.Row(c).Shrink(0).Padding(9, 16).Gap(16).AlignItems(ui.Center).Children(func() {
-		hint("Close", func() { a.keyCap(c, "Esc") })
-		hint("Change type", func() {
+		hint(locales.Close(), func() { a.keyCap(c, "Esc") })
+		hint(locales.SearchChangeType(), func() {
 			ui.Row(c).Gap(2).Children(func() {
 				a.keyCap(c, "←")
 				a.keyCap(c, "→")
 			})
 		})
 		ui.Spacer(c)
-		hint("Compose", func() { a.keyCap(c, "Tab") })
+		hint(locales.SearchCompose(), func() { a.keyCap(c, "Tab") })
 	})
 }

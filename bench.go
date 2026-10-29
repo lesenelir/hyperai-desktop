@@ -25,7 +25,7 @@ func (a *app) bench(n int) {
 		done := make(chan struct{})
 		a.win.Update(func() {
 			a.onFinish = func() { close(done) }
-			a.send(suggestions[i%len(suggestions)].prompt)
+			a.send(suggestions[i%len(suggestions)].prompt())
 		})
 		<-done
 		time.Sleep(300 * time.Millisecond)

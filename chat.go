@@ -8,20 +8,23 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
+
+	"hyperai-desktop/locales"
 )
 
 // suggestions are what an empty chat offers to ask, each with the icon of
-// its kind.
+// its kind, in the app's language.
 var suggestions = []struct {
 	icon   *ui.SVG
-	prompt string
+	prompt func() string
 }{
-	{codeIcon, "Write an LRU cache in Go that is safe for concurrent use."},
-	{planIcon, "Plan how to add streaming replies to a chat app."},
-	{ideaIcon, "Explain how Go's scheduler runs goroutines."},
-	{plugIcon, "How do I connect this app to a real model?"},
+	{codeIcon, locales.SuggestionCache},
+	{planIcon, locales.SuggestionPlan},
+	{ideaIcon, locales.SuggestionScheduler},
+	{plugIcon, locales.SuggestionModel},
 }
 
 // pane builds the chat shown: its title bar, its messages or the welcome,
@@ -33,7 +36,7 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 	th := a.current()
 	ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
 		ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Padding(0, bar.Right+12, 0, titleLeft).Children(func() {
-			name := "New chat"
+			name := locales.NewChat()
 			if th != nil {
 				name = th.Title
 			}
@@ -42,13 +45,13 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 				ui.Text(c, name).FontSize(14).FontWeight(500).SingleLine()
 			})
 			if th != nil {
-				iconButton(c, moreIcon, "More").Menu(func(m *ui.Menu) {
-					if m.Item("Copy as Markdown").Chosen() {
+				iconButton(c, moreIcon, locales.More()).Menu(func(m *ui.Menu) {
+					if m.Item(locales.CopyAsMarkdown()).Chosen() {
 						c.Services().WriteClipboard(transcript(th))
-						c.Toast("Copied")
+						c.Toast(locales.Copied())
 					}
 					m.Separator()
-					if m.Item("Delete Chat…").Chosen() {
+					if m.Item(locales.DeleteChatItem()).Chosen() {
 						a.askDelete(th)
 					}
 				})
@@ -76,7 +79,7 @@ func (a *app) greeting(c *ui.Context) {
 		Children(func() {
 			ui.Icon(c, markIcon).Size(48, 48).TextColor(a.pal.ac).Label("HyperAI")
 			// Regular: at this size, 500 read heavy.
-			ui.Text(c, "What are you building with AI today?").FontSize(26)
+			ui.Text(c, locales.Greeting()).FontSize(26)
 		})
 }
 
@@ -87,30 +90,31 @@ func (a *app) prompts(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1.2).MinHeight(0).AlignItems(ui.Center).Padding(0, 24).Children(func() {
 		ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Padding(4, 0, 0, 0).Children(func() {
-			for _, s := range suggestions {
+			for i, s := range suggestions {
+				prompt := s.prompt()
 				// Its icon under the composer's text, as hyperai-next's: no
 				// card, no wash; the pointer brings the text up the ladder,
 				// and the icon to the accent.
-				row := ui.ButtonBase(c.Key(s.prompt)).Padding(7, fieldPadX+1).Gap(12).Radius(8).Justify(ui.Start).
-					AlignItems(ui.Center).Label(s.prompt)
+				row := ui.ButtonBase(c.Key("prompt "+strconv.Itoa(i))).Padding(7, fieldPadX+1).Gap(12).Radius(8).
+					Justify(ui.Start).AlignItems(ui.Center).Label(prompt)
 				on := row.Hovered()
 				row.Children(func() {
 					icon := ui.Icon(c, s.icon).Size(16, 16).Shrink(0).TextColor(t.TextMuted)
-					text := ui.Text(c, s.prompt).FontSize(14).TextColor(t.TextMuted)
+					text := ui.Text(c, prompt).FontSize(14).TextColor(t.TextMuted)
 					if on {
 						icon.TextColor(a.pal.ac)
 						text.TextColor(t.Text)
 					}
 				})
 				if row.Clicked() {
-					a.draft, a.focusDraft = s.prompt, true
+					a.draft, a.focusDraft = prompt, true
 				}
 			}
 		})
 		ui.Spacer(c)
-		note := "Answers may be inaccurate, so check important details."
+		note := locales.NoteAccuracy()
 		if _, ok := a.prov.(*demo); ok {
-			note = "Demo replies · set OPENROUTER_API_KEY in .env to talk to a real model."
+			note = locales.NoteDemo()
 		}
 		ui.Text(c, note).FontSize(12).TextColor(t.TextMuted).Padding(24, 0, 14, 0)
 	})
@@ -210,7 +214,7 @@ func (a *app) scrollToEnd(c *ui.Context, th *thread) {
 	t := c.Theme()
 	b := ui.ButtonBase(c.Key("scroll to end")).Size(size, size).Radius(size/2).
 		Background(a.pal.composer).Border(1, t.Border).TextColor(t.Text).
-		Label("Scroll to end").Tooltip("Scroll to end").
+		Label(locales.ScrollToEnd()).Tooltip(locales.ScrollToEnd()).
 		Absolute().LeftPercent(50).Bottom(a.footer + 16)
 	if b.Hovered() {
 		b.Translate(-size/2, -4).Shadow(0, 8, 16, -4, a.pal.shadow(0.22))
@@ -263,7 +267,7 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 			markdown.View(c, m.Text, &a.md)
 		}
 		if m.Error != "" {
-			ui.Text(c, m.Error).FontSize(14).TextColor(t.Danger).Selectable()
+			ui.Text(c, m.errorText()).FontSize(14).TextColor(t.Danger).Selectable()
 		}
 		// Under the reply: the button on the text's edge, the time at the
 		// far end.
@@ -324,9 +328,9 @@ func (a *app) question(c *ui.Context, m *message, room float32) {
 		}
 		// Muted, open or not, as hyperai-next's; the accent under the pointer,
 		// as a link.
-		label, svg := "Show more", chevronIcon
+		label, svg := locales.ShowMore(), chevronIcon
 		if m.expanded {
-			label, svg = "Show less", chevronUpIcon
+			label, svg = locales.ShowLess(), chevronUpIcon
 		}
 		b := ui.ButtonBase(c.Key("show more")).AlignSelf(ui.Start).Padding(2, 0).Gap(4).TextColor(t.TextMuted).Label(label)
 		if b.Hovered() {
@@ -382,9 +386,9 @@ func shown(show bool) float32 {
 func (a *app) copyButton(c *ui.Context, m *message) {
 	left := a.copiedUntil.Sub(c.Now())
 	copied := a.copied == m.ID && left > 0
-	svg, label := copyIcon, "Copy"
+	svg, label := copyIcon, locales.Copy()
 	if copied {
-		svg, label = checkIcon, "Copied"
+		svg, label = checkIcon, locales.Copied()
 		c.After(left) // a frame as the check goes
 	}
 	// A size under the other buttons', as it shows on every message.
@@ -414,18 +418,20 @@ func (a *app) messageTime(c *ui.Context, m *message) {
 
 // formatTime returns t shortly — the clock today, the day too before
 // that, and the year outside this one — and in full, as hyperai-next's
-// messages show it; now is the time now, in the zone t shows in.
+// messages show it, in the app's language: "Oct 28, 11:05 PM" in English,
+// "10月28日 23:05" in Chinese. now is the time now, in the zone t shows in.
 func formatTime(t, now time.Time) (short, full string) {
 	t = t.In(now.Location())
+	lang := i18n.Locale()
+	skeleton := "jm"
 	switch {
 	case t.Year() != now.Year():
-		short = t.Format("Jan 2, 2006, 3:04 PM")
+		skeleton = "yMMMdjm"
 	case t.YearDay() != now.YearDay():
-		short = t.Format("Jan 2, 3:04 PM")
-	default:
-		short = t.Format("3:04 PM")
+		skeleton = "MMMdjm"
 	}
-	return short, t.Format("January 2, 2006 at 3:04 PM")
+	short = i18n.FormatDate(lang, t, i18n.DateOptions{Skeleton: skeleton})
+	return short, i18n.FormatDate(lang, t, i18n.DateOptions{Date: i18n.LongStyle, Time: i18n.ShortStyle})
 }
 
 // worked builds the rule over a reply, as Waku's: while it is written,
@@ -437,21 +443,22 @@ func worked(c *ui.Context, m *message) {
 		rule()
 		if m.streaming {
 			ui.Spinner(c).Size(12, 12)
-			ui.Text(c, "Thinking…").FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, locales.Thinking()).FontSize(12).TextColor(t.TextMuted)
 		} else {
-			ui.Text(c, "Worked for "+seconds(m.Elapsed)).FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, locales.WorkedFor(seconds(m.Elapsed))).FontSize(12).TextColor(t.TextMuted)
 		}
 		rule()
 	})
 }
 
-// seconds is a duration of s seconds, shortly: 4s, 2m 5s.
+// seconds is a duration of s seconds, shortly, in the app's language: 4s,
+// 2m 5s.
 func seconds(s float64) string {
 	n := max(1, int(s+0.5))
 	if n < 60 {
-		return strconv.Itoa(n) + "s"
+		return locales.DurationSeconds(n)
 	}
-	return strconv.Itoa(n/60) + "m " + strconv.Itoa(n%60) + "s"
+	return locales.DurationMinutes(n/60, n%60)
 }
 
 // composer builds the field to write in, with the model to ask and the
@@ -608,7 +615,7 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 					draft := ui.TextAreaBase(c.Key("draft"), &a.draft).WidthPercent(100).Lines(1, 10).
 						FontSize(a.body).LineHeight(bodyLineHeight).Padding(top, right, bottom, fieldPadX).
 						TrackScroll(&a.fieldScroll).
-						Label("Message").AutoFocus().
+						Label(locales.ComposerLabel()).AutoFocus().
 						OnTextKey(func(k ui.TextKey) bool {
 							if !a.sends(k.Key, k.Mods) {
 								return false
@@ -619,7 +626,7 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 							}
 							return true
 						})
-					a.placeholder(c, "Ask anything…", a.draft == "" && !draft.Composing(), top, fieldPadX, a.body, bodyLineHeight)
+					a.placeholder(c, locales.ComposerPlaceholder(), a.draft == "" && !draft.Composing(), top, fieldPadX, a.body, bodyLineHeight)
 					if b := draft.Bounds(); !empty(b) {
 						a.field = b
 					}
@@ -674,9 +681,9 @@ func (a *app) composerTools(c *ui.Context, ready bool) ui.Element {
 	row := ui.Row(c).Shrink(0).Gap(6).AlignItems(ui.Center)
 	row.Children(func() {
 		a.modelPicker(c)
-		label, svg := "Send", arrowUpIcon
+		label, svg := locales.Send(), arrowUpIcon
 		if a.busy != nil {
-			label, svg = "Stop", stopIcon
+			label, svg = locales.Stop(), stopIcon
 		}
 		send := ui.ButtonBase(c.Key("send")).Size(sendSize, sendSize).Radius(sendSize / 2).Label(label).Tooltip(label).
 			Disabled(a.busy == nil && !ready)
@@ -705,7 +712,7 @@ func (a *app) composerTools(c *ui.Context, ready bool) ui.Element {
 // modelPicker builds the button that chooses the model to ask.
 func (a *app) modelPicker(c *ui.Context) {
 	t := c.Theme()
-	b := ui.ButtonBase(c.Key("model")).Padding(5, 8).Gap(6).Radius(8).TextColor(t.TextMuted).Label("Model")
+	b := ui.ButtonBase(c.Key("model")).Padding(5, 8).Gap(6).Radius(8).TextColor(t.TextMuted).Label(locales.Model())
 	if b.Hovered() {
 		b.Background(a.pal.fg.Alpha(0.06)).TextColor(t.Text)
 	}
@@ -723,16 +730,17 @@ func (a *app) modelPicker(c *ui.Context) {
 	})
 }
 
-// transcript returns th as Markdown.
+// transcript returns th as Markdown, who said each message in the app's
+// language.
 func transcript(th *thread) string {
 	var b strings.Builder
 	b.WriteString("# " + th.Title + "\n\n")
 	for _, m := range th.Messages {
-		who := "**Assistant**"
+		who := locales.TranscriptAssistant()
 		if m.Role == "user" {
-			who = "**You**"
+			who = locales.TranscriptYou()
 		}
-		b.WriteString(who + "\n\n" + m.Text + "\n\n")
+		b.WriteString("**" + who + "**\n\n" + m.Text + "\n\n")
 	}
 	return b.String()
 }

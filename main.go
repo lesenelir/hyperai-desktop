@@ -37,6 +37,9 @@ func main() {
 			// The theme chosen, before the window opens in another.
 			a.applyTheme = func(theme string) { mygo.Theme.SetSource(mygo.ThemeSource(theme)) }
 			a.applyTheme(a.theme)
+			// The language chosen MyGo keeps itself, and shows from the
+			// start: the app only changes it.
+			a.applyLanguage = mygo.App.SetLocale
 			a.openAtLogin, a.setOpenAtLogin = mygo.App.OpenAtLogin, mygo.App.SetOpenAtLogin
 			a.reveal = mygo.Shell.ShowItemInFolder
 		}

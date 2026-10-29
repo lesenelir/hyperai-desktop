@@ -1,11 +1,12 @@
 package main
 
 import (
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"hyperai-desktop/locales"
 )
 
 // maxOutlineTurns is the most turns the outline shows: 20 ticks of 14 DIPs
@@ -20,12 +21,12 @@ type outlineTurn struct {
 }
 
 // outlineTurns groups msgs into turns: a question opens one, and the reply
-// after it answers it.
+// after it answers it, what became of it in the app's language.
 func outlineTurns(msgs []*message) []outlineTurn {
 	var turns []outlineTurn
 	for i, m := range msgs {
 		if m.Role == "user" {
-			turns = append(turns, outlineTurn{row: i, prompt: m.previewText(), reply: "No reply"})
+			turns = append(turns, outlineTurn{row: i, prompt: m.previewText(), reply: locales.OutlineNoReply()})
 			continue
 		}
 		if len(turns) == 0 {
@@ -34,13 +35,13 @@ func outlineTurns(msgs []*message) []outlineTurn {
 		t := &turns[len(turns)-1]
 		switch {
 		case m.streaming:
-			t.reply = "Generating…"
+			t.reply = locales.OutlineGenerating()
 		case m.Text != "":
 			t.reply = m.previewText()
-		case m.Error == "Stopped.":
-			t.reply = "Stopped"
+		case m.Error == errStopped:
+			t.reply = locales.OutlineStopped()
 		case m.Error != "":
-			t.reply = "Failed"
+			t.reply = locales.OutlineFailed()
 		}
 	}
 	return turns
@@ -106,11 +107,11 @@ func (a *app) outline(c *ui.Context, th *thread, area ui.Rect) {
 	// to the conversation, as the messages' buttons under its left edge in
 	// a narrow window, and only the ticks take it.
 	ui.Column(c.Key("outline")).Absolute().Left(12).Top(16).Bottom(16).Width(40).
-		Justify(ui.Center).AlignItems(ui.Start).Label("Conversation outline").PassThrough().
+		Justify(ui.Center).AlignItems(ui.Start).Label(locales.OutlineLabel()).PassThrough().
 		Children(func() {
 			for i, tu := range turns {
 				b := ui.ButtonBase(c.Key(tu.row)).Height(14).WidthPercent(100).Justify(ui.Start).Radius(4).
-					Label("Message " + strconv.Itoa(i+1) + ": " + tu.prompt)
+					Label(locales.OutlineMessage(i+1, tu.prompt))
 				if b.Hovered() {
 					hovered, hoveredBox = i, b.Bounds()
 				}
@@ -152,7 +153,7 @@ func (a *app) outlineCard(c *ui.Context, turn outlineTurn, box, area ui.Rect) {
 	card.Children(func() {
 		prompt := turn.prompt
 		if prompt == "" {
-			prompt = "Message"
+			prompt = locales.OutlineUntitled()
 		}
 		ui.Text(c, prompt).FontSize(14).FontWeight(600).SingleLine()
 		ui.Text(c, turn.reply).FontSize(14).LineHeight(1.6).TextColor(t.TextMuted).MaxLines(3)

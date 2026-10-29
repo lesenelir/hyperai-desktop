@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"hyperai-desktop/locales"
 )
 
 // errNotificationsOff is what notify's failed gets where the system does
@@ -25,7 +27,7 @@ func (a *app) notifyReply(th *thread, reply *message) {
 	}
 	body := reply.previewText()
 	if reply.Error != "" {
-		body = "The reply failed: " + reply.Error
+		body = locales.NotifyFailed(reply.errorText())
 	}
 	if r := []rune(body); len(r) > 120 {
 		body = string(r[:120]) + "…"
@@ -33,17 +35,18 @@ func (a *app) notifyReply(th *thread, reply *message) {
 	id := strconv.Itoa(th.ID)
 	a.notify(th.Title, body, func() { a.open(id) }, func(err error) {
 		if errors.Is(err, errNotificationsOff) {
-			a.notifyDone, a.notifyError = false, "Turned off: notifications from HyperAI are off in System Settings."
+			a.notifyDone, a.notifyError = false, locales.NotifyOff()
 		} else {
-			a.notifyError = "The last could not show: " + err.Error()
+			a.notifyError = locales.NotifyLastFailed(err.Error())
 		}
 		a.saveLayout()
 	})
 }
 
-// What the General page sets beyond the switch of Open at login: the chat
-// shown as the app opens, of launchTitles, and the key that sends, of
-// sendTitles, Return or Cmd+Return, the other breaking the line.
+// What the General page sets beyond the language and the switch of Open
+// at login: the chat shown as the app opens, of launchTitles, and the key
+// that sends, of sendTitles, Return or Cmd+Return, the other breaking the
+// line.
 const (
 	launchNew  = 0
 	launchLast = 1
@@ -52,7 +55,8 @@ const (
 	sendCmdReturn = 1
 )
 
-var launchTitles = [...]string{"New chat", "Last chat"}
+// launchTitles name the chats On launch chooses of, in the app's language.
+func launchTitles() []string { return []string{locales.NewChat(), locales.OnLaunchLast()} }
 
 // cmdReturnKeys send a draft where the settings say Cmd+Return does.
 var cmdReturnKeys = keys{[]string{"⌘", "Return"}, []string{"Ctrl", "Enter"}}
@@ -75,35 +79,40 @@ func (a *app) sends(k ui.Key, mods ui.Modifiers) bool {
 // generalTerms returns what the General page holds, as the settings'
 // field finds it: its rows' titles, and what they offer.
 func (a *app) generalTerms() []settingsTerm {
+	langs := terms(locales.LanguageTerms())
+	for _, l := range languages {
+		langs = append(langs, l.name)
+	}
 	return []settingsTerm{
-		{"Open at login", []string{"Startup", "Login items", "Launch"}},
-		{"On launch", append([]string{"Startup", "Open"}, launchTitles[:]...)},
-		{"Send with", append([]string{"Send", "Enter", "New line"}, sendTitles[:]...)},
-		{"Notify when a reply finishes", []string{"Notifications", "Background", "Replies"}},
-		{chatsSavedTitle, []string{"Chats", "Finder", "Folder", "Data", "chats.json"}},
-		{"Delete all chats", []string{"Delete", "Remove", "Clear", "History"}},
+		{locales.Language(), langs},
+		{locales.OpenAtLogin(), terms(locales.OpenAtLoginTerms())},
+		{locales.OnLaunch(), append(terms(locales.OnLaunchTerms()), launchTitles()...)},
+		{locales.SendWith(), append(terms(locales.SendWithTerms()), sendTitles[:]...)},
+		{locales.Notify(), terms(locales.NotifyTerms())},
+		{locales.ChatsSaved(platform()), terms(locales.ChatsTerms())},
+		{locales.DeleteAll(), terms(locales.DeleteAllTerms())},
 	}
 }
 
-// chatsSavedTitle names the row that says where the chats are kept.
-var chatsSavedTitle = onMac("Saved on this Mac", "Saved on this computer")
-
-// generalPage builds the General page: how HyperAI starts, the key that
-// sends, the notification of a reply, and where the chats are kept, and
-// deleting them.
+// generalPage builds the General page: the app's language, how HyperAI
+// starts, the key that sends, the notification of a reply, and where the
+// chats are kept, and deleting them.
 func (a *app) generalPage(c *ui.Context) {
-	a.settingsCard(c, "Startup", func() {
-		about := "Start HyperAI as you log in."
+	a.settingsCard(c, locales.LanguageCard(), func() {
+		a.settingRow(c, locales.Language(), locales.LanguageAbout(), func() { a.languageButton(c) })
+	})
+	a.settingsCard(c, locales.Startup(), func() {
+		about := locales.OpenAtLoginAbout()
 		if a.loginError != "" {
-			about = "Could not change it: " + a.loginError
+			about = locales.OpenAtLoginFailed(a.loginError)
 		}
-		a.settingRow(c, "Open at login", about, func() {
+		a.settingRow(c, locales.OpenAtLogin(), about, func() {
 			// Off, and still, where the app cannot set it (in tests).
 			on, none := &a.atLogin, false
 			if a.setOpenAtLogin == nil {
 				on = &none
 			}
-			if ui.Switch(c.Key("open at login"), on).Label("Open at login").Disabled(a.setOpenAtLogin == nil).Changed() {
+			if ui.Switch(c.Key("open at login"), on).Label(locales.OpenAtLogin()).Disabled(a.setOpenAtLogin == nil).Changed() {
 				a.loginError = ""
 				if err := a.setOpenAtLogin(a.atLogin); err != nil {
 					a.atLogin, a.loginError = !a.atLogin, err.Error()
@@ -111,34 +120,34 @@ func (a *app) generalPage(c *ui.Context) {
 			}
 		})
 		settingDivider(c)
-		a.settingRow(c, "On launch", "The chat HyperAI shows as it opens.", func() {
-			a.choiceButton(c, "On launch", &a.onLaunch, launchTitles[:])
+		a.settingRow(c, locales.OnLaunch(), locales.OnLaunchAbout(), func() {
+			a.choiceButton(c, locales.OnLaunch(), &a.onLaunch, launchTitles())
 		})
 	})
-	a.settingsCard(c, "Composer", func() {
-		a.settingRow(c, "Send with", "The other breaks the line, as Shift with either does.", func() {
-			a.choiceButton(c, "Send with", &a.sendWith, sendTitles[:])
+	a.settingsCard(c, locales.Composer(), func() {
+		a.settingRow(c, locales.SendWith(), locales.SendWithAbout(), func() {
+			a.choiceButton(c, locales.SendWith(), &a.sendWith, sendTitles[:])
 		})
 	})
-	a.settingsCard(c, "Replies", func() {
-		about := "While HyperAI is in the background. Clicking it shows the chat."
+	a.settingsCard(c, locales.Replies(), func() {
+		about := locales.NotifyAbout()
 		if a.notifyError != "" {
 			about = a.notifyError
 		}
-		a.settingRow(c, "Notify when a reply finishes", about, func() {
-			if ui.Switch(c.Key("notify"), &a.notifyDone).Label("Notify when a reply finishes").Changed() {
+		a.settingRow(c, locales.Notify(), about, func() {
+			if ui.Switch(c.Key("notify"), &a.notifyDone).Label(locales.Notify()).Changed() {
 				a.notifyError = ""
 				a.saveLayout()
 			}
 		})
 	})
-	a.settingsCard(c, "Chats", func() {
-		about := "Not saved: this is a demo."
+	a.settingsCard(c, locales.Chats(), func() {
+		about := locales.ChatsDemo()
 		if a.path != "" {
 			about = homeRelative(a.path)
 		}
-		a.settingRow(c, chatsSavedTitle, about, func() {
-			if a.path != "" && a.reveal != nil && a.settingButton(c, onMac("Show in Finder", "Show in Folder"), false) {
+		a.settingRow(c, locales.ChatsSaved(platform()), about, func() {
+			if a.path != "" && a.reveal != nil && a.settingButton(c, "show in folder", locales.ShowInFolder(platform()), false) {
 				// The folder, where no chat was written yet.
 				target := a.path
 				if _, err := os.Stat(target); err != nil {
@@ -148,16 +157,8 @@ func (a *app) generalPage(c *ui.Context) {
 			}
 		})
 		settingDivider(c)
-		about = "There are none."
-		switch n := len(a.threads); n {
-		case 0:
-		case 1:
-			about = "The one chat, and its messages. HyperAI asks first."
-		default:
-			about = "All " + strconv.Itoa(n) + " chats, and their messages. HyperAI asks first."
-		}
-		a.settingRow(c, "Delete all chats", about, func() {
-			if a.settingButton(c, "Delete All…", len(a.threads) == 0) {
+		a.settingRow(c, locales.DeleteAll(), locales.DeleteAllRow(len(a.threads)), func() {
+			if a.settingButton(c, "delete all", locales.DeleteAllButton(), len(a.threads) == 0) {
 				a.askDelete(nil)
 			}
 		})
@@ -190,11 +191,12 @@ func homeRelative(path string) string {
 	return path
 }
 
-// settingButton builds a button of a settings row, labeled label, as the
-// pop-up buttons look, faded where disabled: it reports a click.
-func (a *app) settingButton(c *ui.Context, label string, disabled bool) bool {
+// settingButton builds a button of a settings row, keyed key and labeled
+// label, as the pop-up buttons look, faded where disabled: it reports a
+// click.
+func (a *app) settingButton(c *ui.Context, key, label string, disabled bool) bool {
 	t := c.Theme()
-	btn := ui.ButtonBase(c.Key(label)).Padding(5, 10).Radius(8).Background(a.pal.composer).Border(1, t.Border).
+	btn := ui.ButtonBase(c.Key(key)).Padding(5, 10).Radius(8).Background(a.pal.composer).Border(1, t.Border).
 		Label(label).Disabled(disabled)
 	switch {
 	case disabled:

@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"hyperai-desktop/locales"
 )
 
 // keys are the keys of a shortcut, as their caps show them, the modifiers
@@ -63,7 +65,7 @@ type shortcutRow struct {
 }
 
 // shortcutGroups are the shortcuts, by where they work, as the page lists
-// them: the composer's as General has its keys.
+// them, in the app's language: the composer's as General has its keys.
 func (a *app) shortcutGroups() []struct {
 	title string
 	rows  []shortcutRow
@@ -77,32 +79,30 @@ func (a *app) shortcutGroups() []struct {
 		title string
 		rows  []shortcutRow
 	}{
-		{"App", []shortcutRow{
-			{"New chat", "", []keys{newChatKeys}},
-			{"Search", "Chats, projects, artifacts and settings.", []keys{findKeys}},
-			{"Show or hide the sidebar", "", []keys{sidebarKeys}},
-			{"Settings", "Opens them, and closes them.", []keys{settingsKeys}},
-			{"Close the settings", "Back to the chat shown before.", []keys{key("Esc")}},
+		{locales.GroupApp(), []shortcutRow{
+			{locales.NewChat(), "", []keys{newChatKeys}},
+			{locales.Search(), locales.KeysSearchAbout(), []keys{findKeys}},
+			{locales.KeysSidebar(), "", []keys{sidebarKeys}},
+			{locales.Settings(), locales.KeysSettingsAbout(), []keys{settingsKeys}},
+			{locales.KeysCloseSettings(), locales.KeysCloseSettingsAbout(), []keys{key("Esc")}},
 		}},
-		{"Going back and forth", []shortcutRow{
-			{"Back", onMac("To the chat shown before. A swipe right, or the mouse's back button, too.",
-				"To the chat shown before. The mouse's back button, too."), []keys{backKeys}},
-			{"Forward", onMac("To the chat gone back from. A swipe left, or the mouse's forward button, too.",
-				"To the chat gone back from. The mouse's forward button, too."), []keys{forwardKeys}},
+		{locales.KeysBackForth(), []shortcutRow{
+			{locales.Back(), locales.KeysBackAbout(platform()), []keys{backKeys}},
+			{locales.Forward(), locales.KeysForwardAbout(platform()), []keys{forwardKeys}},
 		}},
-		{"Composer", []shortcutRow{
-			{"Send", "Which keys, General chooses.", send},
-			{"New line", "", newLine},
-			{"Stop the reply", "While a reply comes in.", []keys{key("Esc")}},
+		{locales.Composer(), []shortcutRow{
+			{locales.Send(), locales.KeysSendAbout(), send},
+			{locales.KeysNewLine(), "", newLine},
+			{locales.KeysStop(), locales.KeysStopAbout(), []keys{key("Esc")}},
 		}},
-		{"Search", []shortcutRow{
-			{"Next result", "", []keys{key("↓"), {[]string{"⌃", "N"}, []string{"Ctrl", "N"}}}},
-			{"Previous result", "", []keys{key("↑"), {[]string{"⌃", "P"}, []string{"Ctrl", "P"}}}},
-			{"Open the result", "", []keys{returnKey}},
-			{"Previous type", "With nothing typed.", []keys{key("←")}},
-			{"Next type", "With nothing typed.", []keys{key("→")}},
-			{"Ask in a new chat", "What was typed goes in the composer.", []keys{key("Tab")}},
-			{"Close", "", []keys{key("Esc")}},
+		{locales.Search(), []shortcutRow{
+			{locales.KeysNextResult(), "", []keys{key("↓"), {[]string{"⌃", "N"}, []string{"Ctrl", "N"}}}},
+			{locales.KeysPreviousResult(), "", []keys{key("↑"), {[]string{"⌃", "P"}, []string{"Ctrl", "P"}}}},
+			{locales.KeysOpenResult(), "", []keys{returnKey}},
+			{locales.KeysPreviousType(), locales.KeysNothingTyped(), []keys{key("←")}},
+			{locales.KeysNextType(), locales.KeysNothingTyped(), []keys{key("→")}},
+			{locales.KeysAskNew(), locales.KeysAskNewAbout(), []keys{key("Tab")}},
+			{locales.Close(), "", []keys{key("Esc")}},
 		}},
 	}
 }
@@ -149,12 +149,12 @@ func (a *app) shortcutsPage(c *ui.Context) {
 		groups = a.shortcutGroups()
 	} else {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "Matching “"+a.settingsQuery+"”").FontSize(13).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine()
-			all := ui.ButtonBase(c.Key("all shortcuts")).Padding(4, 8).Radius(6).TextColor(t.TextMuted).Label("Show all shortcuts")
+			ui.Text(c, locales.KeysMatching(a.settingsQuery)).FontSize(13).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine()
+			all := ui.ButtonBase(c.Key("all shortcuts")).Padding(4, 8).Radius(6).TextColor(t.TextMuted).Label(locales.KeysShowAllLabel())
 			if all.Hovered() {
 				all.TextColor(a.pal.ac)
 			}
-			all.Children(func() { ui.Text(c, "Show all").FontSize(13) })
+			all.Children(func() { ui.Text(c, locales.KeysShowAll()).FontSize(13) })
 			if all.Clicked() {
 				a.settingsQuery = ""
 			}
@@ -182,7 +182,7 @@ func (a *app) shortcutKeys(c *ui.Context, alternatives []keys) {
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 		for i, k := range alternatives {
 			if i > 0 {
-				ui.Text(c, "or").FontSize(12).TextColor(t.TextMuted)
+				ui.Text(c, locales.KeysOr()).FontSize(12).TextColor(t.TextMuted)
 			}
 			ui.Row(c).Gap(3).Children(func() {
 				for _, cap := range k.caps() {

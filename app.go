@@ -9,8 +9,11 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
+
+	"hyperai-desktop/locales"
 )
 
 const (
@@ -32,9 +35,11 @@ const (
 // message is one of a chat's: the user's, or the assistant's reply, which
 // streams in while streaming is true.
 type message struct {
-	ID    int    `json:"id"`
-	Role  string `json:"role"` // "user" or "assistant"
-	Text  string `json:"text"`
+	ID   int    `json:"id"`
+	Role string `json:"role"` // "user" or "assistant"
+	Text string `json:"text"`
+	// Error is what went wrong, as the provider said it, or errStopped,
+	// which shows in the app's language (errorText).
 	Error string `json:"error,omitempty"`
 	// Elapsed is how many seconds the reply took to write.
 	Elapsed float64 `json:"elapsed,omitempty"`
@@ -135,10 +140,11 @@ type app struct {
 	saver    saver
 	// rev counts the changes to the chats that move them in the sidebar:
 	// one made, updated or removed. rows are the sidebar's rows as of
-	// rowsRev, rowsDay and rowsQuery, so that a frame builds them only when
-	// they move.
+	// rowsRev, rowsDay and rowsLang, the language their groups are titled
+	// in, so that a frame builds them only when they move.
 	rev, rowsRev int
 	rowsDay      time.Time
+	rowsLang     string
 	rows         []chatRow
 	chatList     ui.ListState
 	// searching shows the search (search.go), for query on searchTab: hits
@@ -193,12 +199,16 @@ type app struct {
 	winTheme       *ui.Theme
 	winOf          *palette
 	popUpWidths    map[string]float32 // popUpWidth's, by button, font and what it shows
-	// The General page's (general.go): whether the app opens at login, as
+	// The General page's (general.go): the language chosen, of languages,
+	// "" for the system's, which applyLanguage gives the app (nil in
+	// tests); whether the app opens at login, as
 	// the system has it, which openAtLogin reads and setOpenAtLogin sets
 	// (nil in tests), loginError what setting it last said; the chat shown
 	// as the app opens, of launchTitles, the last chat shown being
 	// keptChat, as layout.json has it; the key that sends, of sendTitles;
 	// and reveal, which shows a file in the file manager (nil in tests).
+	language       string
+	applyLanguage  func(tag string)
 	atLogin        bool
 	openAtLogin    func() bool
 	setOpenAtLogin func(open bool) error
@@ -336,10 +346,23 @@ func (a *app) stop() {
 	a.cancel()
 	reply.end()
 	if reply.Text == "" {
-		reply.Error = "Stopped."
+		reply.Error = errStopped
 	}
 	a.busy, a.cancel = nil, nil
 	a.save()
+}
+
+// errStopped is the Error of a reply stopped before it said anything, as
+// chats.json keeps it, whatever the app's language.
+const errStopped = "Stopped."
+
+// errorText returns what went wrong with m, as it shows: a stopped reply's
+// in the app's language.
+func (m *message) errorText() string {
+	if m.Error == errStopped {
+		return locales.ReplyStopped()
+	}
+	return m.Error
 }
 
 // askDelete asks whether to delete th, which the alert does once it is
@@ -356,19 +379,14 @@ func (a *app) deleteAlert(c *ui.Context) {
 		a.deleting, a.deletingAll = nil, false
 		return
 	}
-	title, about := "", "This can't be undone."
+	title, about := "", locales.DeleteUndone()
 	switch {
 	case a.deletingAll:
-		title = "Delete all chats?"
-		about = "All " + strconv.Itoa(len(a.threads)) + " chats and their messages go. " + about
-		if len(a.threads) == 1 {
-			about = "The chat and its messages go. This can't be undone."
-		}
+		title, about = locales.DeleteAllTitle(), locales.DeleteAllAbout(len(a.threads))
 	case a.deleting != nil:
-		title = "Delete “" + a.deleting.Title + "”?"
-		about = "Its messages go with it. " + about
+		title, about = locales.DeleteChatTitle(a.deleting.Title), locales.DeleteChatAbout()
 	}
-	if ui.AlertDialog(c, &a.confirming, title, about, "Cancel", "Delete") == 1 {
+	if ui.AlertDialog(c, &a.confirming, title, about, locales.Cancel(), locales.Delete()) == 1 {
 		if a.deletingAll {
 			a.removeAll()
 		} else if a.deleting != nil {
@@ -501,11 +519,11 @@ func (a *app) view(c *ui.Context) {
 
 	// The sidebar's toggle, beside the window controls whether the sidebar
 	// shows or not.
-	label := "Hide sidebar"
+	label := locales.HideSidebar()
 	if a.collapsed {
-		label = "Show sidebar"
+		label = locales.ShowSidebar()
 	}
-	toggle := iconButtonSized(c.Key("toggle"), sidebarIcon, label+" ("+sidebarKeys.String()+")", titleIconSize).
+	toggle := iconButtonSized(c.Key("toggle"), sidebarIcon, locales.WithKeys(label, sidebarKeys.String()), titleIconSize).
 		Absolute().Left(bar.Left + 8).Top((titleBarHeight - 28) / 2)
 	if toggle.Clicked() {
 		a.collapsed = !a.collapsed
@@ -527,14 +545,14 @@ func (a *app) sidebar(c *ui.Context) {
 	t := c.Theme()
 	ui.Box(c).Height(titleBarHeight).Shrink(0).DragWindow()
 
-	if a.navRow(c, "new", newChatIcon, "New chat", newChatKeys.String()).Clicked() {
+	if a.navRow(c, "new", newChatIcon, locales.NewChat(), newChatKeys.String()).Clicked() {
 		a.newChat()
 	}
-	if a.navRow(c, "search", searchIcon, "Search", findKeys.String()).Clicked() {
+	if a.navRow(c, "search", searchIcon, locales.Search(), findKeys.String()).Clicked() {
 		a.toggleSearch()
 	}
 	if len(a.threads) == 0 {
-		ui.Text(c, "Your chats show here.").FontSize(13).TextColor(t.TextMuted).Padding(16, 20).Grow(1)
+		ui.Text(c, locales.SidebarEmpty()).FontSize(13).TextColor(t.TextMuted).Padding(16, 20).Grow(1)
 		a.settingsRow(c)
 		return
 	}
@@ -554,7 +572,7 @@ func (a *app) sidebar(c *ui.Context) {
 		} else {
 			ui.Text(c, rows[i].group).FontSize(12).TextColor(t.TextMuted).Padding(14, 20, 6, 20)
 		}
-	}).Grow(1).MinHeight(0).Padding(6, 0, 12, 0).Label("Chats")
+	}).Grow(1).MinHeight(0).Padding(6, 0, 12, 0).Label(locales.SidebarChats())
 	a.settingsRow(c)
 }
 
@@ -566,10 +584,11 @@ type chatRow struct {
 }
 
 // chatRows returns the sidebar's rows as of now, grouping the chats by day
-// again only when they changed, or the day did.
+// again only when they changed, or the day or the language did.
 func (a *app) chatRows(now time.Time) []chatRow {
 	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	if a.rows != nil && a.rowsRev == a.rev && a.rowsDay.Equal(day) {
+	lang := i18n.Locale()
+	if a.rows != nil && a.rowsRev == a.rev && a.rowsDay.Equal(day) && a.rowsLang == lang {
 		return a.rows
 	}
 	rows := make([]chatRow, 0, len(a.threads)+5)
@@ -579,7 +598,7 @@ func (a *app) chatRows(now time.Time) []chatRow {
 			rows = append(rows, chatRow{th: th})
 		}
 	}
-	a.rows, a.rowsRev, a.rowsDay = rows, a.rev, day
+	a.rows, a.rowsRev, a.rowsDay, a.rowsLang = rows, a.rev, day, lang
 	return rows
 }
 
@@ -623,7 +642,7 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 				ui.Icon(c, messageIcon).Size(12, 12).TextColor(t.TextMuted)
 				model := th.Model
 				if model == "" {
-					model = "Chat"
+					model = locales.SidebarModelNone()
 				}
 				ui.Text(c, model).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1)
 				ui.Text(c, ago(th.Updated, now)).FontSize(12).TextColor(t.TextMuted)
@@ -631,7 +650,7 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 		})
 	})
 	row.ContextMenu(func(m *ui.Menu) {
-		if m.Item("Delete Chat…").Chosen() {
+		if m.Item(locales.DeleteChatItem()).Chosen() {
 			a.askDelete(th)
 		}
 	})
@@ -640,19 +659,20 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 	}
 }
 
-// ago is how long before now t was, shortly: 5m, 3h, 2d, or the date.
+// ago is how long before now t was, shortly, in the app's language: 5m,
+// 3h, 2d, or the date.
 func ago(t, now time.Time) string {
 	switch d := now.Sub(t); {
 	case d < time.Minute:
-		return "now"
+		return locales.AgoNow()
 	case d < time.Hour:
-		return strconv.Itoa(int(d.Minutes())) + "m"
+		return locales.AgoMinutes(int(d.Minutes()))
 	case d < 24*time.Hour:
-		return strconv.Itoa(int(d.Hours())) + "h"
+		return locales.AgoHours(int(d.Hours()))
 	case d < 30*24*time.Hour:
-		return strconv.Itoa(int(d.Hours()/24)) + "d"
+		return locales.AgoDays(int(d.Hours() / 24))
 	}
-	return t.Format("Jan 2")
+	return i18n.FormatDate(i18n.Locale(), t, i18n.DateOptions{Skeleton: "MMMd"})
 }
 
 // group is chats updated on the same day, or within the same span of days.
@@ -668,7 +688,7 @@ func groupByDay(threads []*thread, now time.Time) []group {
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	// Each span holds the chats updated since its start, and not since the
 	// start of the span before it.
-	titles := []string{"Today", "Yesterday", "Previous 7 days", "Previous 30 days", "Older"}
+	titles := []string{locales.GroupToday(), locales.GroupYesterday(), locales.GroupWeek(), locales.GroupMonth(), locales.GroupOlder()}
 	starts := []time.Time{today, today.AddDate(0, 0, -1), today.AddDate(0, 0, -7), today.AddDate(0, 0, -30), {}}
 	var groups []group
 	for _, th := range sorted {

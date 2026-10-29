@@ -3,24 +3,31 @@ package main
 import (
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
+
+	"hyperai-desktop/locales"
 )
 
 // themes are the appearances the settings choose from, as
 // mygo.ThemeSource names them: the system's, or always light or dark.
-var (
-	themes      = [...]string{"system", "light", "dark"}
-	themeTitles = [...]string{"System", "Light", "Dark"}
-)
+var themes = [...]string{"system", "light", "dark"}
+
+// themeTitles name themes, in the app's language.
+func themeTitles() []string {
+	return []string{locales.ThemeSystem(), locales.ThemeLight(), locales.ThemeDark()}
+}
 
 // textSizes are the sizes the settings choose from for the conversation's
 // text: hyperai-next's, and one smaller and one larger, a step apart that
 // shows.
-var (
-	textSizes      = [...]float32{14, bodySize, 17}
-	textSizeTitles = [...]string{"Small", "Default", "Large"}
-)
+var textSizes = [...]float32{14, bodySize, 17}
+
+// textSizeTitles name textSizes, in the app's language.
+func textSizeTitles() []string {
+	return []string{locales.TextSizeSmall(), locales.TextSizeDefault(), locales.TextSizeLarge()}
+}
 
 const defaultTextSize = 1 // bodySize, of textSizes
 
@@ -34,18 +41,18 @@ const motionSettle = 250 * time.Millisecond
 // appearanceTerms returns what the Appearance page holds, as the settings'
 // field finds it: its rows' titles, and what they offer.
 func (a *app) appearanceTerms() []settingsTerm {
-	codes := []string{"Syntax", "Highlighting"}
+	codes := terms(locales.CodeThemeTerms())
 	for _, ct := range codeThemes {
-		codes = append(codes, ct.title)
+		codes = append(codes, ct.name())
 	}
 	return []settingsTerm{
-		{"Theme", append([]string{"Mode"}, themeTitles[:]...)},
-		{"Font", []string{"Typeface"}},
-		{"Code font", []string{"Monospace"}},
-		{"Code theme", codes},
-		{"Text size", textSizeTitles[:]},
-		{"Translucent sidebar", []string{"Vibrancy", "Transparency", "Material"}},
-		{"Reduce motion", []string{"Animation"}},
+		{locales.Theme(), append(terms(locales.ThemeTerms()), themeTitles()...)},
+		{locales.Font(), terms(locales.FontTerms())},
+		{locales.CodeFont(), terms(locales.CodeFontTerms())},
+		{locales.CodeTheme(), codes},
+		{locales.TextSize(), textSizeTitles()},
+		{locales.TranslucentSidebar(), terms(locales.TranslucentSidebarTerms())},
+		{locales.ReduceMotion(), terms(locales.ReduceMotionTerms())},
 	}
 }
 
@@ -104,68 +111,69 @@ func (a *app) setText(size float32, family string) {
 // conversation's size, over a question and a reply in them, since the
 // settings hide the conversation; and the window, a switch a row.
 func (a *app) appearancePage(c *ui.Context) {
-	settingsGroup(c, "Theme", func() {
+	settingsGroup(c, locales.Theme(), func() {
 		ui.Row(c).Gap(12).Children(func() {
+			titles := themeTitles()
 			for i, theme := range themes {
-				a.themeCard(c, theme, themeTitles[i])
+				a.themeCard(c, theme, titles[i])
 			}
 		})
 	})
-	a.settingsCard(c, "Text", func() {
-		a.settingRow(c, "Font", "All of the window's text, but code.", func() {
-			a.fontButton(c, "Font", &a.font, false)
+	a.settingsCard(c, locales.Text(), func() {
+		a.settingRow(c, locales.Font(), locales.FontAbout(), func() {
+			a.fontButton(c, locales.Font(), &a.font, false)
 		})
 		settingDivider(c)
-		a.settingRow(c, "Code font", "Code blocks and code in a line, in replies.", func() {
-			a.fontButton(c, "Code font", &a.codeFont, true)
+		a.settingRow(c, locales.CodeFont(), locales.CodeFontAbout(), func() {
+			a.fontButton(c, locales.CodeFont(), &a.codeFont, true)
 		})
 		settingDivider(c)
-		a.settingRow(c, "Code theme", "The colors of code, in the app's light or dark as the app is.", func() {
+		a.settingRow(c, locales.CodeTheme(), locales.CodeThemeAbout(), func() {
 			a.codeThemeButton(c)
 		})
 		settingDivider(c)
-		a.settingRow(c, "Text size", "Questions, replies and the composer. The rest of the window keeps its size.", func() {
-			if ui.Segmented(c.Key("text size"), &a.textSize, textSizeTitles[:]...).Label("Text size").Changed() {
+		a.settingRow(c, locales.TextSize(), locales.TextSizeAbout(), func() {
+			if ui.Segmented(c.Key("text size"), &a.textSize, textSizeTitles()...).Label(locales.TextSize()).Changed() {
 				a.saveLayout()
 			}
 		})
 		settingDivider(c)
 		// A question and its reply, as the conversation shows them.
-		ui.Column(c).Padding(16).Gap(10).AlignItems(ui.Stretch).Label("Preview").Children(func() {
+		ui.Column(c).Padding(16).Gap(10).AlignItems(ui.Stretch).Label(locales.Preview()).Children(func() {
 			ui.Row(c).Children(func() {
 				ui.Spacer(c)
-				ui.Text(c, "Can you explain closures in Go?").FontSize(a.body).LineHeight(bodyLineHeight).
+				ui.Text(c, locales.PreviewQuestion()).FontSize(a.body).LineHeight(bodyLineHeight).
 					Padding(bubblePadY, bubblePadX).Radius(14).Background(a.pal.raised)
 			})
-			markdown.View(c, previewReply, &a.md)
+			markdown.View(c, locales.PreviewReply()+"\n\n"+previewCode, &a.md)
 		})
 	})
-	a.settingsCard(c, "Window", func() {
+	a.settingsCard(c, locales.Window(), func() {
 		// The material is the desktop's to give: macOS's and Windows 11's.
 		material := c.Vibrancy()
-		about := "Let the desktop show through the sidebar."
+		about := locales.TranslucentSidebarAbout()
 		if !material {
-			about = "This system draws no material behind windows."
+			about = locales.TranslucentSidebarNone()
 		}
-		a.settingRow(c, "Translucent sidebar", about, func() {
+		a.settingRow(c, locales.TranslucentSidebar(), about, func() {
 			// Off, and still, where there is none.
 			on, none := &a.translucent, false
 			if !material {
 				on = &none
 			}
-			if ui.Switch(c.Key("translucent sidebar"), on).Label("Translucent sidebar").Disabled(!material).Changed() {
+			if ui.Switch(c.Key("translucent sidebar"), on).Label(locales.TranslucentSidebar()).Disabled(!material).Changed() {
 				a.saveLayout()
 			}
 		})
 		settingDivider(c)
-		a.settingRow(c, "Reduce motion", "Show changes at once rather than fading or gliding. On whenever the system asks for less motion.", func() {
+		a.settingRow(c, locales.ReduceMotion(), locales.ReduceMotionAbout(), func() {
 			// On, and still, while the system reduces it.
 			system := c.Preferences().ReduceMotion
 			on, always := &a.reduceMotion, true
 			if system {
 				on = &always
 			}
-			sw := ui.Switch(c.Key("reduce motion"), on).Label("Reduce motion").Disabled(system)
+			sw := ui.Switch(c.Key("reduce motion"), on).Label(locales.ReduceMotion()).Disabled(system)
 			if sw.Changed() {
 				a.motionSwitched = c.Now()
 				a.saveLayout()
@@ -218,31 +226,32 @@ func (a *app) themeCard(c *ui.Context, theme, title string) {
 	}
 }
 
-// previewReply is the reply of the Text card's preview: prose, code in a
-// line, and a block of it, to show both fonts.
-const previewReply = "A closure is a function that keeps the variables around it alive, as `n` here, so it can read and change them after they go out of scope:\n\n" +
-	"```go\nfunc counter() func() int {\n\tn := 0\n\treturn func() int { n++; return n }\n}\n```"
+// previewCode is the code of the Text card's preview reply, under its
+// prose (locales.PreviewReply), which has code in a line: to show both
+// fonts.
+const previewCode = "```go\nfunc counter() func() int {\n\tn := 0\n\treturn func() int { n++; return n }\n}\n```"
 
 // fontButton builds the pop-up button, labeled label, that chooses *font:
 // System, then every family installed, the one chosen checked, as macOS's
 // font settings do. For code, the monospaced families come first and the
 // rest in a submenu.
 func (a *app) fontButton(c *ui.Context, label string, font *string, code bool) {
+	system, others := locales.FontSystem(), locales.FontOthers()
 	name := *font
 	if name == "" {
-		name = "System"
+		name = system
 	}
 	// The menu's titles: the families, but for code those not monospaced,
 	// in their submenu.
 	titles := func() []string {
-		out := []string{"System"}
+		out := []string{system}
 		for _, f := range a.fontFamilies() {
 			if !code || f.Monospaced {
 				out = append(out, f.Name)
 			}
 		}
 		if code {
-			out = append(out, "Other Fonts")
+			out = append(out, others)
 		}
 		return out
 	}
@@ -252,7 +261,7 @@ func (a *app) fontButton(c *ui.Context, label string, font *string, code bool) {
 				a.setFont(font, family)
 			}
 		}
-		item(m, "System", "")
+		item(m, system, "")
 		m.Separator()
 		for _, f := range a.fontFamilies() {
 			if !code || f.Monospaced {
@@ -260,7 +269,7 @@ func (a *app) fontButton(c *ui.Context, label string, font *string, code bool) {
 			}
 		}
 		if code {
-			m.Submenu("Other Fonts", func(m *ui.Menu) {
+			m.Submenu(others, func(m *ui.Menu) {
 				for _, f := range a.fontFamilies() {
 					if !f.Monospaced {
 						item(m, f.Name, f.Name)
@@ -278,16 +287,16 @@ func (a *app) codeThemeButton(c *ui.Context) {
 	titles := func() []string {
 		var out []string
 		for _, ct := range codeThemes {
-			out = append(out, ct.title)
+			out = append(out, ct.name())
 		}
 		return out
 	}
-	a.popUpButton(c, "Code theme", shown.title, titles, func(m *ui.Menu) {
+	a.popUpButton(c, locales.CodeTheme(), shown.name(), titles, func(m *ui.Menu) {
 		for i, ct := range codeThemes {
 			if i > 0 && ct.group != codeThemes[i-1].group {
 				m.Separator()
 			}
-			if m.Item(ct.title).Checked(ct.key == a.codeTheme).Chosen() && ct.key != a.codeTheme {
+			if m.Item(ct.name()).Checked(ct.key == a.codeTheme).Chosen() && ct.key != a.codeTheme {
 				a.codeTheme = ct.key
 				a.saveLayout()
 			}
@@ -342,13 +351,13 @@ const (
 // showing: as its widest title, measured as the system's menu draws them,
 // in the system font at the window's size, and as wide as shown in the
 // app's font, which it draws in. The width is kept for the titles until
-// they or the app's font change, as measuring hundreds of fonts' names
-// each frame would cost.
+// they, the app's font or its language change, as measuring hundreds of
+// fonts' names each frame would cost.
 func (a *app) popUpWidth(c *ui.Context, label, shown string, titles func() []string) float32 {
 	if a.popUpWidths == nil {
 		a.popUpWidths = map[string]float32{}
 	}
-	key := label + "\x00" + a.font + "\x00" + shown
+	key := label + "\x00" + a.font + "\x00" + shown + "\x00" + i18n.Locale()
 	w, ok := a.popUpWidths[key]
 	if !ok {
 		size := c.Theme().FontSize

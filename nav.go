@@ -5,6 +5,8 @@ import (
 	"slices"
 
 	"github.com/egoist/mygo/ui"
+
+	"hyperai-desktop/locales"
 )
 
 // history is the chats shown before the one shown, which Back returns to,
@@ -114,10 +116,10 @@ func (a *app) historyButtons(c *ui.Context, x float32) {
 		can      bool
 		do       func()
 	}{
-		{arrowLeftIcon, "Back", backKeys.String(), len(a.nav.back) > 0, a.goBack},
-		{arrowRightIcon, "Forward", forwardKeys.String(), len(a.nav.forward) > 0, a.goForward},
+		{arrowLeftIcon, locales.Back(), backKeys.String(), len(a.nav.back) > 0, a.goBack},
+		{arrowRightIcon, locales.Forward(), forwardKeys.String(), len(a.nav.forward) > 0, a.goForward},
 	} {
-		btn := iconButtonSized(c.Key(b.label), b.svg, b.label+" ("+b.shortcut+")", titleIconSize).
+		btn := iconButtonSized(c.Key(i), b.svg, locales.WithKeys(b.label, b.shortcut), titleIconSize).
 			Absolute().Left(x + float32(i)*(30+2)).Top((titleBarHeight - 28) / 2).Disabled(!b.can)
 		if !b.can {
 			btn.Opacity(0.35)
