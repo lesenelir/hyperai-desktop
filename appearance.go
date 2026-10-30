@@ -100,7 +100,7 @@ func (a *app) setText(size float32, family string) {
 	}
 	a.body, a.textFont, a.measured = size, family, ""
 	for _, th := range a.threads {
-		for _, m := range th.Messages {
+		for _, m := range th.all() {
 			m.wrapWidth = 0
 		}
 	}

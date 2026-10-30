@@ -41,6 +41,10 @@ type message struct {
 	ID   int    `json:"id"`
 	Role string `json:"role"` // "user" or "assistant"
 	Text string `json:"text"`
+	// Parent is the message it follows, 0 for a chat's first, and Next the
+	// one shown after it last, of its versions (versions.go).
+	Parent int `json:"parent,omitempty"`
+	Next   int `json:"next,omitempty"`
 	// Files are the files sent with a question.
 	Files []*attachment `json:"files,omitempty"`
 	// Error is what went wrong, as the provider said it, or errStopped,
@@ -72,16 +76,21 @@ type message struct {
 
 // thread is a chat: its messages, and where its list is scrolled.
 type thread struct {
-	ID       int           `json:"id"`
-	Title    string        `json:"title"`
-	Updated  time.Time     `json:"updated"`            // when the user last sent in it, which orders the sidebar
-	Model    string        `json:"model,omitempty"`    // the model asked last
-	Provider string        `json:"provider,omitempty"` // Model's, "" in chats kept before it
-	Draft    string        `json:"draft,omitempty"`    // what its composer held as it was left
-	Messages []*message    `json:"messages"`
-	files    []*attachment // the files attached to Draft, which are not kept past the app
-	naming   bool          // a model is asked for its title (titles.go)
-	list     ui.ListState
+	ID       int        `json:"id"`
+	Title    string     `json:"title"`
+	Updated  time.Time  `json:"updated"`            // when the user last sent in it, which orders the sidebar
+	Model    string     `json:"model,omitempty"`    // the model asked last
+	Provider string     `json:"provider,omitempty"` // Model's, "" in chats kept before it
+	Draft    string     `json:"draft,omitempty"`    // what its composer held as it was left
+	Messages []*message `json:"messages"`
+	// Others are the messages of the versions not shown (versions.go).
+	Others []*message    `json:"others,omitempty"`
+	files  []*attachment // the files attached to Draft, which are not kept past the app
+	naming bool          // a model is asked for its title (titles.go)
+	// retitling is naming as the user asked (retitle), which its title
+	// shows a spinner beside, where a chat named as it starts shows none.
+	retitling bool
+	list      ui.ListState
 	// busy is the reply streaming in, nil when none, and cancel stops it:
 	// each chat's its own, so that chats stream at once.
 	busy   *message
@@ -191,6 +200,12 @@ type app struct {
 	// title asked for anew could not be made, which a toast says.
 	nameChats  bool
 	titleError string
+	// editingMsg is the question being edited, by its ID, 0 for none,
+	// whose field holds editText, and gives the caret its end where
+	// editStart (versions.go).
+	editingMsg int
+	editText   string
+	editStart  bool
 	// renaming is the chat whose title is a field that renames it, "" for
 	// none, in its row of the sidebar where renameInSidebar, else in the
 	// title bar, holding renameDraft; renameSelect chooses its text as it
@@ -405,17 +420,35 @@ func (a *app) send(text string) {
 	a.keepFiles(files)
 	a.files, th.files = nil, nil
 	a.next++
-	th.Messages = append(th.Messages, &message{ID: a.next, Role: "user", Text: text, Files: files, Time: time.Now()})
+	parent := 0
+	if n := len(th.Messages); n > 0 {
+		parent = th.Messages[n-1].ID
+	}
+	th.Messages = append(th.Messages, &message{ID: a.next, Parent: parent, Role: "user", Text: text, Files: files, Time: time.Now()})
+	a.draft, th.Draft = "", ""
+	// A chat just started is named by a model, beside its reply; of files
+	// alone, it keeps the first's name.
+	if started && text != "" && a.nameChats && !a.noTitles {
+		a.nameChat(th, a.prov, a.model, text, false)
+	}
+	a.ask(th)
+}
+
+// ask streams in the reply to the question last on th's path, of the
+// model the composer asks, while the other chats stream theirs: as one is
+// sent, edited (resend), or its reply asked for again (regenerate).
+func (a *app) ask(th *thread) {
 	turns := th.turns()
 	// The question goes to the top of the conversation, the reply coming
 	// in under it.
-	th.pinTop(len(th.Messages) - 1)
+	q := len(th.Messages) - 1
+	th.pinTop(q)
 	a.next++
-	reply := &message{ID: a.next, Role: "assistant", streaming: true, started: time.Now()}
+	reply := &message{ID: a.next, Parent: th.Messages[q].ID, Role: "assistant", streaming: true, started: time.Now()}
 	th.Messages = append(th.Messages, reply)
+	th.markPath()
 	th.Updated, th.Model, th.Provider = time.Now(), a.model, a.prov.ID()
 	a.rev++
-	a.draft, th.Draft = "", ""
 	ctx, cancel := context.WithCancel(context.Background())
 	th.busy, th.cancel = reply, cancel
 
@@ -446,11 +479,6 @@ func (a *app) send(text string) {
 	// The provider and model asked, as of now: showing another chat
 	// chooses another for the composer while this one streams.
 	prov, model, dir := a.prov, a.model, a.filesDir
-	// A chat just started is named by a model, beside its reply; of files
-	// alone, it keeps the first's name.
-	if started && text != "" && a.nameChats && !a.noTitles {
-		a.nameChat(th, prov, model, text, false)
-	}
 	stream := func(delta func(chunk)) error {
 		if err := readFiles(dir, turns); err != nil {
 			return err
@@ -692,6 +720,8 @@ func (a *app) view(c *ui.Context) {
 		// Escape is the alert's, which it cancels.
 	case a.renaming != "":
 		// Escape is the field's, which ends the renaming.
+	case a.editingMsg != 0:
+		// Escape is the edited question's, which cancels it.
 	case a.settings && !a.searching && c.Shortcut(0, ui.KeyEscape):
 		a.closeSettings()
 	case a.shownReply() != nil && c.Shortcut(0, ui.KeyEscape):
@@ -874,14 +904,20 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 		}
 		row.Children(func() {
 			ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-				title := ui.Text(c, th.Title).SingleLine()
-				if selected {
-					title.FontWeight(500)
-				}
+				line := ui.Row(c).Gap(6).AlignItems(ui.Center)
 				if hover {
 					// Short of the button, which would cover its end.
-					title.Margin(0, rowMoreSize-6+4, 0, 0)
+					line.Margin(0, rowMoreSize-6+4, 0, 0)
 				}
+				line.Children(func() {
+					title := ui.Text(c, th.Title).SingleLine().MinWidth(0)
+					if selected {
+						title.FontWeight(500)
+					}
+					if th.retitling {
+						ui.Spinner(c).Size(12, 12).Shrink(0).Label(locales.TitleRegenerating())
+					}
+				})
 				a.threadMeta(c, th, now)
 			})
 		})

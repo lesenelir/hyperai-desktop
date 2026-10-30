@@ -256,7 +256,7 @@ func (a *app) forgetFiles(threads ...*thread) {
 	}
 	var paths []string
 	for _, th := range threads {
-		for _, m := range th.Messages {
+		for _, m := range th.all() {
 			for _, f := range m.Files {
 				if f.File != "" {
 					paths = append(paths, filepath.Join(a.filesDir, f.File))

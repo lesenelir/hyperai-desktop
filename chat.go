@@ -54,7 +54,11 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 			} else {
 				// The title drags the window; the menu beside it does not.
 				ui.Row(c).Grow(1).MinWidth(0).Height(titleBarHeight).AlignItems(ui.Center).DragWindow().Children(func() {
-					ui.Text(c, name).FontSize(14).FontWeight(500).SingleLine()
+					ui.Text(c, name).FontSize(14).FontWeight(500).SingleLine().MinWidth(0)
+					// A title asked for anew, as the user asked.
+					if th != nil && th.retitling {
+						ui.Spinner(c).Size(14, 14).Shrink(0).Margin(0, 0, 0, 8).Label(locales.TitleRegenerating())
+					}
 				})
 			}
 			if th != nil {
@@ -201,7 +205,7 @@ func (a *app) conversation(c *ui.Context, th *thread) {
 				col := ui.Column(c).Grow(1).MaxWidth(maxWidth)
 				// The pointer over the message, or beside it, shows its actions.
 				hover := col.Hovered()
-				col.Children(func() { a.message(c, th.Messages[i], hover, i == n-1) })
+				col.Children(func() { a.message(c, th, i, hover, i == n-1) })
 			})
 		}).Grow(1).Padding(listPadTop, 24, 0, 24).Gap(listGap).TrackScroll(&th.scroll)
 		th.listBox = list.Bounds()
@@ -244,32 +248,34 @@ func (a *app) scrollToEnd(c *ui.Context, th *thread) {
 // message builds a message: the user's in a bubble on the right, the
 // assistant's as Markdown across the column, with its actions once done,
 // shown while hover, and always for the last reply.
-func (a *app) message(c *ui.Context, m *message, hover, last bool) {
+func (a *app) message(c *ui.Context, th *thread, i int, hover, last bool) {
 	t := c.Theme()
+	m := th.Messages[i]
 	if m.Role == "user" {
 		if len(m.Files) > 0 {
 			a.sentFiles(c, m)
 		}
-		if m.Text == "" {
+		if a.editingMsg == m.ID {
+			a.editQuestion(c, th, i)
 			return
 		}
-		row := ui.Row(c).AlignItems(ui.Start).Gap(4)
+		if m.Text == "" {
+			ui.Row(c).Justify(ui.End).Children(func() { a.questionActions(c, th, i, hover) })
+			a.questionVersions(c, th, i)
+			return
+		}
+		row := ui.Row(c).AlignItems(ui.Start).Gap(6)
 		width := row.Bounds().W
 		row.Children(func() {
 			ui.Spacer(c)
 			// Beside the bubble, centered on its first line, over the
-			// bubble's padding: the time, then the button next to the bubble.
-			actions := ui.Row(c).Height(actionsHeight).Margin(bubblePadY+a.body*bodyLineHeight/2-actionsHeight/2, 0, 0, 0).
-				Gap(4).AlignItems(ui.Center)
-			actions.Opacity(actions.Animate("opacity", shown(hover), revealDuration))
-			actions.Children(func() {
-				a.messageTime(c, m)
-				a.copyButton(c, m)
-			})
+			// bubble's padding.
+			actions := a.questionActions(c, th, i, hover).Margin(bubblePadY+a.body*bodyLineHeight/2-actionSize/2, 0, 0, 0)
 			// The row's room for the bubble, as of the last frame: past the
 			// spacer's gap and the actions'.
-			a.question(c, m, width-actions.Bounds().W-8)
+			a.question(c, m, width-actions.Bounds().W-6)
 		})
+		a.questionVersions(c, th, i)
 		return
 	}
 	// A little further from its question than the list's gap, which the
@@ -305,15 +311,22 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 		if m.Error != "" {
 			ui.Text(c, m.errorText()).FontSize(14).TextColor(t.Danger).Selectable()
 		}
-		// Under the reply: the button on the text's edge, the time at the
-		// far end.
-		if !m.streaming && m.Text != "" {
-			actions := ui.Row(c).Margin(-4, 0, 0, -6).AlignItems(ui.Center)
-			actions.Opacity(actions.Animate("opacity", shown(hover || last), revealDuration))
+		// Under the reply, once it ended, its words or what went wrong:
+		// its versions, always, then its buttons on the text's edge, and
+		// the time at the far end, under the pointer and on the last reply.
+		if !m.streaming && (m.Text != "" || m.Error != "") {
+			actions := ui.Row(c).Margin(-4, 0, 0, -barInset(th, i)).Gap(barGap).AlignItems(ui.Center)
+			reveal := actions.Animate("opacity", shown(hover || last), revealDuration)
 			actions.Children(func() {
-				a.copyButton(c, m)
+				a.versionSwitcher(c, th, i)
+				ui.Row(c).AlignItems(ui.Center).Gap(barGap).Opacity(reveal).Children(func() {
+					if m.Text != "" {
+						a.copyButton(c, m)
+					}
+					a.regenerateButton(c, th, i)
+				})
 				ui.Spacer(c)
-				a.messageTime(c, m)
+				ui.Row(c).Opacity(reveal).Children(func() { a.messageTime(c, m) })
 			})
 		}
 	})
@@ -445,7 +458,6 @@ const (
 	bubblePadY     = 9   // a question's bubble's padding over and under its text
 	bubblePadX     = 14  // and to its sides
 	bubbleMaxWidth = 560 // a question's bubble's width at most
-	actionsHeight  = 28  // a message's actions' height: an iconButton's
 )
 
 // revealDuration is how long a message's actions take to fade in or out.
@@ -459,6 +471,31 @@ func shown(show bool) float32 {
 	return 0
 }
 
+// questionActions builds the row of th's question at i's actions, beside
+// it on the left, under the pointer: its time and its buttons.
+func (a *app) questionActions(c *ui.Context, th *thread, i int, hover bool) ui.Element {
+	m := th.Messages[i]
+	actions := ui.Row(c).Height(actionSize).Gap(barGap).AlignItems(ui.Center)
+	actions.Opacity(actions.Animate("opacity", shown(hover), revealDuration))
+	actions.Children(func() {
+		ui.Row(c).Padding(0, 4, 0, 0).Children(func() { a.messageTime(c, m) })
+		if m.Text != "" {
+			a.editButton(c, th, m)
+			a.copyButton(c, m)
+		}
+	})
+	return actions
+}
+
+// questionVersions builds, under th's question at i, where it has
+// versions, its switcher, always, on the right, its last chevron on the
+// bubble's edge.
+func (a *app) questionVersions(c *ui.Context, th *thread, i int) {
+	ui.Row(c).Justify(ui.End).Children(func() {
+		a.versionSwitcher(c, th, i).Margin(2, -switchInset, 0, 0)
+	})
+}
+
 // copyButton builds the button that copies m's text, which shows a check
 // for a moment after.
 func (a *app) copyButton(c *ui.Context, m *message) {
@@ -469,8 +506,7 @@ func (a *app) copyButton(c *ui.Context, m *message) {
 		svg, label = checkIcon, locales.Copied()
 		c.After(left) // a frame as the check goes
 	}
-	// A size under the other buttons', as it shows on every message.
-	b := iconButtonSized(c, svg, label, 14)
+	b := actionButton(c, svg, label, actionIcon)
 	if copied {
 		b.TextColor(c.Theme().Success)
 	}

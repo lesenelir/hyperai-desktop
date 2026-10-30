@@ -17,6 +17,19 @@
   "@copy": { "description": "The button that copies a message's text." },
   "copied": "Copied",
   "@copied": { "description": "What the copy button and the toast say once a message or a chat was copied." },
+  "regenerate": "Regenerate",
+  "@regenerate": { "description": "The button under a reply that asks for it again, a new version of it, of the model the composer asks." },
+  "editMessage": "Edit",
+  "@editMessage": { "description": "The button beside a question that turns its bubble into a field, to send it again changed, a new version of it." },
+  "previousVersion": "Previous version",
+  "@previousVersion": { "description": "The button that shows the version of a message, and of the conversation after it, before the one shown." },
+  "nextVersion": "Next version",
+  "@nextVersion": { "description": "The button that shows the version of a message, and of the conversation after it, after the one shown." },
+  "versionOf": "Version {n} of {count}",
+  "@versionOf": {
+    "description": "Names, to assistive technology, which version of a message shows, between the buttons that show the others; on screen it shows as 2 / 3.",
+    "placeholders": { "n": { "type": "int", "example": "2" }, "count": { "type": "int", "example": "3" } }
+  },
   "more": "More",
   "@more": { "description": "The button of the chat's title bar that opens its menu." },
   "back": "Back",
@@ -51,6 +64,8 @@
   "@renameLabel": { "description": "Names the field that renames a chat, to assistive technology." },
   "titleFailed": "Couldn’t regenerate the title",
   "@titleFailed": { "description": "The title of the toast that shows as a title asked for with Regenerate Title could not be made; what the provider said goes under it." },
+  "titleRegenerating": "Regenerating title",
+  "@titleRegenerating": { "description": "Names, to assistive technology, the spinner beside a chat's title while Regenerate Title asks for a new one." },
   "chatOptions": "Options for “{title}”",
   "@chatOptions": {
     "description": "Names, to assistive technology, the button of a sidebar row that opens the chat's menu; its tooltip says More.",

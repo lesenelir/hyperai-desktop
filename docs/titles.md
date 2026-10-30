@@ -74,8 +74,11 @@ out of the room that drags the window.
 **Regenerate Title**, in the same menus, asks for a title anew of the
 chat's first question with text, of the model the chat asks and as a
 chat that starts is named (the Title model first, then the provider's
-cheapest), over whatever title it has. It is faded while one is being
-asked for, and for a chat of files alone; a failure, which the user
+cheapest), over whatever title it has. While it is asked for, a spinner
+shows beside the title, in the title bar (14) and the sidebar's row (12),
+where a chat named as it starts shows none: that title replaces the
+local one quietly, under the reply's own spinner. It is faded while one is
+being asked for, and for a chat of files alone; a failure, which the user
 asked about, shows in a toast, as the provider said it.
 
 **Normalize once, at the end.** Trim, take the first line, strip the

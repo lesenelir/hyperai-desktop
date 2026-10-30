@@ -154,6 +154,9 @@ func TestTitleSettings(t *testing.T) {
 	p := &namer{title: "Caching"}
 	a := newApp(p)
 	a.loadFrom(dir)
+	// The chats and settings are written on goroutines: done before the
+	// folder goes.
+	t.Cleanup(func() { a.saver.wait(); a.confSaver.wait() })
 	a.nameChats = true
 	tt := ui.NewTester(a.view, 1120, 760)
 	a.openSettings()
@@ -423,5 +426,47 @@ func TestRowMoreButton(t *testing.T) {
 	tt.Frame()
 	if a.selected != shown || a.renaming != strconv.Itoa(first.ID) || !a.renameInSidebar {
 		t.Errorf("shown %q (was %q), renaming %q in the sidebar %v", a.selected, shown, a.renaming, a.renameInSidebar)
+	}
+}
+
+// A title asked for anew shows a spinner beside it, in the sidebar and the
+// title bar, until it lands; one asked for as a chat starts shows none.
+func TestRetitleSpinner(t *testing.T) {
+	p := &namer{title: "Caching"}
+	a := newApp(p)
+	tt := ui.NewTester(a.view, 1120, 760)
+	a.send("How do I cache?")
+	tt.Frame()
+	th := a.current()
+	spinners := func() int {
+		n := 0
+		for _, s := range tt.Texts() {
+			if s == locales.TitleRegenerating() {
+				n++
+			}
+		}
+		return n
+	}
+
+	posts := make(chan func(), 16)
+	a.post = func(f func()) { posts <- f }
+	a.nameChats = true
+	a.nameChat(th, p, "claude-opus-5-5", "How do I cache?", false)
+	tt.Frame()
+	if th.retitling || spinners() != 0 {
+		t.Errorf("named as it starts: retitling %v, %d spinners", th.retitling, spinners())
+	}
+	(<-posts)()
+
+	th.Title = "Mine"
+	a.retitle(th)
+	tt.Frame()
+	if !th.retitling || spinners() != 2 {
+		t.Fatalf("retitling %v, %d spinners; texts %q", th.retitling, spinners(), tt.Texts())
+	}
+	(<-posts)()
+	tt.Frame()
+	if th.retitling || spinners() != 0 || th.Title != "Caching" {
+		t.Errorf("landed: retitling %v, %d spinners, title %q", th.retitling, spinners(), th.Title)
 	}
 }

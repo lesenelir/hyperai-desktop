@@ -156,6 +156,86 @@ func (msgs Messages) Copied() string {
 	return Catalog.Format(msgs.locale, "copied", nil)
 }
 
+// Regenerate says "Regenerate"
+// in the language the app shows.
+//
+// The button under a reply that asks for it again, a new version of it, of
+// the model the composer asks.
+func Regenerate() string { return In(i18n.Locale()).Regenerate() }
+
+// Regenerate says "Regenerate"
+// in the language of msgs.
+//
+// The button under a reply that asks for it again, a new version of it, of
+// the model the composer asks.
+func (msgs Messages) Regenerate() string {
+	return Catalog.Format(msgs.locale, "regenerate", nil)
+}
+
+// EditMessage says "Edit"
+// in the language the app shows.
+//
+// The button beside a question that turns its bubble into a field, to send
+// it again changed, a new version of it.
+func EditMessage() string { return In(i18n.Locale()).EditMessage() }
+
+// EditMessage says "Edit"
+// in the language of msgs.
+//
+// The button beside a question that turns its bubble into a field, to send
+// it again changed, a new version of it.
+func (msgs Messages) EditMessage() string {
+	return Catalog.Format(msgs.locale, "editMessage", nil)
+}
+
+// PreviousVersion says "Previous version"
+// in the language the app shows.
+//
+// The button that shows the version of a message, and of the conversation
+// after it, before the one shown.
+func PreviousVersion() string { return In(i18n.Locale()).PreviousVersion() }
+
+// PreviousVersion says "Previous version"
+// in the language of msgs.
+//
+// The button that shows the version of a message, and of the conversation
+// after it, before the one shown.
+func (msgs Messages) PreviousVersion() string {
+	return Catalog.Format(msgs.locale, "previousVersion", nil)
+}
+
+// NextVersion says "Next version"
+// in the language the app shows.
+//
+// The button that shows the version of a message, and of the conversation
+// after it, after the one shown.
+func NextVersion() string { return In(i18n.Locale()).NextVersion() }
+
+// NextVersion says "Next version"
+// in the language of msgs.
+//
+// The button that shows the version of a message, and of the conversation
+// after it, after the one shown.
+func (msgs Messages) NextVersion() string {
+	return Catalog.Format(msgs.locale, "nextVersion", nil)
+}
+
+// VersionOf says "Version {n} of {count}"
+// in the language the app shows.
+//
+// Names, to assistive technology, which version of a message shows, between
+// the buttons that show the others; on screen it shows as 2 / 3.
+func VersionOf(n int, count int) string { return In(i18n.Locale()).VersionOf(n, count) }
+
+// VersionOf says "Version {n} of {count}"
+// in the language of msgs.
+//
+// Names, to assistive technology, which version of a message shows, between
+// the buttons that show the others; on screen it shows as 2 / 3.
+func (msgs Messages) VersionOf(n int, count int) string {
+	return Catalog.Format(msgs.locale, "versionOf", map[string]any{"n": n, "count": count})
+}
+
 // More says "More"
 // in the language the app shows.
 //
@@ -378,6 +458,22 @@ func TitleFailed() string { return In(i18n.Locale()).TitleFailed() }
 // Title could not be made; what the provider said goes under it.
 func (msgs Messages) TitleFailed() string {
 	return Catalog.Format(msgs.locale, "titleFailed", nil)
+}
+
+// TitleRegenerating says "Regenerating title"
+// in the language the app shows.
+//
+// Names, to assistive technology, the spinner beside a chat's title while
+// Regenerate Title asks for a new one.
+func TitleRegenerating() string { return In(i18n.Locale()).TitleRegenerating() }
+
+// TitleRegenerating says "Regenerating title"
+// in the language of msgs.
+//
+// Names, to assistive technology, the spinner beside a chat's title while
+// Regenerate Title asks for a new one.
+func (msgs Messages) TitleRegenerating() string {
+	return Catalog.Format(msgs.locale, "titleRegenerating", nil)
 }
 
 // ChatOptions says "Options for “{title}”"

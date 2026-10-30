@@ -213,10 +213,32 @@ A small button that floats over the conversation (scroll to end) rests at
   which are the box; no focus ring; the placeholder at `fg/40`.
 - **Messages**: the user's in a `raised` bubble on the right; replies as
   Markdown across the column under a rule saying how long they took.
-  Their actions (copy, time) fade in under the pointer in 150 ms; the last
-  reply's stay. A question past 8 lines shows 6, fading out from 70% of
+  Their actions are a row of the same buttons: a question's beside its
+  bubble on the left, centered on its first line, 6 from it; a reply's
+  under it, its first icon on the text's edge, the time at the far end.
+  Every button is 24 tall, radius 6, the same wash under the pointer, 2
+  apart, so that the space between two icons is about the same
+  throughout: copy, edit and regenerate 24 square, their icons 14; the
+  versions' chevrons 12 in buttons 18 wide, their wash close round them,
+  the count between 2 clear. The versions, where there are any, are
+  always shown: under a question's bubble on the right, its last chevron
+  on the bubble's edge, and first among a reply's actions; the rest fade
+  in under the pointer in 150 ms; the last reply's stay. A question past 8 lines shows 6, fading out from 70% of
   their height, over a muted "Show more" that takes the accent under the
   pointer, as hyperai-next's agent does.
+- **Versions** ([versions.go](../versions.go)), as ChatGPT's and Claude's:
+  a question edited, with the pencil beside it, before copy, or a reply
+  asked for again, with the arrow under it, after copy, is a version beside the one it replaces, which
+  keeps all that followed it; nothing is ever cut. Editing turns the
+  bubble into a field across the column, the caret at its end, over
+  Cancel (the composer's face, a hairline) and Send (the accent), both
+  13/500, radius 8; the key that sends the composer's sends it, Escape
+  cancels. A message with versions shows `‹ 2 / 3 ›` always: under a
+  question's bubble, first under a reply; the count 12 `fg/70` in tabular figures. All of it fades to 35%
+  while a reply streams in the chat, as do the pencil and the arrow. The path shown is the conversation: what the model is
+  asked, the search finds, the outline marks and Copy as Markdown copies;
+  each message remembers the one shown after it, so a version gone back to
+  shows as it was left. A reply that failed has the arrow too.
 - **Math** in replies — `$…$`, `\(…\)`, `$$…$$` and `\[…\]`, but not
   dollars of money ($5) — is set as KaTeX sets it, by RaTeX
   ([ratex/](../ratex), [katex.go](../katex.go)), a KaTeX-compatible

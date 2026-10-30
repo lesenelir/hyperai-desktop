@@ -97,6 +97,7 @@ func (a *app) show(id string) {
 		return
 	}
 	a.commitRename()
+	a.endEdit()
 	a.keepDraft()
 	a.selected = id
 	a.draft, a.files = a.newDraft, a.newFiles

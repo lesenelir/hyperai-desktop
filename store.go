@@ -36,8 +36,9 @@ func (a *app) loadFrom(dir string) {
 		return
 	}
 	for _, th := range a.threads {
+		th.link()
 		a.next = max(a.next, th.ID)
-		for _, m := range th.Messages {
+		for _, m := range th.all() {
 			a.next = max(a.next, m.ID)
 		}
 	}

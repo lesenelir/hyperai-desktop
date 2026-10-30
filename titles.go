@@ -53,7 +53,7 @@ func (a *app) nameChat(th *thread, p provider, model, first string, explicit boo
 		cheap = kind.titleModel
 	}
 	id, local := th.ID, th.Title
-	th.naming = true
+	th.naming, th.retitling = true, explicit
 	a.async(func() func() {
 		ctx, cancel := context.WithTimeout(context.Background(), titleTimeout)
 		defer cancel()
@@ -63,7 +63,7 @@ func (a *app) nameChat(th *thread, p provider, model, first string, explicit boo
 		}
 		return func() {
 			if th := a.thread(strconv.Itoa(id)); th != nil {
-				th.naming = false
+				th.naming, th.retitling = false, false
 			}
 			switch {
 			case err == nil:
