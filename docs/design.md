@@ -177,8 +177,9 @@ A small button that floats over the conversation (scroll to end) rests at
   do (voice). Over a conversation it floats over the end, on
   the canvas, which fades the conversation out above it.
 - **Attachments** ([attach.go](../attach.go)), as Codex's: a round `+`,
-  muted as the model's button, 4 in at the box's bottom left, its icon
-  about as far in as the text, and left of the pill's text (40 in), opens the system's dialog; files dropped
+  muted as the model's button, 8 in at the box's bottom left, as the
+  send button is at its right, both round buttons as far from the round
+  corner all round, and left of the pill's text (44 in), opens the system's dialog; files dropped
   anywhere on the chat attach too, and while they are dragged over it the
   composer shows "Drop files to attach" over itself, ringed in the accent
   at 1.5, as what takes them. Pasting attaches files copied in Finder, and

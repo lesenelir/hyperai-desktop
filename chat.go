@@ -97,10 +97,10 @@ func (a *app) prompts(c *ui.Context) {
 		ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Padding(4, 0, 0, 0).Children(func() {
 			for i, s := range suggestions {
 				prompt := s.prompt()
-				// Its icon under the attach button's of the composer, and the
-				// box's text, as hyperai-next's: no card, no wash; the pointer brings the text up the ladder,
-				// and the icon to the accent.
-				row := ui.ButtonBase(c.Key("prompt "+strconv.Itoa(i))).Padding(7, fieldPadX+1).Gap(12).Radius(8).
+				// Its icon under the attach button's of the composer, as
+				// hyperai-next's under its text: no card, no wash; the pointer
+				// brings the text up the ladder, and the icon to the accent.
+				row := ui.ButtonBase(c.Key("prompt "+strconv.Itoa(i))).Padding(7, attachLeft+(sendSize-16)/2+1).Gap(12).Radius(8).
 					Justify(ui.Start).AlignItems(ui.Center).Label(prompt)
 				on := row.Hovered()
 				row.Children(func() {
@@ -573,13 +573,16 @@ func (a *app) composer(c *ui.Context, th *thread) {
 // heights are these, so that the conversation's end knows them in the
 // frame the composer takes them (composerRoom).
 const (
-	composerRadius = 24                        // a pill's, one line tall; the box keeps it
-	fieldPadX      = 12                        // the field's text in from the box's left, as Codex's
-	attachLeft     = 4                         // the attach button in from the box's left, its icon about as far in as the text
-	pillPadLeft    = attachLeft + sendSize + 4 // the text in from a pill's left, past the attach button
-	pillPadY       = 12                        // the field's padding over and under its line, as a pill
-	boxPadTop      = 16                        // and as a box: room for the fade (fieldFadeGap)
-	boxPadBottom   = 6
+	composerRadius = 24 // a pill's, one line tall; the box keeps it
+	fieldPadX      = 12 // the field's text in from the box's left, as Codex's
+	// attachLeft is the attach button in from the box's left, as far as
+	// the send button is from its right: round in the box's round corner,
+	// both are as far from it all round (composerRadius - sendSize/2).
+	attachLeft   = composerRadius - sendSize/2
+	pillPadLeft  = attachLeft + sendSize + 4 // the text in from a pill's left, past the attach button
+	pillPadY     = 12                        // the field's padding over and under its line, as a pill
+	boxPadTop    = 16                        // and as a box: room for the fade (fieldFadeGap)
+	boxPadBottom = 6
 	// filesPadTop is the field's padding over its text under the files
 	// attached, which keep the room over them: closer, as Codex's text is
 	// to its images, and room for a fade still.
