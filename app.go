@@ -180,6 +180,9 @@ type app struct {
 	editing      string
 	editDraft    string
 	needProvider bool // the composer sent while no provider can be asked
+	// nameChats has a model name each chat as it starts (titles.go): off
+	// in tests and HYPERAI_BENCH, which ask a demo.
+	nameChats bool
 	// collapsed hides the sidebar, sideWidth wide as it shows; resizing
 	// tells that the pointer drags its edge, which pressed it resizeFrom
 	// wide and went resizeBy since (layout.go).
@@ -366,6 +369,7 @@ func (a *app) send(text string) {
 	if text == "" && len(files) == 0 || a.prov == nil || th != nil && th.busy != nil {
 		return
 	}
+	started := th == nil
 	if th == nil {
 		a.next++
 		name := text
@@ -423,6 +427,11 @@ func (a *app) send(text string) {
 	// The provider and model asked, as of now: showing another chat
 	// chooses another for the composer while this one streams.
 	prov, model, dir := a.prov, a.model, a.filesDir
+	// A chat just started is named by a model, beside its reply; of files
+	// alone, it keeps the first's name.
+	if started && text != "" && a.nameChats {
+		a.nameChat(th, prov, model, text)
+	}
 	stream := func(delta func(chunk)) error {
 		if err := readFiles(dir, turns); err != nil {
 			return err

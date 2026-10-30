@@ -59,19 +59,21 @@ type provider interface {
 // which returns the provider at an endpoint, for a key, offering models;
 // local, of a server on the user's computer, which takes no key, offers
 // the models it runs, and is asked once the user turns it on, its keyURL
-// where it is downloaded; copilot, of GitHub Copilot, asked through its
+// where it is downloaded; titleModel, the cheap model that names its chats
+// (titles.go), "" for the chat's own; copilot, of GitHub Copilot, asked through its
 // CLI as the user signed in (copilot.go), which openKind opens, not open; and,
 // of one the user added, api, the API it takes (customAPIs).
 type providerKind struct {
-	id, name string
-	baseURL  string
-	keyURL   string
-	models   []string
-	chat     func(model string) bool
-	open     func(k *providerKind, baseURL, key string, models []string) provider
-	local    bool
-	copilot  bool
-	api      string
+	id, name   string
+	baseURL    string
+	keyURL     string
+	models     []string
+	chat       func(model string) bool
+	open       func(k *providerKind, baseURL, key string, models []string) provider
+	local      bool
+	copilot    bool
+	api        string
+	titleModel string
 }
 
 // providerKinds are the services HyperAI talks to, in the order the
@@ -80,15 +82,17 @@ type providerKind struct {
 // API, Google at an endpoint it keeps for that.
 var providerKinds = []providerKind{
 	{id: "openai", name: "OpenAI", baseURL: "https://api.openai.com/v1", keyURL: "https://platform.openai.com/api-keys",
-		models: []string{"gpt-5", "gpt-5-mini"}, chat: openAIChat, open: openChatCompletions},
+		models: []string{"gpt-5", "gpt-5-mini"}, chat: openAIChat, open: openChatCompletions, titleModel: "gpt-5-mini"},
 	{id: "anthropic", name: "Anthropic", baseURL: "https://api.anthropic.com", keyURL: "https://console.anthropic.com/settings/keys",
-		models: []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"}, open: openAnthropic},
+		models: []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"}, open: openAnthropic, titleModel: "claude-haiku-5-5"},
 	{id: "google", name: "Google", baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", keyURL: "https://aistudio.google.com/apikey",
-		models: []string{"gemini-4-argon", "gemini-3.8-flash", "gemini-3.5-flash-lite"}, chat: geminiChat, open: openChatCompletions},
+		models: []string{"gemini-4-argon", "gemini-3.8-flash", "gemini-3.5-flash-lite"}, chat: geminiChat, open: openChatCompletions,
+		titleModel: "gemini-3.5-flash-lite"},
 	{id: "openrouter", name: "OpenRouter", baseURL: "https://openrouter.ai/api/v1", keyURL: "https://openrouter.ai/keys",
-		models: []string{"anthropic/claude-sonnet-5.5", "anthropic/claude-opus-5.5", "anthropic/claude-haiku-5.5"}, open: openChatCompletions},
+		models: []string{"anthropic/claude-sonnet-5.5", "anthropic/claude-opus-5.5", "anthropic/claude-haiku-5.5"}, open: openChatCompletions,
+		titleModel: "anthropic/claude-haiku-5.5"},
 	{id: "deepseek", name: "DeepSeek", baseURL: "https://api.deepseek.com/v1", keyURL: "https://platform.deepseek.com/api_keys",
-		models: []string{"deepseek-chat", "deepseek-reasoner"}, open: openChatCompletions},
+		models: []string{"deepseek-chat", "deepseek-reasoner"}, open: openChatCompletions, titleModel: "deepseek-chat"},
 	{id: "copilot", name: "GitHub Copilot", copilot: true},
 	{id: "ollama", name: "Ollama", baseURL: "http://localhost:11434/v1", keyURL: "https://ollama.com/download",
 		chat: localChat, open: openChatCompletions, local: true},

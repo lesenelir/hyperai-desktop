@@ -86,6 +86,7 @@ func main() {
 			go a.bench(bench)
 		} else {
 			a.focused = a.win.IsFocused
+			a.nameChats = true
 			// The models of the providers that listed none yet, as they
 			// have them now, and whom Copilot asks as.
 			a.listUnlisted()
