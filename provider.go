@@ -59,12 +59,15 @@ type providerKind struct {
 
 // providerKinds are the services HyperAI talks to, in the order the
 // Providers page and the composer's menu list them. All but Anthropic
-// take OpenAI's chat completions API.
+// take OpenAI's chat completions API, Google at an endpoint it keeps for
+// that.
 var providerKinds = []providerKind{
 	{id: "openai", name: "OpenAI", baseURL: "https://api.openai.com/v1", keyURL: "https://platform.openai.com/api-keys",
 		models: []string{"gpt-5", "gpt-5-mini"}, chat: openAIChat, open: openChatCompletions},
 	{id: "anthropic", name: "Anthropic", baseURL: "https://api.anthropic.com", keyURL: "https://console.anthropic.com/settings/keys",
 		models: []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"}, open: openAnthropic},
+	{id: "google", name: "Google", baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", keyURL: "https://aistudio.google.com/apikey",
+		models: []string{"gemini-4-argon", "gemini-3.8-flash", "gemini-3.5-flash-lite"}, chat: geminiChat, open: openChatCompletions},
 	{id: "openrouter", name: "OpenRouter", baseURL: "https://openrouter.ai/api/v1", keyURL: "https://openrouter.ai/keys",
 		models: []string{"anthropic/claude-sonnet-5.5", "anthropic/claude-opus-5.5", "anthropic/claude-haiku-5.5"}, open: openChatCompletions},
 	{id: "deepseek", name: "DeepSeek", baseURL: "https://api.deepseek.com/v1", keyURL: "https://platform.deepseek.com/api_keys",
@@ -93,12 +96,24 @@ func openAIChat(model string) bool {
 	return true
 }
 
+// geminiChat tells Google's models that chat from those openAIChat would
+// not, and those that film, compose music, answer of a corpus, drive
+// robots or talk live, which its list holds too.
+func geminiChat(model string) bool {
+	for _, not := range []string{"veo", "lyria", "aqa", "live", "robotics"} {
+		if strings.Contains(model, not) {
+			return false
+		}
+	}
+	return openAIChat(model)
+}
+
 func openChatCompletions(k *providerKind, baseURL, key string, models []string) provider {
 	return &openAI{id: k.id, name: k.name, baseURL: baseURL, apiKey: key, models: models, client: http.DefaultClient}
 }
 
 // openAI streams replies through OpenAI's chat completions API, as OpenAI,
-// OpenRouter and DeepSeek take it.
+// Google, OpenRouter and DeepSeek take it.
 type openAI struct {
 	id, name, baseURL, apiKey string
 	models                    []string
@@ -133,7 +148,9 @@ func (p *openAI) List(ctx context.Context) ([]string, error) {
 	}
 	var ids []string
 	for _, m := range list.Data {
-		ids = append(ids, m.ID)
+		// Google's may name a model by its path in its own API,
+		// "models/gemini-…", where chats name it bare.
+		ids = append(ids, strings.TrimPrefix(m.ID, "models/"))
 	}
 	return ids, nil
 }

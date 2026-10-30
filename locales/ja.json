@@ -259,7 +259,7 @@
   "modelAddProvider": "プロバイダを追加",
   "defaultModelNone": "API キーが設定されたプロバイダはまだありません。",
   "noProviderTitle": "プロバイダがまだありません",
-  "noProviderAbout": "メッセージを送信するには、OpenAI、Anthropic、OpenRouter、DeepSeek のいずれかの API キーを追加してください。",
+  "noProviderAbout": "メッセージを送信するには、OpenAI、Anthropic、Google、OpenRouter、DeepSeek のいずれかの API キーを追加してください。",
   "sidebarReplying": "返信中",
   "sidebarUnread": "新しい返信",
   "keysKeptFile": "{platform, select, mac {開発版：キーはキーチェーンではなく {path} に暗号化せずに保存されます。インストールしたアプリはキーチェーンに保存します。} other {開発版：キーはシステムの資格情報ストアではなく {path} に暗号化せずに保存されます。インストールしたアプリは資格情報ストアに保存します。}}"

@@ -3634,14 +3634,14 @@ func (msgs Messages) NoProviderTitle() string {
 	return Catalog.Format(msgs.locale, "noProviderTitle", nil)
 }
 
-// NoProviderAbout says "Add an API key of OpenAI, Anthropic, OpenRouter or DeepSeek to send messages."
+// NoProviderAbout says "Add an API key of OpenAI, Anthropic, Google, OpenRouter or DeepSeek to send messages."
 // in the language the app shows.
 //
 // Under the title of the toast that shows as the user sends while no
 // provider has an API key.
 func NoProviderAbout() string { return In(i18n.Locale()).NoProviderAbout() }
 
-// NoProviderAbout says "Add an API key of OpenAI, Anthropic, OpenRouter or DeepSeek to send messages."
+// NoProviderAbout says "Add an API key of OpenAI, Anthropic, Google, OpenRouter or DeepSeek to send messages."
 // in the language of msgs.
 //
 // Under the title of the toast that shows as the user sends while no

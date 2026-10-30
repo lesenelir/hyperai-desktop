@@ -1,7 +1,7 @@
 // HyperAI is an AI chat client in native UI: chats in a sidebar, replies
 // streamed in as Markdown, and a composer that asks the model chosen. It
 // talks to the providers the user gave an API key on the Providers page
-// (OpenAI, Anthropic, OpenRouter, DeepSeek); until one has a key, the
+// (OpenAI, Anthropic, Google, OpenRouter, DeepSeek); until one has a key, the
 // composer asks for one.
 package main
 

@@ -107,6 +107,6 @@ var demoReplies = []string{
 		"> **Tip:** keep slow I/O off the UI thread, and publish results with `Window.Update`.\n\n" +
 		"Want me to start with step 1?",
 	"This is **demo mode**: replies are canned, streamed token by token the way a model streams them.\n\n" +
-		"To talk to a real model, open **Settings → Providers** and add an API key of OpenAI, Anthropic, OpenRouter or DeepSeek. " +
+		"To talk to a real model, open **Settings → Providers** and add an API key of OpenAI, Anthropic, Google, OpenRouter or DeepSeek. " +
 		"The key stays in your system's keychain, and the composer offers that provider's models from then on.\n",
 }

@@ -2932,6 +2932,22 @@ func TestListModels(t *testing.T) {
 			t.Errorf("openAIChat(%q) is %v", model, !chat)
 		}
 	}
+	// Google's, by the names its chats take, and those that chat.
+	gemini := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"data":[{"id":"models/gemini-3.8-flash"},{"id":"gemma-4-27b-it"}]}`)
+	}))
+	defer gemini.Close()
+	p = &openAI{baseURL: gemini.URL, apiKey: "good", client: gemini.Client()}
+	if got, err := p.List(context.Background()); err != nil || !slices.Equal(got, []string{"gemini-3.8-flash", "gemma-4-27b-it"}) {
+		t.Errorf("Google's: %q, %v", got, err)
+	}
+	for model, chat := range map[string]bool{"gemini-4-argon": true, "gemini-3.8-flash": true, "gemma-4-27b-it": true,
+		"gemini-embedding-2": false, "gemini-2.5-flash-image": false, "imagen-4.0-generate-001": false, "veo-3.0-generate-001": false,
+		"gemini-2.5-flash-preview-tts": false, "gemini-live-2.5-flash-preview": false, "aqa": false} {
+		if geminiChat(model) != chat {
+			t.Errorf("geminiChat(%q) is %v", model, !chat)
+		}
+	}
 }
 
 func TestFileKeyring(t *testing.T) {
@@ -3017,7 +3033,7 @@ func TestProviders(t *testing.T) {
 		if len(a.threads) != 0 || a.draft != "Hello" || tt.HasText("hyperai-demo") {
 			t.Fatalf("%s without a key: chats %d, draft %q, texts %q", how, len(a.threads), a.draft, tt.Texts())
 		}
-		if texts("Add an API key of OpenAI, Anthropic, OpenRouter or DeepSeek to send messages.") != 1 || texts("No provider yet") != 1 {
+		if texts("Add an API key of OpenAI, Anthropic, Google, OpenRouter or DeepSeek to send messages.") != 1 || texts("No provider yet") != 1 {
 			t.Fatalf("%s: no one toast that says why in %q", how, tt.Texts())
 		}
 	}
