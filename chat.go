@@ -33,6 +33,11 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 	t := c.Theme()
 	bar := c.TitleBar()
 	th := a.current()
+	// A project's page, where no chat shows (projects.go).
+	var page *project
+	if th == nil {
+		page = a.shownProject()
+	}
 	pane := ui.Column(c).Grow(1).MinWidth(0).Background(t.Background)
 	// Files dropped anywhere on the chat are attached to its draft, as
 	// Codex's thread takes them; the composer shows they would be while
@@ -44,8 +49,15 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 			name := locales.NewChat()
 			if th != nil {
 				name = th.Title
+				// Of a project: its name first, which goes to its page.
+				if p := a.projectOf(th); p != nil {
+					a.projectCrumb(c, p)
+				}
 			}
-			if th != nil && a.renaming == strconv.Itoa(th.ID) && !a.renameInSidebar {
+			if page != nil {
+				name = page.Name
+			}
+			if th != nil && a.renaming == strconv.Itoa(th.ID) && !a.renameInSidebar || page != nil && a.renaming == a.selected {
 				// Renamed in place, out of the room that drags the window.
 				ui.Row(c).Grow(1).MinWidth(0).Height(titleBarHeight).AlignItems(ui.Center).Children(func() {
 					a.renameField(c, 14, 500).MaxWidth(480)
@@ -64,7 +76,18 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 			if th != nil {
 				iconButton(c, moreIcon, locales.More()).Menu(func(m *ui.Menu) { a.chatMenu(c, m, th, false) })
 			}
+			if page != nil {
+				iconButton(c, moreIcon, locales.More()).Menu(func(m *ui.Menu) { a.projectMenu(m, page) })
+			}
 		})
+		if page != nil {
+			// As an empty chat, the composer third, so that it keeps the
+			// focus and what is typed as the chat starts.
+			a.projectHeader(c, page)
+			a.composer(c, nil)
+			a.projectBody(c, page)
+			return
+		}
 		if th == nil || len(th.Messages) == 0 {
 			// The composer is the third element either way, so that it keeps
 			// the focus and what is typed as the chat starts.

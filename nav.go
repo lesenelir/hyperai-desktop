@@ -101,8 +101,13 @@ func (a *app) show(id string) {
 	a.keepDraft()
 	a.selected = id
 	a.draft, a.files = a.newDraft, a.newFiles
+	if p := a.shownProject(); p != nil {
+		a.draft, a.files = a.projectDrafts[p.ID], a.projectFiles[p.ID]
+	}
 	if th := a.current(); th != nil {
 		a.draft, a.files = th.Draft, th.files
+		// Of a project: shown under it, unfolded.
+		a.unfoldProject(th.Project)
 	}
 	// From its first line.
 	a.fieldScroll = ui.ScrollState{}
@@ -113,6 +118,14 @@ func (a *app) show(id string) {
 // the files attached to any.
 func (a *app) keepDraft() {
 	th := a.current()
+	if p := a.shownProject(); p != nil {
+		// A project's page's, kept with it.
+		if a.projectDrafts == nil {
+			a.projectDrafts, a.projectFiles = map[string]string{}, map[string][]*attachment{}
+		}
+		a.projectDrafts[p.ID], a.projectFiles[p.ID] = a.draft, a.files
+		return
+	}
 	if th == nil {
 		a.newDraft, a.newFiles = a.draft, a.files
 		return

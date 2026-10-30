@@ -398,6 +398,206 @@ func (msgs Messages) DeleteChatItem() string {
 	return Catalog.Format(msgs.locale, "deleteChatItem", nil)
 }
 
+// NewProject says "New project"
+// in the language the app shows.
+//
+// The sidebar's row, first in Projects, that makes a project and shows it,
+// its name to type; and the name it has until then.
+func NewProject() string { return In(i18n.Locale()).NewProject() }
+
+// NewProject says "New project"
+// in the language of msgs.
+//
+// The sidebar's row, first in Projects, that makes a project and shows it,
+// its name to type; and the name it has until then.
+func (msgs Messages) NewProject() string {
+	return Catalog.Format(msgs.locale, "newProject", nil)
+}
+
+// ProjectInstructions says "Instructions"
+// in the language the app shows.
+//
+// The title of a project's card of instructions, on its page, and its
+// field's name to assistive technology.
+func ProjectInstructions() string { return In(i18n.Locale()).ProjectInstructions() }
+
+// ProjectInstructions says "Instructions"
+// in the language of msgs.
+//
+// The title of a project's card of instructions, on its page, and its
+// field's name to assistive technology.
+func (msgs Messages) ProjectInstructions() string {
+	return Catalog.Format(msgs.locale, "projectInstructions", nil)
+}
+
+// ProjectInstructionsPlaceholder says "What every chat in this project is told: what it is about, what to know, how to reply."
+// in the language the app shows.
+//
+// What the empty field of a project's instructions shows.
+func ProjectInstructionsPlaceholder() string {
+	return In(i18n.Locale()).ProjectInstructionsPlaceholder()
+}
+
+// ProjectInstructionsPlaceholder says "What every chat in this project is told: what it is about, what to know, how to reply."
+// in the language of msgs.
+//
+// What the empty field of a project's instructions shows.
+func (msgs Messages) ProjectInstructionsPlaceholder() string {
+	return Catalog.Format(msgs.locale, "projectInstructionsPlaceholder", nil)
+}
+
+// ProjectInstructionsAbout says "Sent after your own instructions, with every message of this project’s chats."
+// in the language the app shows.
+//
+// Under the field of a project's instructions: when they apply.
+func ProjectInstructionsAbout() string { return In(i18n.Locale()).ProjectInstructionsAbout() }
+
+// ProjectInstructionsAbout says "Sent after your own instructions, with every message of this project’s chats."
+// in the language of msgs.
+//
+// Under the field of a project's instructions: when they apply.
+func (msgs Messages) ProjectInstructionsAbout() string {
+	return Catalog.Format(msgs.locale, "projectInstructionsAbout", nil)
+}
+
+// ProjectNoChats says "Chats you start here show here."
+// in the language the app shows.
+//
+// What a project's page shows where its chats would be, while it has none.
+func ProjectNoChats() string { return In(i18n.Locale()).ProjectNoChats() }
+
+// ProjectNoChats says "Chats you start here show here."
+// in the language of msgs.
+//
+// What a project's page shows where its chats would be, while it has none.
+func (msgs Messages) ProjectNoChats() string {
+	return Catalog.Format(msgs.locale, "projectNoChats", nil)
+}
+
+// ViewAll says "View all"
+// in the language the app shows.
+//
+// The last row under a project unfolded in the sidebar, where it has more
+// chats than show there, which shows its page, where they all are.
+func ViewAll() string { return In(i18n.Locale()).ViewAll() }
+
+// ViewAll says "View all"
+// in the language of msgs.
+//
+// The last row under a project unfolded in the sidebar, where it has more
+// chats than show there, which shows its page, where they all are.
+func (msgs Messages) ViewAll() string {
+	return Catalog.Format(msgs.locale, "viewAll", nil)
+}
+
+// ProjectChatsToggle says "Chats of {name}"
+// in the language the app shows.
+//
+// Names, to assistive technology, the chevron by a project in the sidebar
+// that shows its chats under it, or hides them.
+func ProjectChatsToggle(name string) string { return In(i18n.Locale()).ProjectChatsToggle(name) }
+
+// ProjectChatsToggle says "Chats of {name}"
+// in the language of msgs.
+//
+// Names, to assistive technology, the chevron by a project in the sidebar
+// that shows its chats under it, or hides them.
+func (msgs Messages) ProjectChatsToggle(name string) string {
+	return Catalog.Format(msgs.locale, "projectChatsToggle", map[string]any{"name": name})
+}
+
+// MoveToProject says "Move to project"
+// in the language the app shows.
+//
+// The submenu of a chat's menu that moves it to a project, the projects
+// under it.
+func MoveToProject() string { return In(i18n.Locale()).MoveToProject() }
+
+// MoveToProject says "Move to project"
+// in the language of msgs.
+//
+// The submenu of a chat's menu that moves it to a project, the projects
+// under it.
+func (msgs Messages) MoveToProject() string {
+	return Catalog.Format(msgs.locale, "moveToProject", nil)
+}
+
+// RemoveFromProject says "Remove from project"
+// in the language the app shows.
+//
+// The item of the Move to project submenu that takes the chat out of its
+// project.
+func RemoveFromProject() string { return In(i18n.Locale()).RemoveFromProject() }
+
+// RemoveFromProject says "Remove from project"
+// in the language of msgs.
+//
+// The item of the Move to project submenu that takes the chat out of its
+// project.
+func (msgs Messages) RemoveFromProject() string {
+	return Catalog.Format(msgs.locale, "removeFromProject", nil)
+}
+
+// RemoveProjectItem says "Remove project…"
+// in the language the app shows.
+//
+// The item of a project's menu, in the title bar and the sidebar, that asks
+// to remove it.
+func RemoveProjectItem() string { return In(i18n.Locale()).RemoveProjectItem() }
+
+// RemoveProjectItem says "Remove project…"
+// in the language of msgs.
+//
+// The item of a project's menu, in the title bar and the sidebar, that asks
+// to remove it.
+func (msgs Messages) RemoveProjectItem() string {
+	return Catalog.Format(msgs.locale, "removeProjectItem", nil)
+}
+
+// RemoveProjectTitle says "Remove “{name}”?"
+// in the language the app shows.
+//
+// The question of the alert removing a project.
+func RemoveProjectTitle(name string) string { return In(i18n.Locale()).RemoveProjectTitle(name) }
+
+// RemoveProjectTitle says "Remove “{name}”?"
+// in the language of msgs.
+//
+// The question of the alert removing a project.
+func (msgs Messages) RemoveProjectTitle(name string) string {
+	return Catalog.Format(msgs.locale, "removeProjectTitle", map[string]any{"name": name})
+}
+
+// RemoveProjectAbout says "This only removes the project and its instructions. Its chats stay, outside any project."
+// in the language the app shows.
+//
+// Under the question of the alert removing a project: what goes, and that
+// its chats stay.
+func RemoveProjectAbout() string { return In(i18n.Locale()).RemoveProjectAbout() }
+
+// RemoveProjectAbout says "This only removes the project and its instructions. Its chats stay, outside any project."
+// in the language of msgs.
+//
+// Under the question of the alert removing a project: what goes, and that
+// its chats stay.
+func (msgs Messages) RemoveProjectAbout() string {
+	return Catalog.Format(msgs.locale, "removeProjectAbout", nil)
+}
+
+// RemoveProjectButton says "Remove project"
+// in the language the app shows.
+//
+// The alert's button that removes the project.
+func RemoveProjectButton() string { return In(i18n.Locale()).RemoveProjectButton() }
+
+// RemoveProjectButton says "Remove project"
+// in the language of msgs.
+//
+// The alert's button that removes the project.
+func (msgs Messages) RemoveProjectButton() string {
+	return Catalog.Format(msgs.locale, "removeProjectButton", nil)
+}
+
 // RenameChatItem says "Rename…"
 // in the language the app shows.
 //

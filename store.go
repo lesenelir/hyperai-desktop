@@ -24,6 +24,7 @@ func (a *app) load() {
 func (a *app) loadFrom(dir string) {
 	a.loadLayout(dir)
 	a.loadConf(dir)
+	a.loadProjects(dir)
 	defer func() {
 		if a.onLaunch == launchLast && a.thread(a.keptChat) != nil {
 			a.show(a.keptChat)

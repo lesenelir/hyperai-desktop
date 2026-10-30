@@ -17,14 +17,23 @@ import (
 // there are too. A chat's title is asked for without them. layout.json
 // keeps them.
 
-// withInstructions returns turns, the conversation a reply is asked of,
-// after the user's instructions, where they wrote any.
-func (a *app) withInstructions(turns []turn) []turn {
-	s := strings.TrimSpace(a.instructions)
-	if s == "" {
+// withInstructions returns turns, th's conversation a reply is asked of,
+// after the user's instructions, where they wrote any, and then those of
+// th's project, where it is in one that has any (projects.go).
+func (a *app) withInstructions(th *thread, turns []turn) []turn {
+	var parts []string
+	if s := strings.TrimSpace(a.instructions); s != "" {
+		parts = append(parts, s)
+	}
+	if p := a.projectOf(th); p != nil {
+		if s := strings.TrimSpace(p.Instructions); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	if len(parts) == 0 {
 		return turns
 	}
-	return append([]turn{{Role: "system", Content: s}}, turns...)
+	return append([]turn{{Role: "system", Content: strings.Join(parts, "\n\n")}}, turns...)
 }
 
 // instructionsTerms returns what the Instructions page holds, as the
