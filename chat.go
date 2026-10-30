@@ -324,6 +324,7 @@ func (a *app) message(c *ui.Context, th *thread, i int, hover, last bool) {
 						a.copyButton(c, m)
 					}
 					a.regenerateButton(c, th, i)
+					a.usageButton(c, m)
 				})
 				ui.Spacer(c)
 				ui.Row(c).Opacity(reveal).Children(func() { a.messageTime(c, m) })

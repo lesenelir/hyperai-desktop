@@ -21,6 +21,7 @@ type batcher struct {
 	commit    func(ch chunk) // publishes ch, as through Window.Update
 	text      strings.Builder
 	reasoning strings.Builder
+	used      *usage      // the reply's usage, the latest given
 	timer     *time.Timer // the batch's commit to come, nil when none
 	last      time.Time   // when the last commit was made
 	closed    bool
@@ -37,6 +38,9 @@ func (b *batcher) add(ch chunk) {
 	}
 	b.text.WriteString(ch.Text)
 	b.reasoning.WriteString(ch.Reasoning)
+	if ch.Usage != nil {
+		b.used = ch.Usage
+	}
 	if b.timer == nil {
 		b.timer = time.AfterFunc(max(0, commitInterval-time.Since(b.last)), b.flush)
 	}
@@ -51,12 +55,13 @@ func (b *batcher) flush() {
 
 func (b *batcher) flushLocked() {
 	b.timer = nil
-	if b.closed || b.text.Len()+b.reasoning.Len() == 0 {
+	if b.closed || b.text.Len()+b.reasoning.Len() == 0 && b.used == nil {
 		return
 	}
-	ch := chunk{Text: b.text.String(), Reasoning: b.reasoning.String()}
+	ch := chunk{Text: b.text.String(), Reasoning: b.reasoning.String(), Usage: b.used}
 	b.text.Reset()
 	b.reasoning.Reset()
+	b.used = nil
 	b.last = time.Now()
 	// Committed under the lock, so that a commit of the timer's and the
 	// last one, of close, are made in the order the chunks came.

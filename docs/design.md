@@ -239,6 +239,18 @@ A small button that floats over the conversation (scroll to end) rests at
   asked, the search finds, the outline marks and Copy as Markdown copies;
   each message remembers the one shown after it, so a version gone back to
   shows as it was left. A reply that failed has the arrow too.
+- **Usage** ([usage.go](../usage.go)): a reply's actions end with a chart,
+  which opens what it took in a card under it, as a popover (Escape or a
+  click away closes it): on `composer`, radius 12, a hairline and the float
+  shadow, rows of what each says at 13 `fg/70` on the left and how much at
+  13 in tabular figures on the right, in the app's language's numbers.
+  Input tokens, all of them, cached ones among them; Cached input tokens;
+  Output tokens, the reasoning among them — as the provider counted them,
+  where it did (Anthropic, those that take OpenAI's API, which are asked
+  for it and asked again without where they refuse, and Copilot) — then
+  Time to first token, of text or reasoning, Duration, and Output speed,
+  the output over the time past the first token. chats.json keeps them.
+  No count of model calls: a reply is one.
 - **Math** in replies — `$…$`, `\(…\)`, `$$…$$` and `\[…\]`, but not
   dollars of money ($5) — is set as KaTeX sets it, by RaTeX
   ([ratex/](../ratex), [katex.go](../katex.go)), a KaTeX-compatible

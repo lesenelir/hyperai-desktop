@@ -151,6 +151,30 @@
     "description": "A duration under a minute, shortly: \"4s\".",
     "placeholders": { "s": { "type": "int", "example": "4" } }
   },
+  "usageButton": "Usage",
+  "@usageButton": { "description": "The button under a reply that shows what it took: its tokens, how long, how fast." },
+  "usageInput": "Input tokens",
+  "@usageInput": { "description": "A row of a reply's usage: the tokens of the conversation its model was asked, those read from the cache among them." },
+  "usageCached": "Cached input tokens",
+  "@usageCached": { "description": "A row of a reply's usage: the input tokens the provider read from its prompt cache, at a fraction of the price." },
+  "usageOutput": "Output tokens",
+  "@usageOutput": { "description": "A row of a reply's usage: the tokens the model wrote, its reasoning among them." },
+  "usageFirstToken": "Time to first token",
+  "@usageFirstToken": { "description": "A row of a reply's usage: how long its first word, or the first of its reasoning, took to come." },
+  "usageDuration": "Duration",
+  "@usageDuration": { "description": "A row of a reply's usage: how long it took, from the question sent to its end." },
+  "usageSpeed": "Output speed",
+  "@usageSpeed": { "description": "A row of a reply's usage: how many tokens a second it came at, once it began." },
+  "usageSeconds": "{s}s",
+  "@usageSeconds": {
+    "description": "A duration in seconds, as a reply's usage shows it, s with a decimal written in the app's language: \"3.2s\".",
+    "placeholders": { "s": { "type": "String", "example": "3.2" } }
+  },
+  "usageTokensPerSecond": "{n} tokens/s",
+  "@usageTokensPerSecond": {
+    "description": "A speed in tokens a second, as a reply's usage shows it, n written in the app's language: \"207.9 tokens/s\".",
+    "placeholders": { "n": { "type": "String", "example": "207.9" } }
+  },
   "durationMinutes": "{m}m {s}s",
   "@durationMinutes": {
     "description": "A duration of a minute or more, shortly: \"2m 5s\".",

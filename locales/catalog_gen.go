@@ -886,6 +886,150 @@ func (msgs Messages) DurationSeconds(s int) string {
 	return Catalog.Format(msgs.locale, "durationSeconds", map[string]any{"s": s})
 }
 
+// UsageButton says "Usage"
+// in the language the app shows.
+//
+// The button under a reply that shows what it took: its tokens, how long,
+// how fast.
+func UsageButton() string { return In(i18n.Locale()).UsageButton() }
+
+// UsageButton says "Usage"
+// in the language of msgs.
+//
+// The button under a reply that shows what it took: its tokens, how long,
+// how fast.
+func (msgs Messages) UsageButton() string {
+	return Catalog.Format(msgs.locale, "usageButton", nil)
+}
+
+// UsageInput says "Input tokens"
+// in the language the app shows.
+//
+// A row of a reply's usage: the tokens of the conversation its model was
+// asked, those read from the cache among them.
+func UsageInput() string { return In(i18n.Locale()).UsageInput() }
+
+// UsageInput says "Input tokens"
+// in the language of msgs.
+//
+// A row of a reply's usage: the tokens of the conversation its model was
+// asked, those read from the cache among them.
+func (msgs Messages) UsageInput() string {
+	return Catalog.Format(msgs.locale, "usageInput", nil)
+}
+
+// UsageCached says "Cached input tokens"
+// in the language the app shows.
+//
+// A row of a reply's usage: the input tokens the provider read from its
+// prompt cache, at a fraction of the price.
+func UsageCached() string { return In(i18n.Locale()).UsageCached() }
+
+// UsageCached says "Cached input tokens"
+// in the language of msgs.
+//
+// A row of a reply's usage: the input tokens the provider read from its
+// prompt cache, at a fraction of the price.
+func (msgs Messages) UsageCached() string {
+	return Catalog.Format(msgs.locale, "usageCached", nil)
+}
+
+// UsageOutput says "Output tokens"
+// in the language the app shows.
+//
+// A row of a reply's usage: the tokens the model wrote, its reasoning among
+// them.
+func UsageOutput() string { return In(i18n.Locale()).UsageOutput() }
+
+// UsageOutput says "Output tokens"
+// in the language of msgs.
+//
+// A row of a reply's usage: the tokens the model wrote, its reasoning among
+// them.
+func (msgs Messages) UsageOutput() string {
+	return Catalog.Format(msgs.locale, "usageOutput", nil)
+}
+
+// UsageFirstToken says "Time to first token"
+// in the language the app shows.
+//
+// A row of a reply's usage: how long its first word, or the first of its
+// reasoning, took to come.
+func UsageFirstToken() string { return In(i18n.Locale()).UsageFirstToken() }
+
+// UsageFirstToken says "Time to first token"
+// in the language of msgs.
+//
+// A row of a reply's usage: how long its first word, or the first of its
+// reasoning, took to come.
+func (msgs Messages) UsageFirstToken() string {
+	return Catalog.Format(msgs.locale, "usageFirstToken", nil)
+}
+
+// UsageDuration says "Duration"
+// in the language the app shows.
+//
+// A row of a reply's usage: how long it took, from the question sent to its
+// end.
+func UsageDuration() string { return In(i18n.Locale()).UsageDuration() }
+
+// UsageDuration says "Duration"
+// in the language of msgs.
+//
+// A row of a reply's usage: how long it took, from the question sent to its
+// end.
+func (msgs Messages) UsageDuration() string {
+	return Catalog.Format(msgs.locale, "usageDuration", nil)
+}
+
+// UsageSpeed says "Output speed"
+// in the language the app shows.
+//
+// A row of a reply's usage: how many tokens a second it came at, once it
+// began.
+func UsageSpeed() string { return In(i18n.Locale()).UsageSpeed() }
+
+// UsageSpeed says "Output speed"
+// in the language of msgs.
+//
+// A row of a reply's usage: how many tokens a second it came at, once it
+// began.
+func (msgs Messages) UsageSpeed() string {
+	return Catalog.Format(msgs.locale, "usageSpeed", nil)
+}
+
+// UsageSeconds says "{s}s"
+// in the language the app shows.
+//
+// A duration in seconds, as a reply's usage shows it, s with a decimal
+// written in the app's language: "3.2s".
+func UsageSeconds(s string) string { return In(i18n.Locale()).UsageSeconds(s) }
+
+// UsageSeconds says "{s}s"
+// in the language of msgs.
+//
+// A duration in seconds, as a reply's usage shows it, s with a decimal
+// written in the app's language: "3.2s".
+func (msgs Messages) UsageSeconds(s string) string {
+	return Catalog.Format(msgs.locale, "usageSeconds", map[string]any{"s": s})
+}
+
+// UsageTokensPerSecond says "{n} tokens/s"
+// in the language the app shows.
+//
+// A speed in tokens a second, as a reply's usage shows it, n written in the
+// app's language: "207.9 tokens/s".
+func UsageTokensPerSecond(n string) string { return In(i18n.Locale()).UsageTokensPerSecond(n) }
+
+// UsageTokensPerSecond says "{n} tokens/s"
+// in the language of msgs.
+//
+// A speed in tokens a second, as a reply's usage shows it, n written in the
+// app's language: "207.9 tokens/s".
+func (msgs Messages) UsageTokensPerSecond(n string) string {
+	return Catalog.Format(msgs.locale, "usageTokensPerSecond", map[string]any{"n": n})
+}
+
 // DurationMinutes says "{m}m {s}s"
 // in the language the app shows.
 //

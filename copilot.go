@@ -236,12 +236,23 @@ func (r *copilotSDK) Stream(ctx context.Context, model, system, prompt string, f
 		default:
 		}
 	}
+	var used usage
 	off := s.On(func(ev copilot.SessionEvent) {
 		switch d := ev.Data.(type) {
 		case *copilot.AssistantMessageDeltaData:
 			if d.DeltaContent != "" {
 				delta(chunk{Text: d.DeltaContent})
 			}
+		case *copilot.AssistantUsageData:
+			// Of each call to the model, summed: the input with what the
+			// cache gave, where it counted that apart.
+			in, cached, out := deref(d.InputTokens), deref(d.CacheReadTokens), deref(d.OutputTokens)
+			if cached > in {
+				in += cached
+			}
+			used.Input, used.Cached, used.Output = used.Input+in, used.Cached+cached, used.Output+out
+			u := used
+			delta(chunk{Usage: &u})
 		case *copilot.AssistantReasoningDeltaData:
 			if d.DeltaContent != "" {
 				delta(chunk{Reasoning: d.DeltaContent})
@@ -677,4 +688,12 @@ func (a *app) copilotRows(c *ui.Context) {
 			}
 		})
 	})
+}
+
+// deref returns what n points at, 0 for nil.
+func deref(n *int64) int64 {
+	if n == nil {
+		return 0
+	}
+	return *n
 }

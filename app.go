@@ -60,6 +60,11 @@ type message struct {
 	// it took, until the reply's text began.
 	Reasoning string  `json:"reasoning,omitempty"`
 	Reasoned  float64 `json:"reasoned,omitempty"`
+	// Usage is what a reply took of its model, where its provider counted
+	// it, and FirstToken how many seconds its first text or reasoning
+	// took to come (usage.go).
+	Usage      *usage  `json:"usage,omitempty"`
+	FirstToken float64 `json:"firstToken,omitempty"`
 	// thoughtsOpen shows Reasoning whole, once the text began.
 	thoughtsOpen bool
 	streaming    bool
@@ -200,6 +205,10 @@ type app struct {
 	// title asked for anew could not be made, which a toast says.
 	nameChats  bool
 	titleError string
+	// usageFor is the reply whose usage shows in a card, while usageOpen
+	// (usage.go).
+	usageFor  int
+	usageOpen bool
 	// editingMsg is the question being edited, by its ID, 0 for none,
 	// whose field holds editText, and gives the caret its end where
 	// editStart (versions.go).
@@ -513,6 +522,12 @@ func (a *app) ask(th *thread) {
 // add adds ch to the reply m streaming in, noting how long it reasoned as
 // its text begins.
 func (m *message) add(ch chunk) {
+	if m.FirstToken == 0 && (ch.Text != "" || ch.Reasoning != "") {
+		m.FirstToken = time.Since(m.started).Seconds()
+	}
+	if ch.Usage != nil {
+		m.Usage = ch.Usage
+	}
 	m.Reasoning += ch.Reasoning
 	if ch.Text != "" && m.Text == "" && m.Reasoning != "" {
 		m.Reasoned = time.Since(m.started).Seconds()

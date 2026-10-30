@@ -27,10 +27,12 @@ type turn struct {
 }
 
 // chunk is a piece of a reply as it streams in: of its text, or of the
-// reasoning the model did before it, which some models show.
+// reasoning the model did before it, which some models show; or, as it
+// ends, what it took (Usage), where the provider counts it.
 type chunk struct {
 	Text      string
 	Reasoning string
+	Usage     *usage
 }
 
 // provider answers conversations with a language model.
@@ -194,19 +196,18 @@ func (p *openAI) List(ctx context.Context) ([]string, error) {
 }
 
 func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
-	body, err := json.Marshal(map[string]any{"model": model, "messages": openAIMessages(turns), "stream": true})
-	if err != nil {
-		return err
+	// What the reply takes, in a last chunk of the stream (stream_options),
+	// as OpenAI, Google, OpenRouter, DeepSeek, Ollama and LM Studio give
+	// it; asked again without where a server will not take it.
+	res, err := p.request(ctx, model, turns, true)
+	if err == nil && res.StatusCode == http.StatusBadRequest {
+		err = statusError(res)
+		res.Body.Close()
+		if !strings.Contains(err.Error(), "stream_options") {
+			return err
+		}
+		res, err = p.request(ctx, model, turns, false)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	p.authorize(req)
-	// Names the app in OpenRouter's activity log; the others ignore it.
-	req.Header.Set("X-Title", "HyperAI")
-	res, err := p.client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -214,16 +215,21 @@ func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta f
 	if res.StatusCode != http.StatusOK {
 		return statusError(res)
 	}
+	var used *usage
 	// The reply comes as server-sent events, a chunk of JSON per line, and
 	// comments (": OPENROUTER PROCESSING") while the model warms up. Its
 	// reasoning comes as reasoning_content (DeepSeek, Kimi, GLM, Qwen,
 	// vLLM), as reasoning (OpenRouter, Ollama), or in <think> tags opening
 	// its text (LM Studio, llama.cpp), which think takes out.
 	var think thinkTags
-	// end gives what think held back, as the reply ends.
+	// end gives what think held back, as the reply ends, and what the
+	// reply took.
 	end := func() {
 		if rest := think.flush(); rest != (chunk{}) {
 			delta(rest)
+		}
+		if used != nil {
+			delta(chunk{Usage: used})
 		}
 	}
 	sc := bufio.NewScanner(res.Body)
@@ -239,6 +245,17 @@ func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta f
 			return nil
 		}
 		var event struct {
+			// Usage is what the reply took, in its last chunk, which has no
+			// choices: the cached input as OpenAI and OpenRouter count it,
+			// or DeepSeek.
+			Usage *struct {
+				PromptTokens        int64 `json:"prompt_tokens"`
+				CompletionTokens    int64 `json:"completion_tokens"`
+				PromptCacheHit      int64 `json:"prompt_cache_hit_tokens"`
+				PromptTokensDetails *struct {
+					CachedTokens int64 `json:"cached_tokens"`
+				} `json:"prompt_tokens_details"`
+			} `json:"usage"`
 			// Error is set when the request fails after the reply began.
 			Error *struct {
 				Message string `json:"message"`
@@ -256,6 +273,12 @@ func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta f
 		}
 		if event.Error != nil {
 			return errors.New(event.Error.Message)
+		}
+		if u := event.Usage; u != nil {
+			used = &usage{Input: u.PromptTokens, Output: u.CompletionTokens, Cached: u.PromptCacheHit}
+			if d := u.PromptTokensDetails; d != nil && d.CachedTokens > 0 {
+				used.Cached = d.CachedTokens
+			}
 		}
 		if len(event.Choices) == 0 {
 			continue
@@ -303,6 +326,28 @@ func openAIMessages(turns []turn) []map[string]any {
 		msgs = append(msgs, map[string]any{"role": t.Role, "content": parts})
 	}
 	return msgs
+}
+
+// request asks model to reply to turns, streamed, the usage too where
+// usage: the response, whose status the caller reads.
+func (p *openAI) request(ctx context.Context, model string, turns []turn, usage bool) (*http.Response, error) {
+	fields := map[string]any{"model": model, "messages": openAIMessages(turns), "stream": true}
+	if usage {
+		fields["stream_options"] = map[string]any{"include_usage": true}
+	}
+	body, err := json.Marshal(fields)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	p.authorize(req)
+	// Names the app in OpenRouter's activity log; the others ignore it.
+	req.Header.Set("X-Title", "HyperAI")
+	return p.client.Do(req)
 }
 
 // looseString is a string of a reply's JSON, "" where the field holds
@@ -404,6 +449,7 @@ func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, d
 	stream := p.client.Beta.Messages.NewStreaming(ctx, params)
 	defer stream.Close()
 	var refused *anthropic.BetaRefusalStopDetails
+	var used usage
 	for stream.Next() {
 		switch ev := stream.Current().AsAny().(type) {
 		case anthropic.BetaRawContentBlockDeltaEvent:
@@ -419,16 +465,34 @@ func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, d
 					delta(chunk{Reasoning: d.Thinking})
 				}
 			}
+		case anthropic.BetaRawMessageStartEvent:
+			// The input, all of it: what the cache gave and what it took
+			// counted apart.
+			u := ev.Message.Usage
+			used = usage{Input: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
+				Cached: u.CacheReadInputTokens, Output: u.OutputTokens}
 		case anthropic.BetaRawMessageDeltaEvent:
 			// Declined, by the model or its safeguards, and by its fallback
 			// too where it has one.
 			if ev.Delta.StopReason == anthropic.BetaStopReasonRefusal {
 				refused = &ev.Delta.StopDetails
 			}
+			// The output so far, and the input where a fallback counted it
+			// anew.
+			u := ev.Usage
+			if u.OutputTokens > 0 {
+				used.Output = u.OutputTokens
+			}
+			if in := u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens; in > 0 {
+				used.Input, used.Cached = in, u.CacheReadInputTokens
+			}
 		}
 	}
 	if err := stream.Err(); err != nil {
 		return anthropicError(err)
+	}
+	if used != (usage{}) {
+		delta(chunk{Usage: &used})
 	}
 	if refused != nil {
 		if refused.Explanation != "" {
