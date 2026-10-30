@@ -145,6 +145,11 @@ type providerConf struct {
 	Models  []string `json:"models,omitempty"`
 	Listed  []string `json:"listed,omitempty"`
 	On      bool     `json:"on,omitempty"`
+	// Efforts are those of its models, as its list said them, where it
+	// says them (effort.go), and EffortsListed that it was listed since it
+	// did, for those kept before to be listed once more.
+	Efforts       map[string][]string `json:"efforts,omitempty"`
+	EffortsListed bool                `json:"effortsListed,omitempty"`
 }
 
 // customProvider is a provider the user added, as providers.json keeps
@@ -482,6 +487,9 @@ func (a *app) listModels(id string) {
 		}
 		slices.Sort(models)
 		a.conf(id).Listed = slices.Compact(models)
+		if l, ok := p.(effortLister); ok && listsEfforts(id) {
+			a.conf(id).Efforts, a.conf(id).EffortsListed = l.ListedEfforts(), true
+		}
 		a.saveConf()
 		a.setProviders()
 	}
@@ -504,7 +512,7 @@ func (a *app) listModels(id string) {
 // have listed none yet, as the app starts.
 func (a *app) listUnlisted() {
 	for _, kind := range a.kinds() {
-		if c := a.confs[kind.id]; c == nil || len(c.Listed) == 0 {
+		if c := a.confs[kind.id]; c == nil || len(c.Listed) == 0 || listsEfforts(kind.id) && !c.EffortsListed {
 			a.listModels(kind.id)
 		}
 	}

@@ -383,6 +383,18 @@ A small button that floats over the conversation (scroll to end) rests at
   Show in Finder, the folder before any is written; Delete All…, faded
   where there are none). A setting's button is a pop-up button's box
   without its arrow (`settingButton`).
+- **Thinking effort** ([effort.go](../effort.go)): by the model's button
+  in the composer, as it looks, a gauge and what the model is asked with,
+  over a menu of Default (none sent: the model's own) and the efforts the
+  model takes, least first, the one chosen checked; only where the model
+  takes any, as telling one that takes none fails the reply. Which those
+  are: Anthropic's, OpenRouter's and Copilot's lists say (providers.json
+  keeps it, listed once more where kept before); OpenAI's reasoning models
+  (GPT-5, the o series) and Google's thinking ones (Gemini 2.5 and since)
+  by their names; none of the others. It goes as each API takes it
+  (output_config.effort, reasoning_effort, reasoning.effort, Copilot's
+  session), kept with the chat, and the one chosen last is a new chat's
+  (layout.json).
 - **Instructions** ([instructions.go](../instructions.go)), after General:
   what every model is told, in every chat, about the user and how to
   reply. A card holds its field, six lines tall at first and sixteen at

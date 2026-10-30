@@ -43,6 +43,11 @@ func (a *app) providerOf(ref modelRef) provider {
 func (a *app) chooseFor(th *thread) {
 	a.modelFor = a.selected
 	a.choose(a.modelOf(th))
+	// The effort it asked last, or a new chat's, the one chosen last.
+	a.effort = a.lastEffort
+	if th != nil && th.Model != "" {
+		a.effort = th.Effort
+	}
 }
 
 // modelOf returns the provider and model th asks, as chooseFor chooses

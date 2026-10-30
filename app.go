@@ -85,6 +85,7 @@ type thread struct {
 	Title    string    `json:"title"`
 	Updated  time.Time `json:"updated"`            // when the user last sent in it, which orders the sidebar
 	Model    string    `json:"model,omitempty"`    // the model asked last
+	Effort   string    `json:"effort,omitempty"`   // the effort it was asked with last, "" for its own (effort.go)
 	Provider string    `json:"provider,omitempty"` // Model's, "" in chats kept before it
 	Draft    string    `json:"draft,omitempty"`    // what its composer held as it was left
 	// Pinned is when the user pinned the chat, which keeps it at the
@@ -162,6 +163,10 @@ type app struct {
 	openFiles    func(title string) []string
 	openPath     func(path string)
 	model        string // the model asked, of prov
+	// effort is the effort the composer asks its model with, the chat
+	// shown's, "" for the model's own; lastEffort the one chosen last,
+	// which a new chat asks, as layout.json keeps it (effort.go).
+	effort, lastEffort string
 	// post runs f on the main thread, in order, as Window.Update does,
 	// for what comes on a goroutine: nil in tests, where replies and the
 	// providers' models come at once, but for those that post themselves.
@@ -483,6 +488,9 @@ func (a *app) ask(th *thread) {
 	th.Updated, th.Model, th.Provider = time.Now(), a.model, a.prov.ID()
 	a.rev++
 	ctx, cancel := context.WithCancel(context.Background())
+	// The effort asked, where the model takes it, kept with the chat.
+	th.Effort = a.askedEffort()
+	ctx = withEffort(ctx, th.Effort)
 	th.busy, th.cancel = reply, cancel
 
 	// finish ends the reply, on the main thread.

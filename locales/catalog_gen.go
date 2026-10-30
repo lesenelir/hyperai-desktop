@@ -1410,6 +1410,122 @@ func (msgs Messages) Model() string {
 	return Catalog.Format(msgs.locale, "model", nil)
 }
 
+// EffortLabel says "Thinking effort"
+// in the language the app shows.
+//
+// Names the composer's button that chooses how hard the model thinks, where
+// the model asked takes it, to assistive technology.
+func EffortLabel() string { return In(i18n.Locale()).EffortLabel() }
+
+// EffortLabel says "Thinking effort"
+// in the language of msgs.
+//
+// Names the composer's button that chooses how hard the model thinks, where
+// the model asked takes it, to assistive technology.
+func (msgs Messages) EffortLabel() string {
+	return Catalog.Format(msgs.locale, "effortLabel", nil)
+}
+
+// EffortDefault says "Default"
+// in the language the app shows.
+//
+// The thinking effort that sends none: the model's own, which it chooses.
+// First in the effort's menu, and what its button shows while chosen.
+func EffortDefault() string { return In(i18n.Locale()).EffortDefault() }
+
+// EffortDefault says "Default"
+// in the language of msgs.
+//
+// The thinking effort that sends none: the model's own, which it chooses.
+// First in the effort's menu, and what its button shows while chosen.
+func (msgs Messages) EffortDefault() string {
+	return Catalog.Format(msgs.locale, "effortDefault", nil)
+}
+
+// EffortMinimal says "Minimal"
+// in the language the app shows.
+//
+// A thinking effort: the least, OpenAI's minimal.
+func EffortMinimal() string { return In(i18n.Locale()).EffortMinimal() }
+
+// EffortMinimal says "Minimal"
+// in the language of msgs.
+//
+// A thinking effort: the least, OpenAI's minimal.
+func (msgs Messages) EffortMinimal() string {
+	return Catalog.Format(msgs.locale, "effortMinimal", nil)
+}
+
+// EffortLow says "Low"
+// in the language the app shows.
+//
+// A thinking effort: low.
+func EffortLow() string { return In(i18n.Locale()).EffortLow() }
+
+// EffortLow says "Low"
+// in the language of msgs.
+//
+// A thinking effort: low.
+func (msgs Messages) EffortLow() string {
+	return Catalog.Format(msgs.locale, "effortLow", nil)
+}
+
+// EffortMedium says "Medium"
+// in the language the app shows.
+//
+// A thinking effort: medium.
+func EffortMedium() string { return In(i18n.Locale()).EffortMedium() }
+
+// EffortMedium says "Medium"
+// in the language of msgs.
+//
+// A thinking effort: medium.
+func (msgs Messages) EffortMedium() string {
+	return Catalog.Format(msgs.locale, "effortMedium", nil)
+}
+
+// EffortHigh says "High"
+// in the language the app shows.
+//
+// A thinking effort: high.
+func EffortHigh() string { return In(i18n.Locale()).EffortHigh() }
+
+// EffortHigh says "High"
+// in the language of msgs.
+//
+// A thinking effort: high.
+func (msgs Messages) EffortHigh() string {
+	return Catalog.Format(msgs.locale, "effortHigh", nil)
+}
+
+// EffortXhigh says "Extra high"
+// in the language the app shows.
+//
+// A thinking effort: past high, short of the most, Anthropic's xhigh.
+func EffortXhigh() string { return In(i18n.Locale()).EffortXhigh() }
+
+// EffortXhigh says "Extra high"
+// in the language of msgs.
+//
+// A thinking effort: past high, short of the most, Anthropic's xhigh.
+func (msgs Messages) EffortXhigh() string {
+	return Catalog.Format(msgs.locale, "effortXhigh", nil)
+}
+
+// EffortMax says "Max"
+// in the language the app shows.
+//
+// A thinking effort: the most.
+func EffortMax() string { return In(i18n.Locale()).EffortMax() }
+
+// EffortMax says "Max"
+// in the language of msgs.
+//
+// A thinking effort: the most.
+func (msgs Messages) EffortMax() string {
+	return Catalog.Format(msgs.locale, "effortMax", nil)
+}
+
 // TranscriptYou says "You"
 // in the language the app shows.
 //

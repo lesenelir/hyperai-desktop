@@ -838,6 +838,7 @@ func (a *app) composerTools(c *ui.Context, ready bool) ui.Element {
 	busy := a.shownReply() != nil
 	row.Children(func() {
 		a.modelPicker(c)
+		a.effortPicker(c)
 		label, svg := locales.Send(), arrowUpIcon
 		if busy {
 			label, svg = locales.Stop(), stopIcon

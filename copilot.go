@@ -151,6 +151,24 @@ type copilotSDK struct {
 	cli, dir, token string
 	mu              sync.Mutex
 	client          *copilot.Client
+	// efforts are those of the models Models listed, by ID, under mu.
+	efforts map[string][]string
+}
+
+// ListedEfforts returns the efforts of the models Models listed.
+func (r *copilotSDK) ListedEfforts() map[string][]string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.efforts
+}
+
+// ListedEfforts returns the efforts of the models List listed, where its
+// runtime says them.
+func (p *copilotProvider) ListedEfforts() map[string][]string {
+	if l, ok := p.rt.(effortLister); ok {
+		return l.ListedEfforts()
+	}
+	return nil
 }
 
 func newCopilotSDK(cli, dir, token string) copilotRuntime {
@@ -210,13 +228,20 @@ func (r *copilotSDK) Models(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	var ids []string
+	efforts := map[string][]string{}
 	for _, m := range models {
 		// Those the user's plan or organization has off.
 		if m.Policy != nil && m.Policy.State != "" && m.Policy.State != "enabled" {
 			continue
 		}
 		ids = append(ids, m.ID)
+		if of := orderEfforts(m.SupportedReasoningEfforts); len(of) > 0 {
+			efforts[m.ID] = of
+		}
 	}
+	r.mu.Lock()
+	r.efforts = efforts
+	r.mu.Unlock()
 	return ids, nil
 }
 
@@ -225,7 +250,7 @@ func (r *copilotSDK) Stream(ctx context.Context, model, system, prompt string, f
 	if err != nil {
 		return err
 	}
-	s, err := c.CreateSession(ctx, copilotSession(model, system))
+	s, err := c.CreateSession(ctx, copilotSession(model, system, effortOf(ctx)))
 	if err != nil {
 		return err
 	}
@@ -292,13 +317,14 @@ func (r *copilotSDK) Stream(ctx context.Context, model, system, prompt string, f
 // told system, for a reply: streamed, with no tools, which empty mode wants
 // said, as an empty list rather than none; were it to ask for one, it may
 // not.
-func copilotSession(model, system string) *copilot.SessionConfig {
+func copilotSession(model, system, effort string) *copilot.SessionConfig {
 	return &copilot.SessionConfig{
-		ClientName:     "HyperAI",
-		Model:          model,
-		Streaming:      copilot.Bool(true),
-		SystemMessage:  &copilot.SystemMessageConfig{Mode: "replace", Content: system},
-		AvailableTools: []string{},
+		ClientName:      "HyperAI",
+		Model:           model,
+		ReasoningEffort: effort,
+		Streaming:       copilot.Bool(true),
+		SystemMessage:   &copilot.SystemMessageConfig{Mode: "replace", Content: system},
+		AvailableTools:  []string{},
 		OnPermissionRequest: func(copilot.PermissionRequest, copilot.PermissionInvocation) (rpc.PermissionDecision, error) {
 			return &rpc.PermissionDecisionReject{}, nil
 		},

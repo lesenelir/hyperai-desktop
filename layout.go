@@ -43,6 +43,8 @@ type layout struct {
 	Language string `json:"language,omitempty"`
 	// MathSource shows math in replies as its LaTeX, rather than set.
 	MathSource bool `json:"mathSource,omitempty"`
+	// Effort is the thinking effort chosen last, which a new chat asks.
+	Effort string `json:"effort,omitempty"`
 	// Instructions are what every model is told, in every chat.
 	Instructions string `json:"instructions,omitempty"`
 	// FoldPinned and FoldChats fold the sidebar's sections.
@@ -84,6 +86,7 @@ func (a *app) loadLayout(dir string) {
 	a.keptChat, a.notifyDone, a.renderMath = l.Chat, l.Notify, !l.MathSource
 	a.foldPinned, a.foldChats = l.FoldPinned, l.FoldChats
 	a.instructions = l.Instructions
+	a.lastEffort = l.Effort
 	if slices.ContainsFunc(languages, func(lang struct{ tag, name string }) bool { return lang.tag == l.Language }) {
 		a.language = l.Language
 	}
@@ -98,7 +101,7 @@ func (a *app) saveLayout() {
 	l := layout{SidebarWidth: a.sideWidth, Theme: a.theme, TextSize: textSizes[a.textSize],
 		OpaqueSidebar: !a.translucent, ReduceMotion: a.reduceMotion,
 		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme, Chat: a.keptChat, Notify: a.notifyDone, Language: a.language,
-		MathSource: !a.renderMath, FoldPinned: a.foldPinned, FoldChats: a.foldChats, Instructions: a.instructions}
+		MathSource: !a.renderMath, FoldPinned: a.foldPinned, FoldChats: a.foldChats, Instructions: a.instructions, Effort: a.lastEffort}
 	if a.onLaunch == launchLast {
 		l.OnLaunch = "last"
 	}

@@ -3849,7 +3849,7 @@ func TestDeviceLoginDeclined(t *testing.T) {
 // A session asks for no tools, as empty mode wants said: an empty list,
 // which the SDK sends as [], not none, which it refuses.
 func TestCopilotSession(t *testing.T) {
-	s := copilotSession("gpt-5", "Be brief.")
+	s := copilotSession("gpt-5", "Be brief.", "")
 	if s.AvailableTools == nil || len(s.AvailableTools) != 0 || s.Model != "gpt-5" || s.SystemMessage.Mode != "replace" ||
 		s.SystemMessage.Content != "Be brief." || s.Streaming == nil || !*s.Streaming {
 		t.Errorf("session %+v", s)

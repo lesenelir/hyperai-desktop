@@ -151,7 +151,13 @@ type openAI struct {
 	id, name, baseURL, apiKey string
 	models                    []string
 	client                    *http.Client
+	// listed are the efforts of the models List listed, as OpenRouter's
+	// list says them (effort.go).
+	listed map[string][]string
 }
+
+// ListedEfforts returns the efforts of the models List listed.
+func (p *openAI) ListedEfforts() map[string][]string { return p.listed }
 
 func (p *openAI) ID() string       { return p.id }
 func (p *openAI) Name() string     { return p.name }
@@ -182,16 +188,24 @@ func (p *openAI) List(ctx context.Context) ([]string, error) {
 	var list struct {
 		Data []struct {
 			ID string `json:"id"`
+			// SupportedParameters are what OpenRouter's model takes:
+			// "reasoning", where it takes an effort.
+			SupportedParameters []string `json:"supported_parameters"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&list); err != nil {
 		return nil, fmt.Errorf("reading the models: %w", err)
 	}
 	var ids []string
+	p.listed = map[string][]string{}
 	for _, m := range list.Data {
 		// Google's may name a model by its path in its own API,
 		// "models/gemini-…", where chats name it bare.
-		ids = append(ids, strings.TrimPrefix(m.ID, "models/"))
+		id := strings.TrimPrefix(m.ID, "models/")
+		ids = append(ids, id)
+		if slices.Contains(m.SupportedParameters, "reasoning") {
+			p.listed[id] = []string{"low", "medium", "high"}
+		}
 	}
 	return ids, nil
 }
@@ -336,6 +350,14 @@ func (p *openAI) request(ctx context.Context, model string, turns []turn, usage 
 	if usage {
 		fields["stream_options"] = map[string]any{"include_usage": true}
 	}
+	// The effort asked, as OpenRouter takes it, or OpenAI and Google.
+	if e := effortOf(ctx); e != "" {
+		if p.id == "openrouter" {
+			fields["reasoning"] = map[string]any{"effort": e}
+		} else {
+			fields["reasoning_effort"] = e
+		}
+	}
 	body, err := json.Marshal(fields)
 	if err != nil {
 		return nil, err
@@ -399,7 +421,13 @@ type anthropicAPI struct {
 	client     anthropic.Client
 	models     []string
 	compatible bool
+	// listed are the efforts of the models List listed, as each says them
+	// (Capabilities.Effort).
+	listed map[string][]string
 }
+
+// ListedEfforts returns the efforts of the models List listed.
+func (p *anthropicAPI) ListedEfforts() map[string][]string { return p.listed }
 
 func (p *anthropicAPI) ID() string       { return p.id }
 func (p *anthropicAPI) Name() string     { return p.name }
@@ -407,9 +435,24 @@ func (p *anthropicAPI) Models() []string { return p.models }
 
 func (p *anthropicAPI) List(ctx context.Context) ([]string, error) {
 	var ids []string
+	p.listed = map[string][]string{}
 	pages := p.client.Models.ListAutoPaging(ctx, anthropic.ModelListParams{})
 	for pages.Next() {
-		ids = append(ids, pages.Current().ID)
+		m := pages.Current()
+		ids = append(ids, m.ID)
+		if e := m.Capabilities.Effort; e.Supported {
+			var of []string
+			for _, l := range []struct {
+				name string
+				on   bool
+			}{{"low", e.Low.Supported}, {"medium", e.Medium.Supported}, {"high", e.High.Supported},
+				{"xhigh", e.Xhigh.Supported}, {"max", e.Max.Supported}} {
+				if l.on {
+					of = append(of, l.name)
+				}
+			}
+			p.listed[m.ID] = of
+		}
 	}
 	if err := pages.Err(); err != nil {
 		return nil, anthropicError(err)
@@ -441,6 +484,9 @@ func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, d
 	}
 	// Room for a long reply, which streaming lets take its time.
 	params := anthropic.BetaMessageNewParams{Model: model, MaxTokens: 64000, Messages: msgs, System: system}
+	if e := effortOf(ctx); e != "" {
+		params.OutputConfig = anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffort(e)}
+	}
 	// The conversation is cached, as far as its last block: the next
 	// question reads it back, its files too, which every question sends
 	// again, at a tenth of the price or less, rather than all of it anew.
