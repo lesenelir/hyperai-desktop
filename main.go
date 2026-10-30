@@ -12,6 +12,8 @@ import (
 	"log"
 	"math/rand/v2"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -76,6 +78,18 @@ func main() {
 			}
 			return paths
 		}
+		// Chats exported, where the system's dialog says, from Documents;
+		// as a PDF, printed by the system's web view.
+		a.exportDir, _ = mygo.App.Path(mygo.PathDocuments)
+		a.saveFile = func(title, path, ext string) string {
+			to, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: win, Title: title, DefaultPath: path,
+				Filters: []mygo.FileFilter{{Name: strings.ToUpper(ext), Extensions: []string{ext}}}})
+			if err != nil {
+				log.Printf("exporting a chat: %v", err)
+			}
+			return to
+		}
+		a.printPDF = func(page string) ([]byte, error) { return printPDF(win, page) }
 		a.openPath = func(path string) {
 			if err := mygo.Shell.OpenPath(path); err != nil {
 				log.Printf("opening an attachment: %v", err)
@@ -132,6 +146,39 @@ func startTeX(a *app) {
 		}
 		a.win.Update(func() { a.tex = e })
 	}()
+}
+
+// printPDF prints page, a whole HTML document, as an A4 PDF, its
+// backgrounds too: in a window that never shows, made on the main thread
+// through win, which loads it and then prints it, and goes. It waits, on
+// the goroutine it is called on, for the page to load, at most a while.
+func printPDF(win *mygo.Window, page string) ([]byte, error) {
+	loaded := make(chan error, 1)
+	done := func(err error) {
+		select {
+		case loaded <- err:
+		default:
+		}
+	}
+	made := make(chan *mygo.Window, 1)
+	win.Update(func() {
+		w := mygo.NewWindow(mygo.WindowOptions{Hidden: true, Width: 800, Height: 1100})
+		w.Page().OnDidFinishLoad(func() { done(nil) })
+		w.Page().OnDidFailLoad(func(e *mygo.LoadError) { done(e) })
+		w.Page().LoadHTML(page, "")
+		made <- w
+	})
+	w := <-made
+	defer win.Update(w.Destroy)
+	select {
+	case err := <-loaded:
+		if err != nil {
+			return nil, err
+		}
+	case <-time.After(30 * time.Second):
+		return nil, errors.New("the page to print did not load")
+	}
+	return w.Page().PrintToPDF(mygo.PDFOptions{PageSize: mygo.PageA4, Background: true})
 }
 
 // notifyReply shows a notification titled title, saying body, which brings

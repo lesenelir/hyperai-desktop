@@ -251,6 +251,22 @@ A small button that floats over the conversation (scroll to end) rests at
   Time to first token, of text or reasoning, Duration, and Output speed,
   the output over the time past the first token. chats.json keeps them.
   No count of model calls: a reply is one.
+- **Export** ([export.go](../export.go)): a chat's menu, in the title bar
+  and the sidebar, has Export, and under it PDF…, HTML… and JSON…, which
+  ask where in the system's dialog, from Documents, named by the title;
+  a toast then says it went, with Show in Finder, or why it could not.
+  What goes is the path shown. The page holds all it shows: the light
+  palette's colors, the system font at 15 on lines of 1.6, 780 wide at
+  most; the questions in their bubbles on the right, their images in
+  them; the replies' Markdown, their reasoning folded under how long it
+  took; the math drawn as SVG from RaTeX's layout, as the app sets it, in
+  the KaTeX fonts it uses, carried in the page, or as its TeX where the
+  app shows LaTeX; and when it was exported at its foot. It runs no
+  script and loads nothing (its Content Security Policy), whatever a
+  reply wrote as HTML. The PDF is that page, A4, printed by the system's
+  web view in a window that never shows. The JSON is the chat for
+  programs: its messages' roles, texts, times, files by name and type,
+  reasoning, errors and usage.
 - **Math** in replies — `$…$`, `\(…\)`, `$$…$$` and `\[…\]`, but not
   dollars of money ($5) — is set as KaTeX sets it, by RaTeX
   ([ratex/](../ratex), [katex.go](../katex.go)), a KaTeX-compatible

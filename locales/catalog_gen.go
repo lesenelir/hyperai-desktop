@@ -710,6 +710,130 @@ func (msgs Messages) CopyAsMarkdown() string {
 	return Catalog.Format(msgs.locale, "copyAsMarkdown", nil)
 }
 
+// ExportChat says "Export"
+// in the language the app shows.
+//
+// The submenu of a chat's menu, in the title bar and the sidebar, that
+// writes it to a file of one of its formats.
+func ExportChat() string { return In(i18n.Locale()).ExportChat() }
+
+// ExportChat says "Export"
+// in the language of msgs.
+//
+// The submenu of a chat's menu, in the title bar and the sidebar, that
+// writes it to a file of one of its formats.
+func (msgs Messages) ExportChat() string {
+	return Catalog.Format(msgs.locale, "exportChat", nil)
+}
+
+// ExportPDF says "PDF…"
+// in the language the app shows.
+//
+// The Export submenu's item that writes the chat as a PDF, asking where.
+func ExportPDF() string { return In(i18n.Locale()).ExportPDF() }
+
+// ExportPDF says "PDF…"
+// in the language of msgs.
+//
+// The Export submenu's item that writes the chat as a PDF, asking where.
+func (msgs Messages) ExportPDF() string {
+	return Catalog.Format(msgs.locale, "exportPDF", nil)
+}
+
+// ExportHTML says "HTML…"
+// in the language the app shows.
+//
+// The Export submenu's item that writes the chat as a web page, asking
+// where.
+func ExportHTML() string { return In(i18n.Locale()).ExportHTML() }
+
+// ExportHTML says "HTML…"
+// in the language of msgs.
+//
+// The Export submenu's item that writes the chat as a web page, asking
+// where.
+func (msgs Messages) ExportHTML() string {
+	return Catalog.Format(msgs.locale, "exportHTML", nil)
+}
+
+// ExportJSON says "JSON…"
+// in the language the app shows.
+//
+// The Export submenu's item that writes the chat as JSON, for programs,
+// asking where.
+func ExportJSON() string { return In(i18n.Locale()).ExportJSON() }
+
+// ExportJSON says "JSON…"
+// in the language of msgs.
+//
+// The Export submenu's item that writes the chat as JSON, for programs,
+// asking where.
+func (msgs Messages) ExportJSON() string {
+	return Catalog.Format(msgs.locale, "exportJSON", nil)
+}
+
+// ExportTitle says "Export Chat"
+// in the language the app shows.
+//
+// The title of the dialog that asks where to export a chat.
+func ExportTitle() string { return In(i18n.Locale()).ExportTitle() }
+
+// ExportTitle says "Export Chat"
+// in the language of msgs.
+//
+// The title of the dialog that asks where to export a chat.
+func (msgs Messages) ExportTitle() string {
+	return Catalog.Format(msgs.locale, "exportTitle", nil)
+}
+
+// ExportDone says "Chat exported"
+// in the language the app shows.
+//
+// The toast that shows as a chat was exported, over the file's name, with
+// the button that shows it in Finder.
+func ExportDone() string { return In(i18n.Locale()).ExportDone() }
+
+// ExportDone says "Chat exported"
+// in the language of msgs.
+//
+// The toast that shows as a chat was exported, over the file's name, with
+// the button that shows it in Finder.
+func (msgs Messages) ExportDone() string {
+	return Catalog.Format(msgs.locale, "exportDone", nil)
+}
+
+// ExportFailed says "Couldn’t export the chat"
+// in the language the app shows.
+//
+// The title of the toast that shows as a chat could not be exported, over
+// why.
+func ExportFailed() string { return In(i18n.Locale()).ExportFailed() }
+
+// ExportFailed says "Couldn’t export the chat"
+// in the language of msgs.
+//
+// The title of the toast that shows as a chat could not be exported, over
+// why.
+func (msgs Messages) ExportFailed() string {
+	return Catalog.Format(msgs.locale, "exportFailed", nil)
+}
+
+// ExportFooter says "Exported from HyperAI, {date}"
+// in the language the app shows.
+//
+// The line at the foot of a chat exported as a page or a PDF: when it was
+// exported.
+func ExportFooter(date string) string { return In(i18n.Locale()).ExportFooter(date) }
+
+// ExportFooter says "Exported from HyperAI, {date}"
+// in the language of msgs.
+//
+// The line at the foot of a chat exported as a page or a PDF: when it was
+// exported.
+func (msgs Messages) ExportFooter(date string) string {
+	return Catalog.Format(msgs.locale, "exportFooter", map[string]any{"date": date})
+}
+
 // Greeting says "What are you building with AI today?"
 // in the language the app shows.
 //

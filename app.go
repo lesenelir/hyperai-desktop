@@ -205,6 +205,16 @@ type app struct {
 	// title asked for anew could not be made, which a toast says.
 	nameChats  bool
 	titleError string
+	// saveFile asks where to save a file, in the system's dialog titled
+	// title, from path, of ext, "" where none was chosen; printPDF prints a
+	// page as a PDF; both block, and are nil in tests. exportDir is where
+	// the dialog starts, and exported the file a chat was exported to last,
+	// or exportError why it could not be, which a toast says (export.go).
+	saveFile    func(title, path, ext string) string
+	printPDF    func(page string) ([]byte, error)
+	exportDir   string
+	exported    string
+	exportError string
 	// usageFor is the reply whose usage shows in a card, while usageOpen
 	// (usage.go).
 	usageFor  int
@@ -698,6 +708,7 @@ func (a *app) view(c *ui.Context) {
 	// A title asked for anew that could not be made, before the toasts
 	// are built, for it to show in this frame.
 	a.titleToast(c)
+	a.exportToast(c)
 	a.toasts(c)
 	held := a.motionHeld
 	a.motionHeld = false // until the switch says so again
@@ -1003,8 +1014,9 @@ func (a *app) chatMenu(c *ui.Context, m *ui.Menu, th *thread, inSidebar bool) {
 			c.Services().WriteClipboard(transcript(th))
 			c.Toast(locales.Copied())
 		}
-		m.Separator()
 	}
+	a.exportMenu(m, th)
+	m.Separator()
 	if m.Item(locales.DeleteChatItem()).Chosen() {
 		a.askDelete(th)
 	}
