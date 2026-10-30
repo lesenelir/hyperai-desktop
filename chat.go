@@ -33,7 +33,13 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 	t := c.Theme()
 	bar := c.TitleBar()
 	th := a.current()
-	ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
+	pane := ui.Column(c).Grow(1).MinWidth(0).Background(t.Background)
+	// Files dropped anywhere on the chat are attached to its draft, as
+	// Codex's thread takes them; the composer shows they would be while
+	// they are over it.
+	a.attach(pane.DroppedFiles())
+	a.fileOver = pane.FileDragOver()
+	pane.Children(func() {
 		ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Padding(0, bar.Right+12, 0, titleLeft).Children(func() {
 			name := locales.NewChat()
 			if th != nil {
@@ -91,8 +97,8 @@ func (a *app) prompts(c *ui.Context) {
 		ui.Column(c).WidthPercent(100).MaxWidth(maxWidth).Padding(4, 0, 0, 0).Children(func() {
 			for i, s := range suggestions {
 				prompt := s.prompt()
-				// Its icon under the composer's text, as hyperai-next's: no
-				// card, no wash; the pointer brings the text up the ladder,
+				// Its icon under the attach button's of the composer, and the
+				// box's text, as hyperai-next's: no card, no wash; the pointer brings the text up the ladder,
 				// and the icon to the accent.
 				row := ui.ButtonBase(c.Key("prompt "+strconv.Itoa(i))).Padding(7, fieldPadX+1).Gap(12).Radius(8).
 					Justify(ui.Start).AlignItems(ui.Center).Label(prompt)
@@ -242,6 +248,12 @@ func (a *app) scrollToEnd(c *ui.Context, th *thread) {
 func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 	t := c.Theme()
 	if m.Role == "user" {
+		if len(m.Files) > 0 {
+			a.sentFiles(c, m)
+		}
+		if m.Text == "" {
+			return
+		}
 		row := ui.Row(c).AlignItems(ui.Start).Gap(4)
 		width := row.Bounds().W
 		row.Children(func() {
@@ -537,7 +549,8 @@ func seconds(s float64) string {
 // which hides it on bg, faded out above. It stays the same element either
 // way, so that it keeps what is typed and the focus as a chat starts.
 func (a *app) composer(c *ui.Context, th *thread) {
-	ready := strings.TrimSpace(a.draft) != ""
+	ready := strings.TrimSpace(a.draft) != "" || len(a.files) > 0
+	a.attachToasts(c)
 	outer := ui.Column(c).Shrink(0).AlignItems(ui.Center).Padding(0, 24)
 	if th != nil {
 		// Only the column takes the pointer: beside it, the pointer reaches
@@ -560,11 +573,17 @@ func (a *app) composer(c *ui.Context, th *thread) {
 // heights are these, so that the conversation's end knows them in the
 // frame the composer takes them (composerRoom).
 const (
-	composerRadius = 24 // a pill's, one line tall; the box keeps it
-	fieldPadX      = 20 // the field's text in from the box's left
-	pillPadY       = 12 // the field's padding over and under its line, as a pill
-	boxPadTop      = 16 // and as a box: room for the fade (fieldFadeGap)
+	composerRadius = 24                        // a pill's, one line tall; the box keeps it
+	fieldPadX      = 12                        // the field's text in from the box's left, as Codex's
+	attachLeft     = 4                         // the attach button in from the box's left, its icon about as far in as the text
+	pillPadLeft    = attachLeft + sendSize + 4 // the text in from a pill's left, past the attach button
+	pillPadY       = 12                        // the field's padding over and under its line, as a pill
+	boxPadTop      = 16                        // and as a box: room for the fade (fieldFadeGap)
 	boxPadBottom   = 6
+	// filesPadTop is the field's padding over its text under the files
+	// attached, which keep the room over them: closer, as Codex's text is
+	// to its images, and room for a fade still.
+	filesPadTop    = fieldFadeGap + 2
 	toolbarHeight  = 44 // the row of the buttons under the field of a box
 	sendSize       = 32
 	floatPadTop    = 8  // the room over the composer floating over a conversation
@@ -581,14 +600,23 @@ const fieldFadeGap = 6
 // its top, and full once it scrolled as far as the room over the text, so
 // that it comes in with the scrolling rather than at once.
 func (a *app) fieldFade() float32 {
-	return max(0, min(a.fieldScroll.Y/boxPadTop, 1))
+	return max(0, min(a.fieldScroll.Y/a.fieldTop(), 1))
+}
+
+// fieldTop returns the field's padding over its text, as a box.
+func (a *app) fieldTop() float32 {
+	if len(a.files) > 0 {
+		return filesPadTop
+	}
+	return boxPadTop
 }
 
 // composerPill reports whether the composer shows as a pill, as of the box's
 // width and its buttons' when it was laid out last: on an empty chat
-// (welcome), while the draft is one line that fits beside them.
+// (welcome), while the draft is one line that fits beside them, and has no
+// files, which show over it.
 func (a *app) composerPill(c *ui.Context, welcome bool) bool {
-	if !welcome || strings.Contains(a.draft, "\n") {
+	if !welcome || len(a.files) > 0 || strings.Contains(a.draft, "\n") {
 		return false
 	}
 	if a.draft == "" || a.boxWidth == 0 {
@@ -603,7 +631,7 @@ func (a *app) composerPill(c *ui.Context, welcome bool) bool {
 
 // pillWidth and boxWidthText are how wide the field's text is as a pill,
 // beside the buttons, and as a box, across it, less the caret's room.
-func (a *app) pillWidth() float32    { return a.boxWidth - 2 - fieldPadX - 8 - a.toolsWidth - 4 }
+func (a *app) pillWidth() float32    { return a.boxWidth - 2 - pillPadLeft - 8 - a.toolsWidth - 4 }
 func (a *app) boxTextWidth() float32 { return a.boxWidth - 2 - 2*fieldPadX }
 
 // composerRoom builds, at the end of a conversation, room as tall as the
@@ -618,9 +646,12 @@ func (a *app) composerRoom(c *ui.Context) {
 	if text == "" || strings.HasSuffix(text, "\n") {
 		text += "\u200b" // the line the caret is on, empty
 	}
-	rest, w := float32(floatPadTop+composerPadEnd+2+boxPadTop+boxPadBottom+toolbarHeight), a.boxTextWidth()
+	rest, w := floatPadTop+composerPadEnd+2+a.fieldTop()+boxPadBottom+toolbarHeight, a.boxTextWidth()
 	if a.pill {
 		rest, w = floatPadTop+composerPadEnd+2+2*pillPadY, a.pillWidth()
+	}
+	if len(a.files) > 0 {
+		rest += chipsPadTop + chipSize
 	}
 	ui.Column(c).Padding(0, 0, rest, 0).Children(func() {
 		ui.Text(c, text).Width(max(0, w)).FontSize(a.body).LineHeight(bodyLineHeight).
@@ -666,29 +697,34 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 		}
 		pill := a.pill
 		box.Children(func() {
+			// The files attached, over the field, as Codex shows them.
+			a.draftFiles(c)
 			// The field's row, the field first in it either way, so that it
 			// keeps its place in the tree, and with it the focus and the
 			// caret, as the composer opens; as a pill, the buttons after it.
 			ui.Row(c).AlignItems(ui.Center).Children(func() {
-				top, right, bottom := float32(boxPadTop), float32(fieldPadX), float32(boxPadBottom)
+				top, right, bottom, left := a.fieldTop(), float32(fieldPadX), float32(boxPadBottom), float32(fieldPadX)
 				if pill {
-					top, right, bottom = pillPadY, 8, pillPadY
+					top, right, bottom, left = pillPadY, 8, pillPadY, pillPadLeft
 				}
 				// The field, and over it its placeholder and the fade at its
 				// top.
+				svc := c.Services()
 				ui.Box(c).Grow(1).MinWidth(0).Children(func() {
 					// Return sends, or Cmd+Return as the settings choose
 					// (app.sends); the editor breaks the line for the rest.
 					draft := ui.TextAreaBase(c.Key("draft"), &a.draft).WidthPercent(100).Lines(1, 10).
-						FontSize(a.body).LineHeight(bodyLineHeight).Padding(top, right, bottom, fieldPadX).
+						FontSize(a.body).LineHeight(bodyLineHeight).Padding(top, right, bottom, left).
 						TrackScroll(&a.fieldScroll).
 						Label(locales.ComposerLabel()).AutoFocus().
+						// Files and images pasted are attached (attach.go).
+						OnPaste(func(text string) bool { return a.paste(svc, text) }).
 						OnTextKey(func(k ui.TextKey) bool {
 							if !a.sends(k.Key, k.Mods) {
 								return false
 							}
 							switch {
-							case a.shownReply() != nil || strings.TrimSpace(k.Text()) == "":
+							case a.shownReply() != nil || strings.TrimSpace(k.Text()) == "" && len(a.files) == 0:
 							case a.prov == nil:
 								// Out of the frame: the toast shows in the next.
 								a.needProvider = true
@@ -698,7 +734,7 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 							}
 							return true
 						})
-					a.placeholder(c, locales.ComposerPlaceholder(), a.draft == "" && !draft.Composing(), top, fieldPadX, a.body, bodyLineHeight)
+					a.placeholder(c, locales.ComposerPlaceholder(), a.draft == "" && !draft.Composing(), top, left, a.body, bodyLineHeight)
 					if b := draft.Bounds(); !empty(b) {
 						a.field = b
 					}
@@ -713,9 +749,9 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 						// Two pieces, the solid one and the fade: a gradient's
 						// Start and Stops drew as a plain fade, edge to edge.
 						solid := a.pal.composer.Alpha(k)
-						ui.Box(c).Absolute().Top(0).Left(fieldPadX).Right(right + barClear).
+						ui.Box(c).Absolute().Top(0).Left(left).Right(right + barClear).
 							Height(fieldFadeGap).PassThrough().Background(solid)
-						ui.Box(c).Absolute().Top(fieldFadeGap).Left(fieldPadX).Right(right + barClear).
+						ui.Box(c).Absolute().Top(fieldFadeGap).Left(left).Right(right + barClear).
 							Height(top - fieldFadeGap).PassThrough().LinearGradient(ui.LinearGradient{
 							From: solid, To: a.pal.composer.Alpha(0), Angle: 180,
 						})
@@ -733,16 +769,25 @@ func (a *app) composerColumn(c *ui.Context, th *thread, ready bool) {
 					if b := a.composerTools(c, ready).Padding(0, 8, 0, 0).Bounds(); !empty(b) {
 						a.toolsWidth = b.W
 					}
+					// Left of the field's text, as ChatGPT's pill has it; after
+					// the field in the tree, which keeps its place.
+					a.attachButton(c).Absolute().Left(attachLeft).Top(pillPadY + (a.body*bodyLineHeight-sendSize)/2)
 				}
 			})
 			if !pill {
-				ui.Row(c).Height(toolbarHeight).Shrink(0).Children(func() {
+				// As Codex's: attaching on the left, the model and sending on
+				// the right.
+				ui.Row(c).Height(toolbarHeight).Shrink(0).AlignItems(ui.Center).Children(func() {
+					a.attachButton(c).Margin(0, 0, 0, attachLeft)
 					ui.Spacer(c)
 					a.composerTools(c, ready).Padding(0, 8, 0, 0)
 				})
 			}
 			ui.Box(c).Absolute().Top(-1).Left(-1).Right(-1).Bottom(-1).Radius(composerRadius).
 				Border(1, t.Border).PassThrough()
+			if a.fileOver {
+				a.dropOverlay(c)
+			}
 		})
 	})
 }

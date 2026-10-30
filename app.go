@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -40,6 +41,8 @@ type message struct {
 	ID   int    `json:"id"`
 	Role string `json:"role"` // "user" or "assistant"
 	Text string `json:"text"`
+	// Files are the files sent with a question.
+	Files []*attachment `json:"files,omitempty"`
 	// Error is what went wrong, as the provider said it, or errStopped,
 	// which shows in the app's language (errorText).
 	Error string `json:"error,omitempty"`
@@ -69,13 +72,14 @@ type message struct {
 
 // thread is a chat: its messages, and where its list is scrolled.
 type thread struct {
-	ID       int        `json:"id"`
-	Title    string     `json:"title"`
-	Updated  time.Time  `json:"updated"`            // when the user last sent in it, which orders the sidebar
-	Model    string     `json:"model,omitempty"`    // the model asked last
-	Provider string     `json:"provider,omitempty"` // Model's, "" in chats kept before it
-	Draft    string     `json:"draft,omitempty"`    // what its composer held as it was left
-	Messages []*message `json:"messages"`
+	ID       int           `json:"id"`
+	Title    string        `json:"title"`
+	Updated  time.Time     `json:"updated"`            // when the user last sent in it, which orders the sidebar
+	Model    string        `json:"model,omitempty"`    // the model asked last
+	Provider string        `json:"provider,omitempty"` // Model's, "" in chats kept before it
+	Draft    string        `json:"draft,omitempty"`    // what its composer held as it was left
+	Messages []*message    `json:"messages"`
+	files    []*attachment // the files attached to Draft, which are not kept past the app
 	list     ui.ListState
 	// busy is the reply streaming in, nil when none, and cancel stops it:
 	// each chat's its own, so that chats stream at once.
@@ -96,13 +100,19 @@ type thread struct {
 	seek    int
 }
 
-// turns returns the conversation for the provider: the messages with text,
-// leaving out the reply being written.
+// turns returns the conversation for the provider: the messages with text
+// or files, leaving out the reply being written. The files are copies,
+// which the goroutine the reply streams on reads those of the app's last
+// run into (readFiles).
 func (th *thread) turns() []turn {
 	var turns []turn
 	for _, m := range th.Messages {
-		if m.Text != "" && !m.streaming {
-			turns = append(turns, turn{Role: m.Role, Content: m.Text})
+		if (m.Text != "" || len(m.Files) > 0) && !m.streaming {
+			t := turn{Role: m.Role, Content: m.Text}
+			for _, f := range m.Files {
+				t.Files = append(t.Files, attachment{Name: f.Name, Type: f.Type, File: f.File, data: f.data})
+			}
+			turns = append(turns, t)
 		}
 	}
 	return turns
@@ -116,7 +126,23 @@ type app struct {
 	next     int    // the last ID given to a chat or a message
 	draft    string // what the composer holds, of the chat shown (nav.go)
 	newDraft string // what a new chat's composer held as it was left
-	model    string // the model asked, of prov
+	// files are the files attached to draft, and newFiles those of a new
+	// chat's as it was left (attach.go). filesDir is the folder the files
+	// sent are kept in, "" in tests, and writes the writing and deleting
+	// of their copies, which the app waits for as it quits. attachFailed
+	// are the files that could not be attached, which the composer says
+	// why of; fileOver tells files dragged from another app are over the
+	// chat. openFiles asks for files to attach, in the system's dialog
+	// titled title, and openPath opens a file kept: nil in tests.
+	files        []*attachment
+	newFiles     []*attachment
+	filesDir     string
+	writes       sync.WaitGroup
+	attachFailed []*attachFailure
+	fileOver     bool
+	openFiles    func(title string) []string
+	openPath     func(path string)
+	model        string // the model asked, of prov
 	// post runs f on the main thread, in order, as Window.Update does,
 	// for what comes on a goroutine: nil in tests, where replies and the
 	// providers' models come at once, but for those that post themselves.
@@ -330,25 +356,33 @@ func (a *app) newChat() {
 	a.open("")
 }
 
-// send sends text in the chat shown, starting one when it is new, and
-// streams the reply in, while the other chats stream theirs.
+// send sends text in the chat shown, with the files attached to the
+// draft, starting one when it is new, and streams the reply in, while the
+// other chats stream theirs.
 func (a *app) send(text string) {
 	text = strings.TrimSpace(text)
 	th := a.current()
-	if text == "" || a.prov == nil || th != nil && th.busy != nil {
+	files := a.files
+	if text == "" && len(files) == 0 || a.prov == nil || th != nil && th.busy != nil {
 		return
 	}
 	if th == nil {
 		a.next++
-		th = &thread{ID: a.next, Title: title(text)}
+		name := text
+		if name == "" {
+			name = files[0].Name
+		}
+		th = &thread{ID: a.next, Title: title(name)}
 		a.threads = append(a.threads, th)
 		// The chat asks the model chosen for it while it was new, and the
 		// new chat's draft is what was sent.
 		a.selected = strconv.Itoa(th.ID)
-		a.modelFor, a.newDraft = a.selected, ""
+		a.modelFor, a.newDraft, a.newFiles = a.selected, "", nil
 	}
+	a.keepFiles(files)
+	a.files, th.files = nil, nil
 	a.next++
-	th.Messages = append(th.Messages, &message{ID: a.next, Role: "user", Text: text, Time: time.Now()})
+	th.Messages = append(th.Messages, &message{ID: a.next, Role: "user", Text: text, Files: files, Time: time.Now()})
 	turns := th.turns()
 	// The question goes to the top of the conversation, the reply coming
 	// in under it.
@@ -388,9 +422,15 @@ func (a *app) send(text string) {
 	}
 	// The provider and model asked, as of now: showing another chat
 	// chooses another for the composer while this one streams.
-	prov, model := a.prov, a.model
+	prov, model, dir := a.prov, a.model, a.filesDir
+	stream := func(delta func(chunk)) error {
+		if err := readFiles(dir, turns); err != nil {
+			return err
+		}
+		return prov.Stream(ctx, model, turns, delta)
+	}
 	if a.post == nil {
-		finish(prov.Stream(ctx, model, turns, reply.add))
+		finish(stream(reply.add))
 		return
 	}
 	// The model streams on a goroutine of its own, and the view shows what
@@ -404,7 +444,7 @@ func (a *app) send(text string) {
 				}
 			})
 		})
-		err := prov.Stream(ctx, model, turns, batch.add)
+		err := stream(batch.add)
 		batch.close()
 		a.post(func() {
 			if reply.streaming {
@@ -539,8 +579,9 @@ func (a *app) removeAll() {
 	for _, th := range a.threads {
 		a.stop(th)
 	}
+	a.forgetFiles(a.threads...)
 	if a.selected != "" {
-		a.draft = a.newDraft
+		a.draft, a.files = a.newDraft, a.newFiles
 	}
 	a.threads, a.selected = nil, ""
 	a.nav = history{}
@@ -551,12 +592,13 @@ func (a *app) removeAll() {
 // remove deletes th, stopping its reply.
 func (a *app) remove(th *thread) {
 	a.stop(th)
+	a.forgetFiles(th)
 	a.threads = slices.DeleteFunc(a.threads, func(t *thread) bool { return t == th })
 	a.rev++
 	id := strconv.Itoa(th.ID)
 	if a.selected == id {
 		// Its draft goes with it.
-		a.selected, a.draft = "", a.newDraft
+		a.selected, a.draft, a.files = "", a.newDraft, a.newFiles
 	}
 	a.nav.remove(id, a.selected)
 	a.save()

@@ -98,22 +98,24 @@ func (a *app) show(id string) {
 	}
 	a.keepDraft()
 	a.selected = id
-	a.draft = a.newDraft
+	a.draft, a.files = a.newDraft, a.newFiles
 	if th := a.current(); th != nil {
-		a.draft = th.Draft
+		a.draft, a.files = th.Draft, th.files
 	}
 	// From its first line.
 	a.fieldScroll = ui.ScrollState{}
 }
 
 // keepDraft keeps what the composer holds with the chat shown, saving the
-// chats where a chat's changed: a new chat's is not kept past the app.
+// chats where a chat's changed: a new chat's is not kept past the app, nor
+// the files attached to any.
 func (a *app) keepDraft() {
 	th := a.current()
 	if th == nil {
-		a.newDraft = a.draft
+		a.newDraft, a.newFiles = a.draft, a.files
 		return
 	}
+	th.files = a.files
 	if th.Draft != a.draft {
 		th.Draft = a.draft
 		a.save()

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,9 +53,9 @@ type copilotRuntime interface {
 	User(ctx context.Context) (string, error)
 	// Models returns the models the user's Copilot offers.
 	Models(ctx context.Context) ([]string, error)
-	// Stream asks model to reply to prompt, told system, as provider's
-	// Stream does.
-	Stream(ctx context.Context, model, system, prompt string, delta func(chunk)) error
+	// Stream asks model to reply to prompt, with files, told system, as
+	// provider's Stream does.
+	Stream(ctx context.Context, model, system, prompt string, files []attachment, delta func(chunk)) error
 	// Close stops the CLI, if it runs.
 	Close()
 }
@@ -81,10 +82,12 @@ const copilotSystem = "You are a helpful assistant, chatting with the user in Hy
 
 // copilotPrompt returns what a session of Copilot is told of turns: the
 // conversation before the last of them in its system message, and the
-// last as its prompt.
-func copilotPrompt(turns []turn) (system, prompt string) {
+// last as its prompt, with the images and PDFs sent with it as files. Text
+// files are written in where they were sent; the others sent before, which
+// a session is not told again, are named.
+func copilotPrompt(turns []turn) (system, prompt string, files []attachment) {
 	if len(turns) == 0 {
-		return copilotSystem, ""
+		return copilotSystem, "", nil
 	}
 	var b strings.Builder
 	b.WriteString(copilotSystem)
@@ -95,10 +98,28 @@ func copilotPrompt(turns []turn) (system, prompt string) {
 			if t.Role == "assistant" {
 				who = "Assistant"
 			}
-			b.WriteString("\n\n" + who + ": " + t.Content)
+			text, _ := copilotText(t)
+			b.WriteString("\n\n" + who + ": " + text)
 		}
 	}
-	return b.String(), turns[len(turns)-1].Content
+	prompt, files = copilotText(turns[len(turns)-1])
+	return b.String(), prompt, files
+}
+
+// copilotText returns t as Copilot is told it: its text files written in
+// before its text, and its other files apart, each named where it was.
+func copilotText(t turn) (text string, files []attachment) {
+	var b strings.Builder
+	for _, f := range t.Files {
+		if f.Type == typeText {
+			b.WriteString(fileText(f) + "\n\n")
+		} else {
+			fmt.Fprintf(&b, "<file name=%q type=%q/>\n\n", f.Name, f.Type)
+			files = append(files, f)
+		}
+	}
+	b.WriteString(t.Content)
+	return b.String(), files
 }
 
 // copilotProvider asks GitHub Copilot through rt.
@@ -114,8 +135,8 @@ func (p *copilotProvider) Models() []string { return p.models }
 func (p *copilotProvider) List(ctx context.Context) ([]string, error) { return p.rt.Models(ctx) }
 
 func (p *copilotProvider) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
-	system, prompt := copilotPrompt(turns)
-	return p.rt.Stream(ctx, model, system, prompt, delta)
+	system, prompt, files := copilotPrompt(turns)
+	return p.rt.Stream(ctx, model, system, prompt, files, delta)
 }
 
 // copilotSDK is the Copilot CLI at cli, which the SDK starts as it is
@@ -194,7 +215,7 @@ func (r *copilotSDK) Models(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
-func (r *copilotSDK) Stream(ctx context.Context, model, system, prompt string, delta func(chunk)) error {
+func (r *copilotSDK) Stream(ctx context.Context, model, system, prompt string, files []attachment, delta func(chunk)) error {
 	c, err := r.start(ctx)
 	if err != nil {
 		return err
@@ -232,7 +253,14 @@ func (r *copilotSDK) Stream(ctx context.Context, model, system, prompt string, d
 		}
 	})
 	defer off()
-	if _, err := s.Send(ctx, copilot.MessageOptions{Prompt: prompt}); err != nil {
+	// Images and PDFs as blobs of their bytes, which the CLI takes as the
+	// files of the message.
+	var blobs []copilot.Attachment
+	for _, f := range files {
+		data, name := base64.StdEncoding.EncodeToString(f.data), f.Name
+		blobs = append(blobs, &copilot.AttachmentBlob{Data: &data, MIMEType: f.Type, DisplayName: &name})
+	}
+	if _, err := s.Send(ctx, copilot.MessageOptions{Prompt: prompt, Attachments: blobs}); err != nil {
 		return err
 	}
 	select {

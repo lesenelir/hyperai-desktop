@@ -768,6 +768,116 @@ func (msgs Messages) ComposerPlaceholder() string {
 	return Catalog.Format(msgs.locale, "composerPlaceholder", nil)
 }
 
+// AttachFiles says "Attach files"
+// in the language the app shows.
+//
+// The composer's button that adds files to send with the message, and the
+// title of the dialog that picks them.
+func AttachFiles() string { return In(i18n.Locale()).AttachFiles() }
+
+// AttachFiles says "Attach files"
+// in the language of msgs.
+//
+// The composer's button that adds files to send with the message, and the
+// title of the dialog that picks them.
+func (msgs Messages) AttachFiles() string {
+	return Catalog.Format(msgs.locale, "attachFiles", nil)
+}
+
+// AttachDrop says "Drop files to attach"
+// in the language the app shows.
+//
+// What the composer shows while files dragged from another app are over the
+// chat, which dropping attaches.
+func AttachDrop() string { return In(i18n.Locale()).AttachDrop() }
+
+// AttachDrop says "Drop files to attach"
+// in the language of msgs.
+//
+// What the composer shows while files dragged from another app are over the
+// chat, which dropping attaches.
+func (msgs Messages) AttachDrop() string {
+	return Catalog.Format(msgs.locale, "attachDrop", nil)
+}
+
+// AttachRemove says "Remove {name}"
+// in the language the app shows.
+//
+// Names the button on a file attached to the draft that takes it off, to
+// assistive technology.
+func AttachRemove(name string) string { return In(i18n.Locale()).AttachRemove(name) }
+
+// AttachRemove says "Remove {name}"
+// in the language of msgs.
+//
+// Names the button on a file attached to the draft that takes it off, to
+// assistive technology.
+func (msgs Messages) AttachRemove(name string) string {
+	return Catalog.Format(msgs.locale, "attachRemove", map[string]any{"name": name})
+}
+
+// AttachFailed says "Couldn’t attach “{name}”"
+// in the language the app shows.
+//
+// The title of the toast that shows as a file the user chose or dropped
+// could not be attached.
+func AttachFailed(name string) string { return In(i18n.Locale()).AttachFailed(name) }
+
+// AttachFailed says "Couldn’t attach “{name}”"
+// in the language of msgs.
+//
+// The title of the toast that shows as a file the user chose or dropped
+// could not be attached.
+func (msgs Messages) AttachFailed(name string) string {
+	return Catalog.Format(msgs.locale, "attachFailed", map[string]any{"name": name})
+}
+
+// AttachTooLarge says "Files over {size} MB can’t be attached."
+// in the language the app shows.
+//
+// Why a file could not be attached: it is larger than the app sends, size
+// megabytes.
+func AttachTooLarge(size int) string { return In(i18n.Locale()).AttachTooLarge(size) }
+
+// AttachTooLarge says "Files over {size} MB can’t be attached."
+// in the language of msgs.
+//
+// Why a file could not be attached: it is larger than the app sends, size
+// megabytes.
+func (msgs Messages) AttachTooLarge(size int) string {
+	return Catalog.Format(msgs.locale, "attachTooLarge", map[string]any{"size": size})
+}
+
+// AttachUnsupported says "Only images, PDFs and text files can be attached."
+// in the language the app shows.
+//
+// Why a file could not be attached: it is of a kind the app does not send,
+// as a video or an archive.
+func AttachUnsupported() string { return In(i18n.Locale()).AttachUnsupported() }
+
+// AttachUnsupported says "Only images, PDFs and text files can be attached."
+// in the language of msgs.
+//
+// Why a file could not be attached: it is of a kind the app does not send,
+// as a video or an archive.
+func (msgs Messages) AttachUnsupported() string {
+	return Catalog.Format(msgs.locale, "attachUnsupported", nil)
+}
+
+// AttachUnreadable says "The file couldn’t be read."
+// in the language the app shows.
+//
+// Why a file could not be attached: reading it failed.
+func AttachUnreadable() string { return In(i18n.Locale()).AttachUnreadable() }
+
+// AttachUnreadable says "The file couldn’t be read."
+// in the language of msgs.
+//
+// Why a file could not be attached: reading it failed.
+func (msgs Messages) AttachUnreadable() string {
+	return Catalog.Format(msgs.locale, "attachUnreadable", nil)
+}
+
 // Send says "Send"
 // in the language the app shows.
 //

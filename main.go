@@ -66,6 +66,21 @@ func main() {
 			Content:  ui.View(a.view),
 		})
 		a.post = a.win.Update
+		// Files to attach, as the system's dialog picks them, over the
+		// window; and those sent, opened in the apps the system opens them in.
+		win := a.win
+		a.openFiles = func(title string) []string {
+			paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: win, Title: title, Multiple: true})
+			if err != nil {
+				log.Printf("attaching files: %v", err)
+			}
+			return paths
+		}
+		a.openPath = func(path string) {
+			if err := mygo.Shell.OpenPath(path); err != nil {
+				log.Printf("opening an attachment: %v", err)
+			}
+		}
 		startTeX(a)
 		if bench > 0 {
 			go a.bench(bench)
@@ -88,6 +103,7 @@ func main() {
 			a.saver.wait()
 			a.layoutSaver.wait()
 			a.confSaver.wait()
+			a.writes.Wait()
 			// The Copilot CLI, if it runs, with it.
 			a.closeCopilot()
 		})

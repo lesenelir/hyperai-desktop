@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
@@ -3306,7 +3307,7 @@ func TestCustomProvider(t *testing.T) {
 		t.Errorf("the card shows %q", tt.Texts())
 	}
 	var reply strings.Builder
-	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, func(ch chunk) { reply.WriteString(ch.Text) }); err != nil || reply.String() != "Hi" {
+	if err := a.prov.Stream(context.Background(), a.model, []turn{{Role: "user", Content: "Hello"}}, func(ch chunk) { reply.WriteString(ch.Text) }); err != nil || reply.String() != "Hi" {
 		t.Errorf("replied %q, %v", reply.String(), err)
 	}
 	if !slices.Equal(auth, []string{"", ""}) {
@@ -3435,14 +3436,14 @@ func TestCustomAnthropicProvider(t *testing.T) {
 	}
 	var reply, reasoning strings.Builder
 	delta := func(ch chunk) { reply.WriteString(ch.Text); reasoning.WriteString(ch.Reasoning) }
-	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, delta); err != nil || reply.String() != "Hi" || reasoning.String() != "Greet back." {
+	if err := a.prov.Stream(context.Background(), a.model, []turn{{Role: "user", Content: "Hello"}}, delta); err != nil || reply.String() != "Hi" || reasoning.String() != "Greet back." {
 		t.Errorf("replied %q, reasoned %q, %v", reply.String(), reasoning.String(), err)
 	}
 	if key[0] != "" || beta[0] != "" || body["fallbacks"] != nil {
 		t.Errorf("key %q, beta %q, fallbacks %v", key[0], beta[0], body["fallbacks"])
 	}
 	a.setKey(id, "sk-proxy")
-	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, func(chunk) {}); err != nil || !strings.HasSuffix(key[1], "sk-proxy") {
+	if err := a.prov.Stream(context.Background(), a.model, []turn{{Role: "user", Content: "Hello"}}, func(chunk) {}); err != nil || !strings.HasSuffix(key[1], "sk-proxy") {
 		t.Errorf("with the key: %q, %v", key[1:], err)
 	}
 }
@@ -3622,18 +3623,18 @@ func TestThoughts(t *testing.T) {
 	}
 	// The next question asks the reply's text alone.
 	a.send("Again")
-	want := []turn{{"user", "Hello"}, {"assistant", "Hi there."}, {"user", "Again"}}
-	if len(p.asked) != 2 || !slices.Equal(p.asked[1], want) {
-		t.Errorf("asked %q", p.asked)
+	want := []turn{{Role: "user", Content: "Hello"}, {Role: "assistant", Content: "Hi there."}, {Role: "user", Content: "Again"}}
+	if len(p.asked) != 2 || !reflect.DeepEqual(p.asked[1], want) {
+		t.Errorf("asked %+v", p.asked)
 	}
 }
 
 func TestCopilotPrompt(t *testing.T) {
-	system, prompt := copilotPrompt([]turn{{"user", "Hi"}, {"assistant", "Hello."}, {"user", "Again"}})
+	system, prompt, _ := copilotPrompt([]turn{{Role: "user", Content: "Hi"}, {Role: "assistant", Content: "Hello."}, {Role: "user", Content: "Again"}})
 	if want := copilotSystem + "\n\nThe conversation so far, before the user's message:\n\nUser: Hi\n\nAssistant: Hello."; system != want || prompt != "Again" {
 		t.Errorf("system %q, prompt %q", system, prompt)
 	}
-	if system, prompt := copilotPrompt([]turn{{"user", "Hi"}}); system != copilotSystem || prompt != "Hi" {
+	if system, prompt, _ := copilotPrompt([]turn{{Role: "user", Content: "Hi"}}); system != copilotSystem || prompt != "Hi" {
 		t.Errorf("of one turn: system %q, prompt %q", system, prompt)
 	}
 }
@@ -3679,7 +3680,7 @@ func (f *fakeCopilot) User(ctx context.Context) (string, error)     { return f.u
 func (f *fakeCopilot) Models(ctx context.Context) ([]string, error) { return f.models, nil }
 func (f *fakeCopilot) Close()                                       { f.closed = true }
 
-func (f *fakeCopilot) Stream(ctx context.Context, model, system, prompt string, delta func(chunk)) error {
+func (f *fakeCopilot) Stream(ctx context.Context, model, system, prompt string, files []attachment, delta func(chunk)) error {
 	f.asked = append(f.asked, [2]string{system, prompt})
 	delta(chunk{Reasoning: "Greet back."})
 	delta(chunk{Text: "Hi from " + model})

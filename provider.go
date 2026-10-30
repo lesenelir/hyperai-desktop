@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,10 +18,12 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2/shared/constant"
 )
 
-// turn is a message of a conversation as a provider sees it.
+// turn is a message of a conversation as a provider sees it, with the
+// files sent with it.
 type turn struct {
-	Role    string `json:"role"` // "user" or "assistant"
-	Content string `json:"content"`
+	Role    string
+	Content string
+	Files   []attachment
 }
 
 // chunk is a piece of a reply as it streams in: of its text, or of the
@@ -187,7 +190,7 @@ func (p *openAI) List(ctx context.Context) ([]string, error) {
 }
 
 func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
-	body, err := json.Marshal(map[string]any{"model": model, "messages": turns, "stream": true})
+	body, err := json.Marshal(map[string]any{"model": model, "messages": openAIMessages(turns), "stream": true})
 	if err != nil {
 		return err
 	}
@@ -267,6 +270,37 @@ func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta f
 	return nil
 }
 
+// openAIMessages returns turns as chat completions takes them: a message's
+// text as its content, or, with files, its parts, the files first and the
+// text after them, as OpenAI's guide has them. An image goes as a data
+// URL, a PDF as a file, as OpenAI and OpenRouter take them, and a text
+// file in a part of text, as any takes it.
+func openAIMessages(turns []turn) []map[string]any {
+	msgs := make([]map[string]any, 0, len(turns))
+	for _, t := range turns {
+		if len(t.Files) == 0 {
+			msgs = append(msgs, map[string]any{"role": t.Role, "content": t.Content})
+			continue
+		}
+		var parts []map[string]any
+		for _, f := range t.Files {
+			switch f.Type {
+			case typeText:
+				parts = append(parts, map[string]any{"type": "text", "text": fileText(f)})
+			case typePDF:
+				parts = append(parts, map[string]any{"type": "file", "file": map[string]any{"filename": f.Name, "file_data": dataURL(f)}})
+			default:
+				parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]any{"url": dataURL(f)}})
+			}
+		}
+		if t.Content != "" {
+			parts = append(parts, map[string]any{"type": "text", "text": t.Content})
+		}
+		msgs = append(msgs, map[string]any{"role": t.Role, "content": parts})
+	}
+	return msgs
+}
+
 // looseString is a string of a reply's JSON, "" where the field holds
 // another type, as one a service names as others do but fills otherwise.
 type looseString string
@@ -342,12 +376,11 @@ var anthropicFallbacks = []string{"claude-fable-5-1", "claude-opus-5-5", "claude
 func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
 	var msgs []anthropic.BetaMessageParam
 	for _, t := range turns {
-		block := anthropic.NewBetaTextBlock(t.Content)
 		if t.Role == "assistant" {
 			msgs = append(msgs, anthropic.BetaMessageParam{OfAssistant: &anthropic.BetaAssistantMessageParam{
-				Content: []anthropic.BetaContentBlockParamUnion{block}}})
+				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(t.Content)}}})
 		} else {
-			msgs = append(msgs, anthropic.NewBetaUserMessage(block))
+			msgs = append(msgs, anthropic.NewBetaUserMessage(anthropicBlocks(t)...))
 		}
 	}
 	// Room for a long reply, which streaming lets take its time.
@@ -392,6 +425,31 @@ func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, d
 		return errors.New("Claude declined to answer.")
 	}
 	return nil
+}
+
+// anthropicBlocks returns the question t as the Messages API takes it: its
+// files first, as Anthropic's guide has them, an image as one, a PDF as a
+// document titled by its name, and a text file in a block of text; then
+// its text, where it has any.
+func anthropicBlocks(t turn) []anthropic.BetaContentBlockParamUnion {
+	var blocks []anthropic.BetaContentBlockParamUnion
+	for _, f := range t.Files {
+		switch f.Type {
+		case typeText:
+			blocks = append(blocks, anthropic.NewBetaTextBlock(fileText(f)))
+		case typePDF:
+			doc := anthropic.NewBetaDocumentBlock(anthropic.BetaBase64PDFSourceParam{Data: base64.StdEncoding.EncodeToString(f.data)})
+			doc.OfDocument.Title = anthropic.String(f.Name)
+			blocks = append(blocks, doc)
+		default:
+			blocks = append(blocks, anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+				Data: base64.StdEncoding.EncodeToString(f.data), MediaType: anthropic.BetaBase64ImageSourceMediaType(f.Type)}))
+		}
+	}
+	if t.Content != "" || len(blocks) == 0 {
+		blocks = append(blocks, anthropic.NewBetaTextBlock(t.Content))
+	}
+	return blocks
 }
 
 // anthropicError returns err as a reply shows it: what the API said, under

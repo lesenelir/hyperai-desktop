@@ -161,7 +161,7 @@ A small button that floats over the conversation (scroll to end) rests at
   model and the send button on the right. On an empty chat, as ChatGPT's,
   it is a pill while the draft is a line that fits beside those buttons,
   and opens into the box as the draft breaks a line or outgrows it. Its
-  text is 20 in from its left, and 16 under its top. A long draft
+  text is 12 in from its left, as Codex's, and 16 under its top. A long draft
   scrolls up into that room and fades out in it, as the conversation does
   over the composer, but keeps clear of the edge: the box's color over
   the room's first 6, then a fade to clear by the room's end. The fade
@@ -174,8 +174,27 @@ A small button that floats over the conversation (scroll to end) rests at
   corner and the scroll bar. It is two pieces, a solid one and a plain
   fade: MyGo draws a gradient's `Start` and `Stops` as a plain fade, edge
   to edge. It has no buttons for what the app cannot
-  do (attachments, voice). Over a conversation it floats over the end, on
+  do (voice). Over a conversation it floats over the end, on
   the canvas, which fades the conversation out above it.
+- **Attachments** ([attach.go](../attach.go)), as Codex's: a round `+`,
+  muted as the model's button, 4 in at the box's bottom left, its icon
+  about as far in as the text, and left of the pill's text (40 in), opens the system's dialog; files dropped
+  anywhere on the chat attach too, and while they are dragged over it the
+  composer shows "Drop files to attach" over itself, ringed in the accent
+  at 1.5, as what takes them. Pasting attaches files copied in Finder, and
+  an image (a screenshot) where the clipboard holds no text: a browser's
+  selection comes with a picture of itself, and pastes as text. An image, a PDF or a UTF-8 text file (20 MB
+  at most, text 1 MB) attaches; anything else, a toast says why. They
+  show over the field as chips 56 tall, in a row that scrolls sideways,
+  12 in from the box's top and left, where the text starts, and about 12
+  over the text, whose room over it is 8 under them, not 16: an image as its picture, radius 12; another
+  file as its icon on a tile over the name and the extension, on a 4%
+  wash; each in a hairline, and under the pointer a round ✕, 16, over
+  its corner, 5 past its top and right, clear of a file's name. Files make the composer a box. A question's files show over
+  its bubble on the right, its images 120 square, and open in their app
+  as clicked. The files sent are copied into `attachments/` beside
+  `chats.json`, which goes with their chat; a draft's stay with its chat
+  until the app quits.
 - **Pop-up buttons** (`popUpButton`) choose one of a list, as macOS's:
   the choice over a chevron, on `composer` with a hairline, radius 8,
   opening the system's own menu, the choice checked. They are as wide as

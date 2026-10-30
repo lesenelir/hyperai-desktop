@@ -30,6 +30,7 @@ func (a *app) loadFrom(dir string) {
 		}
 	}()
 	a.path = filepath.Join(dir, "chats.json")
+	a.filesDir = filepath.Join(dir, "attachments")
 	b, err := os.ReadFile(a.path)
 	if err != nil || json.Unmarshal(b, &a.threads) != nil {
 		return

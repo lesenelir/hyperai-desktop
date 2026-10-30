@@ -134,6 +134,29 @@
   "@composerLabel": { "description": "Names the composer's field to assistive technology." },
   "composerPlaceholder": "Ask anything…",
   "@composerPlaceholder": { "description": "What the composer's empty field shows." },
+  "attachFiles": "Attach files",
+  "@attachFiles": { "description": "The composer's button that adds files to send with the message, and the title of the dialog that picks them." },
+  "attachDrop": "Drop files to attach",
+  "@attachDrop": { "description": "What the composer shows while files dragged from another app are over the chat, which dropping attaches." },
+  "attachRemove": "Remove {name}",
+  "@attachRemove": {
+    "description": "Names the button on a file attached to the draft that takes it off, to assistive technology.",
+    "placeholders": { "name": { "type": "String", "example": "notes.md" } }
+  },
+  "attachFailed": "Couldn’t attach “{name}”",
+  "@attachFailed": {
+    "description": "The title of the toast that shows as a file the user chose or dropped could not be attached.",
+    "placeholders": { "name": { "type": "String", "example": "video.mov" } }
+  },
+  "attachTooLarge": "Files over {size} MB can’t be attached.",
+  "@attachTooLarge": {
+    "description": "Why a file could not be attached: it is larger than the app sends, size megabytes.",
+    "placeholders": { "size": { "type": "int", "example": "20" } }
+  },
+  "attachUnsupported": "Only images, PDFs and text files can be attached.",
+  "@attachUnsupported": { "description": "Why a file could not be attached: it is of a kind the app does not send, as a video or an archive." },
+  "attachUnreadable": "The file couldn’t be read.",
+  "@attachUnreadable": { "description": "Why a file could not be attached: reading it failed." },
   "send": "Send",
   "@send": { "description": "The composer's button that sends, and its shortcut." },
   "stop": "Stop",
