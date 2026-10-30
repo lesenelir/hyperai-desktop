@@ -125,17 +125,7 @@ func (a *app) commitRename() {
 		return
 	}
 	th, name := a.thread(a.renaming), title(a.renameDraft)
-	id, isProject := strings.CutPrefix(a.renaming, projectPrefix)
 	a.renaming = ""
-	// A project's name, as its page's title bar renames it.
-	if p := a.project(id); isProject && p != nil {
-		if name != "" && name != p.Name {
-			p.Name = name
-			a.rev++
-			a.saveProjects()
-		}
-		return
-	}
 	if th == nil || name == "" || name == th.Title {
 		return
 	}

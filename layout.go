@@ -46,11 +46,8 @@ type layout struct {
 	// Instructions are what every model is told, in every chat.
 	Instructions string `json:"instructions,omitempty"`
 	// FoldPinned and FoldChats fold the sidebar's sections.
-	FoldPinned   bool `json:"foldPinned,omitempty"`
-	FoldChats    bool `json:"foldChats,omitempty"`
-	FoldProjects bool `json:"foldProjects,omitempty"`
-	// OpenProjects are the projects whose chats show under them.
-	OpenProjects []string `json:"openProjects,omitempty"`
+	FoldPinned bool `json:"foldPinned,omitempty"`
+	FoldChats  bool `json:"foldChats,omitempty"`
 }
 
 // loadLayout reads the layout kept in dir, if any.
@@ -85,11 +82,7 @@ func (a *app) loadLayout(dir string) {
 		a.sendWith = sendCmdReturn
 	}
 	a.keptChat, a.notifyDone, a.renderMath = l.Chat, l.Notify, !l.MathSource
-	a.foldPinned, a.foldChats, a.foldProjects = l.FoldPinned, l.FoldChats, l.FoldProjects
-	a.openProjects = map[string]bool{}
-	for _, id := range l.OpenProjects {
-		a.openProjects[id] = true
-	}
+	a.foldPinned, a.foldChats = l.FoldPinned, l.FoldChats
 	a.instructions = l.Instructions
 	if slices.ContainsFunc(languages, func(lang struct{ tag, name string }) bool { return lang.tag == l.Language }) {
 		a.language = l.Language
@@ -105,7 +98,7 @@ func (a *app) saveLayout() {
 	l := layout{SidebarWidth: a.sideWidth, Theme: a.theme, TextSize: textSizes[a.textSize],
 		OpaqueSidebar: !a.translucent, ReduceMotion: a.reduceMotion,
 		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme, Chat: a.keptChat, Notify: a.notifyDone, Language: a.language,
-		MathSource: !a.renderMath, FoldPinned: a.foldPinned, FoldChats: a.foldChats, FoldProjects: a.foldProjects, OpenProjects: openProjects(a.openProjects), Instructions: a.instructions}
+		MathSource: !a.renderMath, FoldPinned: a.foldPinned, FoldChats: a.foldChats, Instructions: a.instructions}
 	if a.onLaunch == launchLast {
 		l.OnLaunch = "last"
 	}
@@ -168,16 +161,4 @@ func (a *app) resizer(c *ui.Context, x, lo, hi float32) {
 			bar.Background(a.pal.fg.Alpha(0.35))
 		}
 	})
-}
-
-// openProjects returns the IDs of the projects open, in order.
-func openProjects(open map[string]bool) []string {
-	var ids []string
-	for id, o := range open {
-		if o {
-			ids = append(ids, id)
-		}
-	}
-	slices.Sort(ids)
-	return ids
 }

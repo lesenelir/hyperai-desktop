@@ -383,30 +383,6 @@ A small button that floats over the conversation (scroll to end) rests at
   Show in Finder, the folder before any is written; Delete All…, faded
   where there are none). A setting's button is a pop-up button's box
   without its arrow (`settingButton`).
-- **Projects** ([projects.go](../projects.go)): chats that share what
-  their model is told, as Claude's and ChatGPT's. The sidebar lists them
-  first, in a section of their own that folds as Pinned and Chats do, a
-  `+` (24, its icon 14) on its title's right, always, the one way to make
-  one; each project a row of its folder and its name, the one shown on the
-  7% wash at 500; a right click renames or removes it. Under the pointer a
-  chevron takes the folder's place, as VS Code's and Notion's, which
-  unfolds the project's chats under it, or folds them (folded at first;
-  layout.json keeps which are open): its latest five, as far in as its
-  name, the one shown too wherever it is, and View all, muted, where it
-  has more, which shows its page. A project's chats show there alone, not
-  in Chats; pinned, in Pinned alone, its name by their model. Showing one
-  of its chats, or starting one, unfolds it. New project makes one and
-  shows its page, its name a field in the title bar, chosen, to type its
-  own. A project's page is an empty chat's, its folder (40, `fg/70`) and
-  its name (26) over the composer, which starts a chat in it; and under
-  it, as wide, scrolling, its instructions, a field on a card kept as
-  typed, and its chats, the latest first. Its menu, in the title bar:
-  Rename…, Remove project…, which asks first and keeps its chats, out of
-  any project. A chat of a project is told the user's instructions, then
-  the project's, and has its name first in its title bar, muted, over a
-  slash, which goes back to the page. A chat's menu moves it to a project
-  and out (Move to project). The page is a place Back and Forward go to
-  as a chat, and keeps its own draft.
 - **Instructions** ([instructions.go](../instructions.go)), after General:
   what every model is told, in every chat, about the user and how to
   reply. A card holds its field, six lines tall at first and sixteen at

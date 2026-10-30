@@ -12,14 +12,11 @@ import (
 	"hyperai-desktop/locales"
 )
 
-// sidebar returns the sidebar's rows of chats, as their groups' titles and
-// the chats' titles: Projects' left out.
+// sidebar returns the sidebar's rows, as their groups' titles and the
+// chats' titles.
 func sidebar(a *app) []string {
 	var out []string
 	for _, r := range a.chatRows(time.Now()) {
-		if r.section == sectionProjects || r.project != nil || r.nested || r.viewAll != nil || r.empty {
-			continue
-		}
 		if r.th != nil {
 			out = append(out, r.th.Title)
 		} else {

@@ -90,9 +90,7 @@ type thread struct {
 	// Pinned is when the user pinned the chat, which keeps it at the
 	// sidebar's top, zero where it is not (not pin, the question held at
 	// the conversation's top).
-	Pinned time.Time `json:"pinned,omitzero"`
-	// Project is the ID of the project it is in, "" for none (projects.go).
-	Project  string     `json:"project,omitempty"`
+	Pinned   time.Time  `json:"pinned,omitzero"`
 	Messages []*message `json:"messages"`
 	// Others are the messages of the versions not shown (versions.go).
 	Others []*message    `json:"others,omitempty"`
@@ -292,26 +290,14 @@ type app struct {
 	rowsDay      time.Time
 	rowsLang     string
 	rows         []chatRow
-	rowsFolds    [3]bool // foldProjects, foldPinned and foldChats as rows were made
+	rowsFolds    [2]bool // foldPinned and foldChats as rows were made
 	chatList     ui.ListState
 	// instructions are what every model is told, in every chat, which the
 	// Instructions page sets and layout.json keeps (instructions.go).
 	instructions string
 	// foldPinned and foldChats fold the sidebar's sections, Pinned and
-	// Chats, and foldProjects Projects, which layout.json keeps.
-	foldPinned, foldChats, foldProjects bool
-	// projects are the user's (projects.go), which projectsPath keeps;
-	// projectDrafts and projectFiles what the composer of each one's page
-	// held as it was left, by its ID; removingProject the one the alert asks
-	// to remove.
-	projects        []*project
-	openProjects    map[string]bool // the projects unfolded in the sidebar, by ID
-	rowsShown       string          // the chat or page shown as rows were made
-	projectsPath    string
-	projectsSaver   saver
-	projectDrafts   map[string]string
-	projectFiles    map[string][]*attachment
-	removingProject string
+	// Chats, which layout.json keeps.
+	foldPinned, foldChats bool
 	// chatScroll is where the sidebar's list is scrolled, which glides to
 	// its top as a chat is pinned.
 	chatScroll ui.ScrollState
@@ -458,20 +444,11 @@ func (a *app) send(text string) {
 			name = files[0].Name
 		}
 		th = &thread{ID: a.next, Title: title(name)}
-		// Sent on a project's page: a chat of the project, whose page's
-		// draft was what was sent; else a new chat's.
-		if p := a.shownProject(); p != nil {
-			th.Project = p.ID
-			delete(a.projectDrafts, p.ID)
-			delete(a.projectFiles, p.ID)
-			a.unfoldProject(p.ID)
-		} else {
-			a.newDraft, a.newFiles = "", nil
-		}
 		a.threads = append(a.threads, th)
-		// The chat asks the model chosen for it while it was new.
+		// The chat asks the model chosen for it while it was new, and the
+		// new chat's draft is what was sent.
 		a.selected = strconv.Itoa(th.ID)
-		a.modelFor = a.selected
+		a.modelFor, a.newDraft, a.newFiles = a.selected, "", nil
 	}
 	a.keepFiles(files)
 	a.files, th.files = nil, nil
@@ -494,7 +471,7 @@ func (a *app) send(text string) {
 // model the composer asks, while the other chats stream theirs: as one is
 // sent, edited (resend), or its reply asked for again (regenerate).
 func (a *app) ask(th *thread) {
-	turns := a.withInstructions(th, th.turns())
+	turns := a.withInstructions(th.turns())
 	// The question goes to the top of the conversation, the reply coming
 	// in under it.
 	q := len(th.Messages) - 1
@@ -649,7 +626,7 @@ func (a *app) askRemove(id string, key bool) {
 // Sign Out is chosen.
 func (a *app) deleteAlert(c *ui.Context) {
 	if !a.confirming {
-		a.deleting, a.deletingAll, a.removing, a.removingKey, a.removingProject = nil, false, "", false, ""
+		a.deleting, a.deletingAll, a.removing, a.removingKey = nil, false, "", false
 		return
 	}
 	title, about, button := "", locales.DeleteUndone(), locales.Delete()
@@ -658,8 +635,6 @@ func (a *app) deleteAlert(c *ui.Context) {
 		title, about = locales.DeleteAllTitle(), locales.DeleteAllAbout(len(a.threads))
 	case a.deleting != nil:
 		title, about = locales.DeleteChatTitle(a.deleting.Title), locales.DeleteChatAbout()
-	case a.project(a.removingProject) != nil:
-		title, about, button = locales.RemoveProjectTitle(a.project(a.removingProject).Name), locales.RemoveProjectAbout(), locales.RemoveProjectButton()
 	case a.removing != "" && a.kindOf(a.removing) != nil:
 		kind := a.kindOf(a.removing)
 		switch {
@@ -681,8 +656,6 @@ func (a *app) deleteAlert(c *ui.Context) {
 			a.removeAll()
 		case a.deleting != nil:
 			a.remove(a.deleting)
-		case a.removingProject != "":
-			a.removeProject(a.removingProject)
 		case a.removing == "copilot":
 			a.signOutCopilot()
 		case a.removingKey:
@@ -692,7 +665,7 @@ func (a *app) deleteAlert(c *ui.Context) {
 		}
 	}
 	if !a.confirming {
-		a.deleting, a.deletingAll, a.removing, a.removingKey, a.removingProject = nil, false, "", false, ""
+		a.deleting, a.deletingAll, a.removing, a.removingKey = nil, false, "", false
 	}
 }
 
@@ -870,6 +843,11 @@ func (a *app) sidebar(c *ui.Context) {
 	if a.navRow(c, "search", searchIcon, locales.Search(), findKeys.String()).Clicked() {
 		a.toggleSearch()
 	}
+	if len(a.threads) == 0 {
+		ui.Text(c, locales.SidebarEmpty()).FontSize(13).TextColor(t.TextMuted).Padding(16, 20).Grow(1)
+		a.settingsRow(c)
+		return
+	}
 	// A list, so that a frame builds only the rows that show: every frame of
 	// a streaming reply builds the sidebar too.
 	now := time.Now()
@@ -881,25 +859,11 @@ func (a *app) sidebar(c *ui.Context) {
 		if s := rows[i].section; s != 0 {
 			return "section " + strconv.Itoa(int(s))
 		}
-		switch r := rows[i]; {
-		case r.project != nil:
-			return "project " + r.project.ID
-		case r.viewAll != nil:
-			return "view all " + r.viewAll.ID
-		case r.empty:
-			return "empty"
-		}
 		return "group " + rows[i].group
 	}
 	ui.List(c.Key("chats"), &a.chatList, len(rows), func(i int) {
 		if th := rows[i].th; th != nil {
-			a.threadRow(c, th, now, rows[i].nested)
-		} else if p := rows[i].project; p != nil {
-			a.projectRow(c, p)
-		} else if p := rows[i].viewAll; p != nil {
-			a.viewAllRow(c, p)
-		} else if rows[i].empty {
-			ui.Text(c, locales.SidebarEmpty()).FontSize(13).TextColor(t.TextMuted).Padding(16, 20)
+			a.threadRow(c, th, now)
 		} else if rows[i].section != 0 {
 			a.sectionRow(c, rows[i])
 		} else {
@@ -915,14 +879,6 @@ type chatRow struct {
 	group   string
 	th      *thread
 	section section
-	// project is a project's row; nested tells a chat's row is under its
-	// project's, unfolded, and viewAll is the row under them that shows
-	// the project's page, where it has more; empty is the word of the
-	// sidebar of no chat.
-	project *project
-	nested  bool
-	viewAll *project
-	empty   bool
 }
 
 // section is a section of the sidebar, which folds: its chats pinned, and
@@ -932,7 +888,6 @@ type section int
 const (
 	sectionPinned section = iota + 1
 	sectionChats
-	sectionProjects
 )
 
 // chatRows returns the sidebar's rows as of now, grouping the chats by day
@@ -940,36 +895,15 @@ const (
 func (a *app) chatRows(now time.Time) []chatRow {
 	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	lang := i18n.Locale()
-	folds := [3]bool{a.foldProjects, a.foldPinned, a.foldChats}
-	if a.rows != nil && a.rowsRev == a.rev && a.rowsDay.Equal(day) && a.rowsLang == lang && a.rowsFolds == folds &&
-		a.rowsShown == a.selected {
+	folds := [2]bool{a.foldPinned, a.foldChats}
+	if a.rows != nil && a.rowsRev == a.rev && a.rowsDay.Equal(day) && a.rowsLang == lang && a.rowsFolds == folds {
 		return a.rows
 	}
-	// Three sections, which fold: Projects, each project's chats under it
-	// where it is unfolded; Pinned, where any are; and Chats, the others,
-	// out of any project, by day, under the days' titles. A chat shows
-	// once: pinned, in Pinned alone.
-	rows := make([]chatRow, 0, len(a.threads)+len(a.projects)+9)
-	rows = append(rows, chatRow{group: locales.TabProjects(), section: sectionProjects})
-	if !a.foldProjects {
-		for _, p := range a.projects {
-			rows = append(rows, chatRow{project: p})
-			if a.openProjects[p.ID] {
-				rows = a.projectRows(rows, p)
-			}
-		}
-	}
-	if len(a.threads) == 0 {
-		rows = append(rows, chatRow{empty: true})
-	}
-	var others []*thread
-	for _, th := range a.threads {
-		if !th.Pinned.IsZero() || a.projectOf(th) == nil {
-			others = append(others, th)
-		}
-	}
+	// Two sections, which fold: Pinned, where any are, and Chats, the
+	// others by day, under the days' titles.
+	rows := make([]chatRow, 0, len(a.threads)+7)
 	chats := false
-	for _, g := range groupByDay(others, now) {
+	for _, g := range groupByDay(a.threads, now) {
 		if g.pinned {
 			rows = append(rows, chatRow{group: g.title, section: sectionPinned})
 			if !a.foldPinned {
@@ -991,7 +925,7 @@ func (a *app) chatRows(now time.Time) []chatRow {
 			rows = append(rows, chatRow{th: th})
 		}
 	}
-	a.rows, a.rowsRev, a.rowsDay, a.rowsLang, a.rowsFolds, a.rowsShown = rows, a.rev, day, lang, folds, a.selected
+	a.rows, a.rowsRev, a.rowsDay, a.rowsLang, a.rowsFolds = rows, a.rev, day, lang, folds
 	return rows
 }
 
@@ -1002,40 +936,29 @@ func (a *app) chatRows(now time.Time) []chatRow {
 func (a *app) sectionRow(c *ui.Context, r chatRow) {
 	t := c.Theme()
 	fold := &a.foldPinned
-	switch r.section {
-	case sectionChats:
+	if r.section == sectionChats {
 		fold = &a.foldChats
-	case sectionProjects:
-		fold = &a.foldProjects
 	}
-	// Apart from the section over it: Projects is first.
 	top := float32(rowGap / 2)
-	if r.section != sectionProjects {
+	if r.section == sectionChats && len(a.rows) > 0 && a.rows[0].section == sectionPinned {
 		top = 12
 	}
-	ui.Row(c.Key("section "+strconv.Itoa(int(r.section)))).Margin(top, barClear, rowGap/2, 8).Gap(2).AlignItems(ui.Center).Children(func() {
-		b := ui.ButtonBase(c.Key("fold")).Grow(1).Padding(6, 12).Radius(8).Gap(4).Justify(ui.Start).AlignItems(ui.Center).
-			TextColor(t.TextMuted).Label(r.group).Expanded(!*fold)
-		if b.Hovered() {
-			b.Background(a.pal.fg.Alpha(0.04)).TextColor(t.Text)
+	b := ui.ButtonBase(c.Key("section "+strconv.Itoa(int(r.section)))).Margin(top, barClear, rowGap/2, 8).Padding(6, 12).
+		Radius(8).Gap(4).Justify(ui.Start).AlignItems(ui.Center).TextColor(t.TextMuted).Label(r.group).Expanded(!*fold)
+	if b.Hovered() {
+		b.Background(a.pal.fg.Alpha(0.04)).TextColor(t.Text)
+	}
+	b.Children(func() {
+		ui.Text(c, r.group).FontSize(12).FontWeight(500).SingleLine()
+		chevron := ui.Icon(c, chevronIcon).Size(12, 12)
+		if *fold {
+			chevron.Rotate(-90)
 		}
-		b.Children(func() {
-			ui.Text(c, r.group).FontSize(12).FontWeight(500).SingleLine()
-			chevron := ui.Icon(c, chevronIcon).Size(12, 12)
-			if *fold {
-				chevron.Rotate(-90)
-			}
-		})
-		// Once the list is built, whose rows it changes.
-		b.OnClick(func() {
-			*fold = !*fold
-			a.saveLayout()
-		})
-		// Projects' own button that makes one, on its right, always: the
-		// one way to.
-		if r.section == sectionProjects {
-			iconButtonSized(c.Key("new project"), plusIcon, locales.NewProject(), 14).Size(24, 24).OnClick(a.newProject)
-		}
+	})
+	// Once the list is built, whose rows it changes.
+	b.OnClick(func() {
+		*fold = !*fold
+		a.saveLayout()
 	})
 }
 
@@ -1059,22 +982,17 @@ func (a *app) navRow(c *ui.Context, key string, svg *ui.SVG, label, shortcut str
 // and how long ago, or a spinner as a reply streams in, the mark of one
 // that ended out of view before it. The chat shown is on a wash of fg, its title at 500,
 // as the settings' pages are: the wash says it, without the accent too.
-func (a *app) threadRow(c *ui.Context, th *thread, now time.Time, nested bool) {
+func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 	t := c.Theme()
 	id := strconv.Itoa(th.ID)
 	selected := id == a.selected
-	// Under its project's row, its title as far in as the project's name.
-	left := float32(8)
-	if nested {
-		left += projectIndent
-	}
 	// Renamed in place: a row, not a button, that the field takes clicks in.
 	if a.renaming == id && a.renameInSidebar {
-		ui.Row(c.Key("rename "+id)).Margin(rowGap/2, barClear, rowGap/2, left).Padding(8, 12).Radius(8).
+		ui.Row(c.Key("rename "+id)).Margin(rowGap/2, barClear, rowGap/2, 8).Padding(8, 12).Radius(8).
 			Background(a.pal.fg.Alpha(0.07)).Children(func() {
 			ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
 				a.renameField(c, t.FontSize, 500)
-				a.threadMeta(c, th, now, nested)
+				a.threadMeta(c, th, now)
 			})
 		})
 		return
@@ -1085,7 +1003,7 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time, nested bool) {
 	box := ui.Box(c.Key("chat " + id))
 	hover := box.Hovered()
 	box.Children(func() {
-		row := ui.ButtonBase(c.Key(th.ID)).Margin(rowGap/2, barClear, rowGap/2, left).Padding(8, 12).Radius(8).Justify(ui.Start).Label(th.Title)
+		row := ui.ButtonBase(c.Key(th.ID)).Margin(rowGap/2, barClear, rowGap/2, 8).Padding(8, 12).Radius(8).Justify(ui.Start).Label(th.Title)
 		switch {
 		case selected:
 			row.Background(a.pal.fg.Alpha(0.07))
@@ -1108,7 +1026,7 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time, nested bool) {
 						ui.Spinner(c).Size(12, 12).Shrink(0).Label(locales.TitleRegenerating())
 					}
 				})
-				a.threadMeta(c, th, now, nested)
+				a.threadMeta(c, th, now)
 			})
 		})
 		row.ContextMenu(func(m *ui.Menu) { a.chatMenu(c, m, th, true) })
@@ -1140,19 +1058,13 @@ func (a *app) rowMoreButton(c *ui.Context, th *thread, hover bool) {
 // threadMeta builds the line under th's title in the sidebar: the model it
 // asked and how long ago, or a spinner as a reply streams in, the mark of
 // one that ended out of view before it.
-func (a *app) threadMeta(c *ui.Context, th *thread, now time.Time, nested bool) {
+func (a *app) threadMeta(c *ui.Context, th *thread, now time.Time) {
 	t := c.Theme()
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, messageIcon).Size(12, 12).TextColor(t.TextMuted)
 		model := th.Model
 		if model == "" {
 			model = locales.SidebarModelNone()
-		}
-		// Of a project, but under it: its folder, and its name by the model.
-		if p := a.projectOf(th); p != nil && !nested {
-			ui.Icon(c, folderIcon).Size(12, 12).TextColor(t.TextMuted)
-			model = p.Name + " · " + model
-		} else {
-			ui.Icon(c, messageIcon).Size(12, 12).TextColor(t.TextMuted)
 		}
 		ui.Text(c, model).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1)
 		// A reply streaming in, in place of the age; one that ended out of
@@ -1214,7 +1126,6 @@ func (a *app) chatMenu(c *ui.Context, m *ui.Menu, th *thread, inSidebar bool) {
 		}
 	}
 	a.exportMenu(m, th)
-	a.moveMenu(m, th)
 	m.Separator()
 	if m.Item(locales.DeleteChatItem()).Chosen() {
 		a.askDelete(th)

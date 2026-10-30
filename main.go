@@ -118,7 +118,6 @@ func main() {
 			a.saver.wait()
 			a.layoutSaver.wait()
 			a.confSaver.wait()
-			a.projectsSaver.wait()
 			a.writes.Wait()
 			// The Copilot CLI, if it runs, with it.
 			a.closeCopilot()
