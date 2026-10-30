@@ -8,11 +8,19 @@ import (
 
 // The model the composer asks: a chat's, the model it asked last, as it
 // is shown, and a new chat's the default, which the Default model page
-// chooses. The composer's menu chooses another for the chat shown until
-// another is.
+// chooses, or the composer's menu, whichever chose last. The composer's
+// menu chooses another for the chat shown until another is.
 
 // choose makes model of p the one the composer asks.
 func (a *app) choose(p provider, model string) { a.prov, a.model = p, model }
+
+// pick makes model of p, which the user chose in the composer's menu, the
+// one it asks, and the default, which new chats ask from then on.
+func (a *app) pick(p provider, model string) {
+	a.choose(p, model)
+	a.defaultModel = modelRef{p.ID(), model}
+	a.saveConf()
+}
 
 // providerOf returns the provider asked that offers ref's model, nil for
 // none.

@@ -713,7 +713,7 @@
   "@defaultModelCard": { "description": "The Default model page's card." },
   "defaultModelRow": "Model",
   "@defaultModelRow": { "description": "The Default model page's row that chooses the model new chats ask." },
-  "defaultModelAbout": "What a new chat asks. Each chat keeps the model it asked last.",
+  "defaultModelAbout": "What a new chat asks: the model chosen last, here or in the composer. Each chat keeps the model it asked last.",
   "@defaultModelAbout": { "description": "Under the row that chooses the model new chats ask." },
   "defaultModelTerms": "Default, Model, New chat",
   "@defaultModelTerms": { "description": "Words the settings' field finds the Default model page by, separated by commas." },

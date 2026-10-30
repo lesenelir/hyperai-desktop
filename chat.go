@@ -827,7 +827,7 @@ func (a *app) modelPicker(c *ui.Context) {
 		ui.Icon(c, chevronIcon).Size(12, 12)
 	})
 	b.Menu(func(m *ui.Menu) {
-		a.modelMenu(m, func(p provider, model string) bool { return p == a.prov && model == a.model }, a.choose)
+		a.modelMenu(m, func(p provider, model string) bool { return p == a.prov && model == a.model }, a.pick)
 	})
 }
 

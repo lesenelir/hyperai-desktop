@@ -3169,17 +3169,20 @@ func TestProviders(t *testing.T) {
 	if th := a.current(); th == nil || th.Provider != "openai" || th.Model != "o3-pro" {
 		t.Fatalf("the chat keeps %+v", th)
 	}
-	// The first provider's first model, until a default is chosen.
+	// The model chosen in the composer's menu, which is the default since.
+	if a.defaultModel != (modelRef{"openai", "o3-pro"}) {
+		t.Errorf("default %+v once o3-pro is chosen", a.defaultModel)
+	}
 	a.newChat()
 	tt.Frame()
-	if a.prov.ID() != "openai" || a.model != "gpt-5-nano" {
+	if a.prov.ID() != "openai" || a.model != "o3-pro" {
 		t.Errorf("a new chat asks %s's %q", a.prov.Name(), a.model)
 	}
 	a.openSettings()
 	a.settingsPage = "model"
 	tt.Frame()
 	// The pop-up button, by the default it shows.
-	if err := tt.Click("gpt-5-nano"); err != nil {
+	if err := tt.Click("o3-pro"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tt.ChooseMenuItem("claude-sonnet-5-5"); err != nil {

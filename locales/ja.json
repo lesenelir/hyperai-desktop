@@ -299,7 +299,7 @@
   "keyOptional": "なし（ローカルサーバでは不要な場合があります）",
   "defaultModelCard": "新しいチャット",
   "defaultModelRow": "モデル",
-  "defaultModelAbout": "新しいチャットで使うモデル。各チャットは最後に使ったモデルを記憶します。",
+  "defaultModelAbout": "新しいチャットで使うモデル。ここか入力欄で最後に選んだものです。各チャットは最後に使ったモデルを記憶します。",
   "defaultModelTerms": "デフォルト, モデル, 新しいチャット, Default, Model",
   "noteAddKey": "プロバイダを設定してチャットを始める",
   "modelAddProvider": "プロバイダを追加",

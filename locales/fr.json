@@ -348,7 +348,7 @@
   "keyOptional": "Aucune, ce dont un serveur local peut se passer",
   "defaultModelCard": "Nouvelles conversations",
   "defaultModelRow": "Modèle",
-  "defaultModelAbout": "Ce qu’interroge une nouvelle conversation. Chaque conversation garde le dernier modèle utilisé.",
+  "defaultModelAbout": "Ce qu’interroge une nouvelle conversation : le dernier modèle choisi, ici ou dans le compositeur. Chaque conversation garde le dernier modèle utilisé.",
   "defaultModelTerms": "Défaut, Modèle, Nouvelle conversation, Default, Model",
   "noteAddKey": "Configurez un fournisseur pour commencer à discuter",
   "modelAddProvider": "Ajouter un fournisseur",

@@ -348,7 +348,7 @@
   "keyOptional": "Keiner – ein lokaler Server braucht oft keinen",
   "defaultModelCard": "Neue Chats",
   "defaultModelRow": "Modell",
-  "defaultModelAbout": "Was ein neuer Chat fragt. Jeder Chat merkt sich das zuletzt genutzte Modell.",
+  "defaultModelAbout": "Was ein neuer Chat fragt: das zuletzt gewählte Modell, hier oder im Eingabefeld. Jeder Chat merkt sich das zuletzt genutzte Modell.",
   "defaultModelTerms": "Standard, Modell, Neuer Chat, Default, Model",
   "noteAddKey": "Richte einen Anbieter ein, um zu chatten",
   "modelAddProvider": "Anbieter hinzufügen",

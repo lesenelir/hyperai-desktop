@@ -4256,13 +4256,13 @@ func (msgs Messages) DefaultModelRow() string {
 	return Catalog.Format(msgs.locale, "defaultModelRow", nil)
 }
 
-// DefaultModelAbout says "What a new chat asks. Each chat keeps the model it asked last."
+// DefaultModelAbout says "What a new chat asks: the model chosen last, here or in the composer. Each chat keeps the model it asked last."
 // in the language the app shows.
 //
 // Under the row that chooses the model new chats ask.
 func DefaultModelAbout() string { return In(i18n.Locale()).DefaultModelAbout() }
 
-// DefaultModelAbout says "What a new chat asks. Each chat keeps the model it asked last."
+// DefaultModelAbout says "What a new chat asks: the model chosen last, here or in the composer. Each chat keeps the model it asked last."
 // in the language of msgs.
 //
 // Under the row that chooses the model new chats ask.

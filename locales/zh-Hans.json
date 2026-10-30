@@ -299,7 +299,7 @@
   "keyOptional": "未设置，本地服务器可能不需要",
   "defaultModelCard": "新对话",
   "defaultModelRow": "模型",
-  "defaultModelAbout": "新对话使用的模型。每个对话会记住它上次使用的模型。",
+  "defaultModelAbout": "新对话使用的模型：你最近在这里或输入框中选择的那个。每个对话会记住它上次使用的模型。",
   "defaultModelTerms": "默认, 模型, 新对话, Default, Model",
   "noteAddKey": "设置服务商，开始对话",
   "modelAddProvider": "添加服务商",
