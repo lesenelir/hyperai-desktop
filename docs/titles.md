@@ -55,17 +55,28 @@ Automatic is chosen again. Both are kept in `providers.json`
 (`noTitles`, `titleModel`).
 
 **A user's name always wins.** A title lands only on a chat whose title is
-still the local one it replaces, so that it never overwrites another. When
-chats can be renamed, split the title as Waku does:
+still the one it was asked to replace, so that a name the user typed while
+it was asked for stays. That is why one field is enough, where Waku keeps
+two (the user's and the app's): no title is ever asked for over a name the
+user gave, but by Regenerate Title, which the user asks for.
 
-| Field | Owner | Set by |
-| --- | --- | --- |
-| `Title` | the user | renaming; wins whenever set |
-| `AutoTitle` | the app | the local title, then the generated one |
+**Renaming, in place.** Rename… in the chat's menu, of the title bar or of
+its row in the sidebar, turns the title there into a field, at its size
+and weight, on the composer's face in a hairline, the text where the
+title's was, all of it chosen, the caret at its start so that a long one
+shows from there, as the Finder's names do. Return keeps what it holds,
+its spaces collapsed and cut as a title's; so does clicking away, or the
+field going (its row scrolled away, the sidebar hidden, another chat
+shown); Escape keeps the name, as does a field left empty. Escape ends the
+renaming alone, not a reply streaming in. In the title bar, the field is
+out of the room that drags the window.
 
-The sidebar shows `Title`, else `AutoTitle`. A generated title therefore
-never overwrites a name the user typed, and a chat saved before the split
-reads its old `Title` as the user's, which is safe.
+**Regenerate Title**, in the same menus, asks for a title anew of the
+chat's first question with text, of the model the chat asks and as a
+chat that starts is named (the Title model first, then the provider's
+cheapest), over whatever title it has. It is faded while one is being
+asked for, and for a chat of files alone; a failure, which the user
+asked about, shows in a toast, as the provider said it.
 
 **Normalize once, at the end.** Trim, take the first line, strip the
 Markdown, labels ("Title:", "标题：") and quotes models put round it and a

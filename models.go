@@ -42,22 +42,27 @@ func (a *app) providerOf(ref modelRef) provider {
 // the Default model page, else the first provider's first model.
 func (a *app) chooseFor(th *thread) {
 	a.modelFor = a.selected
+	a.choose(a.modelOf(th))
+}
+
+// modelOf returns the provider and model th asks, as chooseFor chooses
+// them: the model it asked last, where it is still offered, else the
+// default; nil where none can be asked.
+func (a *app) modelOf(th *thread) (provider, string) {
 	if len(a.provs) == 0 {
-		a.choose(nil, "")
-		return
+		return nil, ""
 	}
 	if th != nil && th.Model != "" {
 		for _, p := range a.provs {
 			// Of the chat's provider, or of any, for chats kept before
 			// they kept it.
 			if (th.Provider == "" || th.Provider == p.ID()) && a.providerOf(modelRef{p.ID(), th.Model}) != nil {
-				a.choose(p, th.Model)
-				return
+				return p, th.Model
 			}
 		}
 	}
 	ref := a.defaultRef()
-	a.choose(a.providerOf(ref), ref.Model)
+	return a.providerOf(ref), ref.Model
 }
 
 // defaultRef returns the model a new chat asks.

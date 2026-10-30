@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -213,5 +214,181 @@ func TestTitleSettings(t *testing.T) {
 	again.removeProvider("anthropic")
 	if again.titleModel != (modelRef{}) {
 		t.Errorf("title model %+v after its provider went", again.titleModel)
+	}
+}
+
+// The title bar's menu turns the title into a field, its text chosen:
+// Return keeps what it holds, Escape what was, and so does a field left
+// empty; clicking away keeps it too.
+func TestRenameInTitleBar(t *testing.T) {
+	p := &namer{title: "Caching"}
+	a := newApp(p)
+	tt := ui.NewTester(a.view, 1120, 760)
+	tt.Type("How do I cache?")
+	tt.Key(0, ui.KeyEnter)
+	th := a.current()
+	rename := func() {
+		t.Helper()
+		if err := tt.Click(locales.More()); err != nil {
+			t.Fatal(err)
+		}
+		if got := tt.Menu(); !slices.Contains(got, locales.RenameChatItem()) || !slices.Contains(got, locales.RegenerateTitleItem()) {
+			t.Fatalf("menu %q", got)
+		}
+		if err := tt.ChooseMenuItem(locales.RenameChatItem()); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		if a.renaming == "" || a.renameInSidebar || a.renameDraft != th.Title {
+			t.Fatalf("renaming %q in the sidebar %v, holding %q", a.renaming, a.renameInSidebar, a.renameDraft)
+		}
+	}
+
+	// Typed over the title, which is chosen.
+	rename()
+	tt.Type("Cache  notes ")
+	tt.Key(0, ui.KeyEnter)
+	if th.Title != "Cache notes" || a.renaming != "" {
+		t.Fatalf("title %q, renaming %q", th.Title, a.renaming)
+	}
+	if _, ok := tt.Find("Cache notes"); !ok {
+		t.Errorf("the title bar shows %q", tt.Texts())
+	}
+
+	// Escape: as it was.
+	rename()
+	tt.Type("Something else")
+	tt.Key(0, ui.KeyEscape)
+	if th.Title != "Cache notes" || a.renaming != "" {
+		t.Errorf("after Escape: title %q, renaming %q", th.Title, a.renaming)
+	}
+
+	// Left empty: as it was.
+	rename()
+	tt.Key(0, ui.KeyBackspace)
+	tt.Key(0, ui.KeyEnter)
+	if th.Title != "Cache notes" {
+		t.Errorf("emptied: title %q", th.Title)
+	}
+
+	// Clicking away keeps it.
+	rename()
+	tt.Type("Caches")
+	r, _ := tt.Find(locales.ComposerPlaceholder())
+	tt.ClickAt(r.X+10, r.Y+r.H/2)
+	tt.Frame()
+	if th.Title != "Caches" || a.renaming != "" {
+		t.Errorf("clicked away: title %q, renaming %q", th.Title, a.renaming)
+	}
+}
+
+// A row of the sidebar is renamed in place, from its menu.
+func TestRenameInSidebar(t *testing.T) {
+	a, tt := newTester()
+	tt.Type("How do I cache?")
+	tt.Key(0, ui.KeyEnter)
+	th := a.current()
+	if err := tt.RightClick("How do I cache?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem(locales.RenameChatItem()); err != nil {
+		t.Fatalf("%v; menu %q", err, tt.Menu())
+	}
+	tt.Frame()
+	if !a.renameInSidebar || a.renaming != strconv.Itoa(th.ID) {
+		t.Fatalf("renaming %q in the sidebar %v", a.renaming, a.renameInSidebar)
+	}
+	tt.Type("LRU cache")
+	tt.Key(0, ui.KeyEnter)
+	if th.Title != "LRU cache" {
+		t.Errorf("title %q", th.Title)
+	}
+	// Hiding the sidebar as it is renamed keeps what its field holds.
+	a.startRename(th, true)
+	a.renameDraft = "LRU caches"
+	tt.Frame()
+	a.collapsed = true
+	tt.Advance(time.Second)
+	if th.Title != "LRU caches" || a.renaming != "" {
+		t.Errorf("hidden: title %q, renaming %q", th.Title, a.renaming)
+	}
+}
+
+// Regenerate Title asks anew, over a name the user gave too, once at a
+// time, and says why where it fails.
+func TestRegenerateTitle(t *testing.T) {
+	p := &namer{title: "Caching"}
+	a := newApp(p)
+	tt := ui.NewTester(a.view, 1120, 760)
+	a.send("How do I cache?")
+	tt.Frame()
+	th := a.current()
+	th.Title = "Mine"
+	if !a.canRetitle(th) {
+		t.Fatal("cannot regenerate the title")
+	}
+	if err := tt.Click(locales.More()); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem(locales.RegenerateTitleItem()); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if th.Title != "Caching" || th.naming || strings.Join(p.titled, ",") != "claude-haiku-5-5" {
+		t.Fatalf("title %q, naming %v, asked %v", th.Title, th.naming, p.titled)
+	}
+	// Once at a time.
+	th.naming = true
+	if a.canRetitle(th) {
+		t.Error("regenerates while one is asked for")
+	}
+	th.naming = false
+
+	p.titleFails = true
+	a.retitle(th)
+	tt.Frame()
+	if th.Title != "Caching" || !tt.HasText(locales.TitleFailed()) || !tt.HasText("no such model") {
+		t.Errorf("title %q; texts %q", th.Title, tt.Texts())
+	}
+
+	// Of files alone, nothing to name it of.
+	files := &thread{ID: 99, Title: "notes.md", Messages: []*message{{Role: "user", Files: []*attachment{{Name: "notes.md"}}}}}
+	if a.canRetitle(files) {
+		t.Error("regenerates a chat of files alone")
+	}
+}
+
+// Escape in the field ends the renaming alone: the reply streaming in
+// goes on.
+func TestRenameEscapeKeepsReply(t *testing.T) {
+	p := &held{gate: map[string]chan struct{}{}}
+	a := newApp(p)
+	posts := make(chan func(), 64)
+	a.post = func(f func()) { posts <- f }
+	tt := ui.NewTester(a.view, 1120, 760)
+	a.send("Hello")
+	th := a.current()
+	tt.Frame()
+	if th.busy == nil {
+		t.Fatal("no reply streaming in")
+	}
+	a.startRename(th, false)
+	tt.Frame()
+	tt.Type("Greeting")
+	tt.Key(0, ui.KeyEscape)
+	if a.renaming != "" || th.Title != "Hello" {
+		t.Errorf("renaming %q, title %q", a.renaming, th.Title)
+	}
+	if th.busy == nil {
+		t.Error("Escape stopped the reply")
+	}
+	// A second Escape, the field gone, stops it.
+	tt.Key(0, ui.KeyEscape)
+	if th.busy != nil {
+		t.Error("Escape did not stop the reply once the renaming ended")
+	}
+	close(p.release("Hello"))
+	for len(posts) > 0 {
+		(<-posts)()
 	}
 }

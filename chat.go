@@ -45,21 +45,20 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 			if th != nil {
 				name = th.Title
 			}
-			// The title drags the window; the menu beside it does not.
-			ui.Row(c).Grow(1).MinWidth(0).Height(titleBarHeight).AlignItems(ui.Center).DragWindow().Children(func() {
-				ui.Text(c, name).FontSize(14).FontWeight(500).SingleLine()
-			})
-			if th != nil {
-				iconButton(c, moreIcon, locales.More()).Menu(func(m *ui.Menu) {
-					if m.Item(locales.CopyAsMarkdown()).Chosen() {
-						c.Services().WriteClipboard(transcript(th))
-						c.Toast(locales.Copied())
-					}
-					m.Separator()
-					if m.Item(locales.DeleteChatItem()).Chosen() {
-						a.askDelete(th)
-					}
+			if th != nil && a.renaming == strconv.Itoa(th.ID) && !a.renameInSidebar {
+				// Renamed in place, out of the room that drags the window.
+				ui.Row(c).Grow(1).MinWidth(0).Height(titleBarHeight).AlignItems(ui.Center).Children(func() {
+					a.renameField(c, 14, 500).MaxWidth(480)
+					ui.Spacer(c)
 				})
+			} else {
+				// The title drags the window; the menu beside it does not.
+				ui.Row(c).Grow(1).MinWidth(0).Height(titleBarHeight).AlignItems(ui.Center).DragWindow().Children(func() {
+					ui.Text(c, name).FontSize(14).FontWeight(500).SingleLine()
+				})
+			}
+			if th != nil {
+				iconButton(c, moreIcon, locales.More()).Menu(func(m *ui.Menu) { a.chatMenu(c, m, th, false) })
 			}
 		})
 		if th == nil || len(th.Messages) == 0 {

@@ -80,6 +80,7 @@ type thread struct {
 	Draft    string        `json:"draft,omitempty"`    // what its composer held as it was left
 	Messages []*message    `json:"messages"`
 	files    []*attachment // the files attached to Draft, which are not kept past the app
+	naming   bool          // a model is asked for its title (titles.go)
 	list     ui.ListState
 	// busy is the reply streaming in, nil when none, and cancel stops it:
 	// each chat's its own, so that chats stream at once.
@@ -186,8 +187,21 @@ type app struct {
 	editDraft    string
 	needProvider bool // the composer sent while no provider can be asked
 	// nameChats has a model name each chat as it starts (titles.go): off
-	// in tests and HYPERAI_BENCH, which ask a demo.
-	nameChats bool
+	// in tests and HYPERAI_BENCH, which ask a demo. titleError is why a
+	// title asked for anew could not be made, which a toast says.
+	nameChats  bool
+	titleError string
+	// renaming is the chat whose title is a field that renames it, "" for
+	// none, in its row of the sidebar where renameInSidebar, else in the
+	// title bar, holding renameDraft; renameSelect chooses its text as it
+	// shows, renameFocused tells it had the focus the frame before, and
+	// renameBuilt that the frame built it (titles.go).
+	renaming        string
+	renameDraft     string
+	renameInSidebar bool
+	renameSelect    bool
+	renameFocused   bool
+	renameBuilt     bool
 	// collapsed hides the sidebar, sideWidth wide as it shows; resizing
 	// tells that the pointer drags its edge, which pressed it resizeFrom
 	// wide and went resizeBy since (layout.go).
@@ -435,7 +449,7 @@ func (a *app) send(text string) {
 	// A chat just started is named by a model, beside its reply; of files
 	// alone, it keeps the first's name.
 	if started && text != "" && a.nameChats && !a.noTitles {
-		a.nameChat(th, prov, model, text)
+		a.nameChat(th, prov, model, text, false)
 	}
 	stream := func(delta func(chunk)) error {
 		if err := readFiles(dir, turns); err != nil {
@@ -638,6 +652,9 @@ func (a *app) view(c *ui.Context) {
 	c.SetTheme(a.windowTheme())
 	a.setText(textSizes[a.textSize], a.font)
 	a.md.Theme = a.markdownTheme()
+	// A title asked for anew that could not be made, before the toasts
+	// are built, for it to show in this frame.
+	a.titleToast(c)
 	a.toasts(c)
 	held := a.motionHeld
 	a.motionHeld = false // until the switch says so again
@@ -673,6 +690,8 @@ func (a *app) view(c *ui.Context) {
 	switch {
 	case a.confirming:
 		// Escape is the alert's, which it cancels.
+	case a.renaming != "":
+		// Escape is the field's, which ends the renaming.
 	case a.settings && !a.searching && c.Shortcut(0, ui.KeyEscape):
 		a.closeSettings()
 	case a.shownReply() != nil && c.Shortcut(0, ui.KeyEscape):
@@ -734,6 +753,7 @@ func (a *app) view(c *ui.Context) {
 	a.searchPalette(c)
 	// Over all of it, the alert asking to delete.
 	a.deleteAlert(c)
+	a.renameEnd()
 }
 
 // sidebar builds, as Waku's does, New chat and Search over the chats by
@@ -828,6 +848,17 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 	t := c.Theme()
 	id := strconv.Itoa(th.ID)
 	selected := id == a.selected
+	// Renamed in place: a row, not a button, that the field takes clicks in.
+	if a.renaming == id && a.renameInSidebar {
+		ui.Row(c.Key("rename "+id)).Margin(rowGap/2, barClear, rowGap/2, 8).Padding(8, 12).Radius(8).
+			Background(a.pal.fg.Alpha(0.07)).Children(func() {
+			ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+				a.renameField(c, t.FontSize, 500)
+				a.threadMeta(c, th, now)
+			})
+		})
+		return
+	}
 	row := ui.ButtonBase(c.Key(th.ID)).Margin(rowGap/2, barClear, rowGap/2, 8).Padding(8, 12).Radius(8).Justify(ui.Start).Label(th.Title)
 	switch {
 	case selected:
@@ -841,33 +872,60 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 			if selected {
 				title.FontWeight(500)
 			}
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, messageIcon).Size(12, 12).TextColor(t.TextMuted)
-				model := th.Model
-				if model == "" {
-					model = locales.SidebarModelNone()
-				}
-				ui.Text(c, model).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1)
-				// A reply streaming in, in place of the age; one that ended
-				// out of view, marked before it.
-				if th.busy != nil {
-					ui.Spinner(c).Size(12, 12).Label(locales.SidebarReplying())
-					return
-				}
-				if th.unread {
-					ui.Box(c).Size(7, 7).Radius(3.5).Background(a.pal.ac).Label(locales.SidebarUnread())
-				}
-				ui.Text(c, ago(th.Updated, now)).FontSize(12).TextColor(t.TextMuted)
-			})
+			a.threadMeta(c, th, now)
 		})
 	})
-	row.ContextMenu(func(m *ui.Menu) {
-		if m.Item(locales.DeleteChatItem()).Chosen() {
-			a.askDelete(th)
-		}
-	})
+	row.ContextMenu(func(m *ui.Menu) { a.chatMenu(c, m, th, true) })
 	if row.Clicked() {
 		a.open(id)
+	}
+}
+
+// threadMeta builds the line under th's title in the sidebar: the model it
+// asked and how long ago, or a spinner as a reply streams in, the mark of
+// one that ended out of view before it.
+func (a *app) threadMeta(c *ui.Context, th *thread, now time.Time) {
+	t := c.Theme()
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, messageIcon).Size(12, 12).TextColor(t.TextMuted)
+		model := th.Model
+		if model == "" {
+			model = locales.SidebarModelNone()
+		}
+		ui.Text(c, model).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1)
+		// A reply streaming in, in place of the age; one that ended out of
+		// view, marked before it.
+		if th.busy != nil {
+			ui.Spinner(c).Size(12, 12).Label(locales.SidebarReplying())
+			return
+		}
+		if th.unread {
+			ui.Box(c).Size(7, 7).Radius(3.5).Background(a.pal.ac).Label(locales.SidebarUnread())
+		}
+		ui.Text(c, ago(th.Updated, now)).FontSize(12).TextColor(t.TextMuted)
+	})
+}
+
+// chatMenu fills m, th's menu, in the title bar or, inSidebar, its row's:
+// Rename… and Regenerate Title, faded where a title cannot be asked for,
+// then in the title bar Copy as Markdown, then Delete Chat….
+func (a *app) chatMenu(c *ui.Context, m *ui.Menu, th *thread, inSidebar bool) {
+	if m.Item(locales.RenameChatItem()).Chosen() {
+		a.startRename(th, inSidebar)
+	}
+	if m.Item(locales.RegenerateTitleItem()).Disabled(!a.canRetitle(th)).Chosen() {
+		a.retitle(th)
+	}
+	m.Separator()
+	if !inSidebar {
+		if m.Item(locales.CopyAsMarkdown()).Chosen() {
+			c.Services().WriteClipboard(transcript(th))
+			c.Toast(locales.Copied())
+		}
+		m.Separator()
+	}
+	if m.Item(locales.DeleteChatItem()).Chosen() {
+		a.askDelete(th)
 	}
 }
 

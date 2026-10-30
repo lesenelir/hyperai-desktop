@@ -318,6 +318,68 @@ func (msgs Messages) DeleteChatItem() string {
 	return Catalog.Format(msgs.locale, "deleteChatItem", nil)
 }
 
+// RenameChatItem says "Rename…"
+// in the language the app shows.
+//
+// The chat's menu item, in the title bar and the sidebar, that turns its
+// title into a field to rename it.
+func RenameChatItem() string { return In(i18n.Locale()).RenameChatItem() }
+
+// RenameChatItem says "Rename…"
+// in the language of msgs.
+//
+// The chat's menu item, in the title bar and the sidebar, that turns its
+// title into a field to rename it.
+func (msgs Messages) RenameChatItem() string {
+	return Catalog.Format(msgs.locale, "renameChatItem", nil)
+}
+
+// RegenerateTitleItem says "Regenerate Title"
+// in the language the app shows.
+//
+// The chat's menu item, in the title bar and the sidebar, that has a model
+// name it anew.
+func RegenerateTitleItem() string { return In(i18n.Locale()).RegenerateTitleItem() }
+
+// RegenerateTitleItem says "Regenerate Title"
+// in the language of msgs.
+//
+// The chat's menu item, in the title bar and the sidebar, that has a model
+// name it anew.
+func (msgs Messages) RegenerateTitleItem() string {
+	return Catalog.Format(msgs.locale, "regenerateTitleItem", nil)
+}
+
+// RenameLabel says "Chat title"
+// in the language the app shows.
+//
+// Names the field that renames a chat, to assistive technology.
+func RenameLabel() string { return In(i18n.Locale()).RenameLabel() }
+
+// RenameLabel says "Chat title"
+// in the language of msgs.
+//
+// Names the field that renames a chat, to assistive technology.
+func (msgs Messages) RenameLabel() string {
+	return Catalog.Format(msgs.locale, "renameLabel", nil)
+}
+
+// TitleFailed says "Couldn’t regenerate the title"
+// in the language the app shows.
+//
+// The title of the toast that shows as a title asked for with Regenerate
+// Title could not be made; what the provider said goes under it.
+func TitleFailed() string { return In(i18n.Locale()).TitleFailed() }
+
+// TitleFailed says "Couldn’t regenerate the title"
+// in the language of msgs.
+//
+// The title of the toast that shows as a title asked for with Regenerate
+// Title could not be made; what the provider said goes under it.
+func (msgs Messages) TitleFailed() string {
+	return Catalog.Format(msgs.locale, "titleFailed", nil)
+}
+
 // GroupToday says "Today"
 // in the language the app shows.
 //
