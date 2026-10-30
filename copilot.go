@@ -86,11 +86,16 @@ const copilotSystem = "You are a helpful assistant, chatting with the user in Hy
 // files are written in where they were sent; the others sent before, which
 // a session is not told again, are named.
 func copilotPrompt(turns []turn) (system, prompt string, files []attachment) {
-	if len(turns) == 0 {
-		return copilotSystem, "", nil
-	}
 	var b strings.Builder
 	b.WriteString(copilotSystem)
+	// The user's instructions, after its own.
+	if len(turns) > 0 && turns[0].Role == "system" {
+		b.WriteString("\n\nThe user's instructions:\n\n" + turns[0].Content)
+		turns = turns[1:]
+	}
+	if len(turns) == 0 {
+		return b.String(), "", nil
+	}
 	if len(turns) > 1 {
 		b.WriteString("\n\nThe conversation so far, before the user's message:")
 		for _, t := range turns[:len(turns)-1] {

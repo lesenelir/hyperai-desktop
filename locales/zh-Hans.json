@@ -142,6 +142,12 @@
   "pageProvidersAbout": "回复从哪里来：HyperAI 所用的服务及其 API 密钥，以及这台电脑上的本地服务器。",
   "pageModel": "默认模型",
   "pageModelAbout": "新对话使用的模型（直到在输入框中更改），以及为对话起标题的模型。",
+  "pageInstructions": "自定义指令",
+  "pageInstructionsAbout": "每个对话中都会告诉模型的内容：关于你，以及如何回复。",
+  "instructionsCard": "自定义指令",
+  "instructionsAbout": "从下一条回复起，随每条消息发给每个模型，新对话和已有对话都适用。留空则不使用。",
+  "instructionsPlaceholder": "例如：用中文回答。我写 Go，代码请简洁、符合惯用写法。",
+  "instructionsTerms": "指令, 自定义指令, 系统提示词, 个性化, 偏好",
   "pageAbout": "关于",
   "pageAboutAbout": "HyperAI 的版本，以及它背后的社区。",
 

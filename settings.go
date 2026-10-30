@@ -58,6 +58,7 @@ func settingsSections() []settingsSection {
 	personal, models := locales.GroupPersonal(), locales.GroupModels()
 	return []settingsSection{
 		{"general", personal, locales.PageGeneral(), settingsIcon, locales.PageGeneralAbout(), (*app).generalPage, (*app).generalTerms},
+		{"instructions", personal, locales.PageInstructions(), instructionsIcon, locales.PageInstructionsAbout(), (*app).instructionsPage, (*app).instructionsTerms},
 		{"appearance", personal, locales.PageAppearance(), sunIcon, locales.PageAppearanceAbout(), (*app).appearancePage, (*app).appearanceTerms},
 		{"shortcuts", personal, locales.PageShortcuts(), keyboardIcon, locales.PageShortcutsAbout(), (*app).shortcutsPage, (*app).shortcutTerms},
 		{"providers", models, locales.PageProviders(), plugIcon, locales.PageProvidersAbout(), (*app).providersPage, (*app).providerTerms},

@@ -2038,6 +2038,98 @@ func (msgs Messages) PageModelAbout() string {
 	return Catalog.Format(msgs.locale, "pageModelAbout", nil)
 }
 
+// PageInstructions says "Instructions"
+// in the language the app shows.
+//
+// The settings page, and its row in the settings' sidebar, of what every
+// model is told in every chat.
+func PageInstructions() string { return In(i18n.Locale()).PageInstructions() }
+
+// PageInstructions says "Instructions"
+// in the language of msgs.
+//
+// The settings page, and its row in the settings' sidebar, of what every
+// model is told in every chat.
+func (msgs Messages) PageInstructions() string {
+	return Catalog.Format(msgs.locale, "pageInstructions", nil)
+}
+
+// PageInstructionsAbout says "What every model is told, in every chat: about you, and how to reply."
+// in the language the app shows.
+//
+// Under the Instructions page's title, what it sets.
+func PageInstructionsAbout() string { return In(i18n.Locale()).PageInstructionsAbout() }
+
+// PageInstructionsAbout says "What every model is told, in every chat: about you, and how to reply."
+// in the language of msgs.
+//
+// Under the Instructions page's title, what it sets.
+func (msgs Messages) PageInstructionsAbout() string {
+	return Catalog.Format(msgs.locale, "pageInstructionsAbout", nil)
+}
+
+// InstructionsCard says "Custom instructions"
+// in the language the app shows.
+//
+// The title of the card holding the field of the user's instructions, and
+// the field's name to assistive technology.
+func InstructionsCard() string { return In(i18n.Locale()).InstructionsCard() }
+
+// InstructionsCard says "Custom instructions"
+// in the language of msgs.
+//
+// The title of the card holding the field of the user's instructions, and
+// the field's name to assistive technology.
+func (msgs Messages) InstructionsCard() string {
+	return Catalog.Format(msgs.locale, "instructionsCard", nil)
+}
+
+// InstructionsAbout says "Sent with every message, to every model, from the next reply on, in new chats and those you have. Leave it empty for …"
+// in the language the app shows.
+//
+// Under the field of the user's instructions: when they apply, and how to
+// have none.
+func InstructionsAbout() string { return In(i18n.Locale()).InstructionsAbout() }
+
+// InstructionsAbout says "Sent with every message, to every model, from the next reply on, in new chats and those you have. Leave it empty for …"
+// in the language of msgs.
+//
+// Under the field of the user's instructions: when they apply, and how to
+// have none.
+func (msgs Messages) InstructionsAbout() string {
+	return Catalog.Format(msgs.locale, "instructionsAbout", nil)
+}
+
+// InstructionsPlaceholder says "For example: Reply in Chinese. I write Go, so keep code idiomatic and short."
+// in the language the app shows.
+//
+// What the empty field of the user's instructions shows, an example of
+// them.
+func InstructionsPlaceholder() string { return In(i18n.Locale()).InstructionsPlaceholder() }
+
+// InstructionsPlaceholder says "For example: Reply in Chinese. I write Go, so keep code idiomatic and short."
+// in the language of msgs.
+//
+// What the empty field of the user's instructions shows, an example of
+// them.
+func (msgs Messages) InstructionsPlaceholder() string {
+	return Catalog.Format(msgs.locale, "instructionsPlaceholder", nil)
+}
+
+// InstructionsTerms says "Instructions, Custom instructions, System prompt, Personalize, Preferences"
+// in the language the app shows.
+//
+// What finds the Instructions page in the settings' field, comma-separated.
+func InstructionsTerms() string { return In(i18n.Locale()).InstructionsTerms() }
+
+// InstructionsTerms says "Instructions, Custom instructions, System prompt, Personalize, Preferences"
+// in the language of msgs.
+//
+// What finds the Instructions page in the settings' field, comma-separated.
+func (msgs Messages) InstructionsTerms() string {
+	return Catalog.Format(msgs.locale, "instructionsTerms", nil)
+}
+
 // PageAbout says "About"
 // in the language the app shows.
 //

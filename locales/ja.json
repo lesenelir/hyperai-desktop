@@ -142,6 +142,12 @@
   "pageProvidersAbout": "返信の取得元：HyperAI が使うサービスとその API キー、そしてこのコンピュータのローカルサーバ。",
   "pageModel": "デフォルトのモデル",
   "pageModelAbout": "新しいチャットで使うモデル（入力欄で変更するまで）と、チャットにタイトルを付けるモデル。",
+  "pageInstructions": "カスタム指示",
+  "pageInstructionsAbout": "すべてのチャットでモデルに伝える内容：あなたのことや、返答の仕方。",
+  "instructionsCard": "カスタム指示",
+  "instructionsAbout": "次の返答から、新しいチャットにも既存のチャットにも、すべてのメッセージと一緒にすべてのモデルへ送られます。空欄なら使いません。",
+  "instructionsPlaceholder": "例：日本語で答えてください。Go を書いているので、コードは簡潔で慣用的に。",
+  "instructionsTerms": "指示, カスタム指示, システムプロンプト, パーソナライズ, 好み",
   "pageAbout": "このアプリについて",
   "pageAboutAbout": "HyperAI のバージョンと、その背後にあるコミュニティ。",
 

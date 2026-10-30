@@ -142,6 +142,12 @@
   "pageProvidersAbout": "Woher Antworten kommen: die Dienste, die HyperAI fragt, mit deinen API-Schlüsseln, und die Server auf diesem Computer.",
   "pageModel": "Standardmodell",
   "pageModelAbout": "Das Modell, das ein neuer Chat fragt, bis es im Eingabefeld geändert wird, und das, das ihn benennt.",
+  "pageInstructions": "Anweisungen",
+  "pageInstructionsAbout": "Was jedes Modell in jedem Chat erfährt: über dich und wie es antworten soll.",
+  "instructionsCard": "Eigene Anweisungen",
+  "instructionsAbout": "Wird ab der nächsten Antwort mit jeder Nachricht an jedes Modell gesendet, in neuen und bestehenden Chats. Leer lassen für keine.",
+  "instructionsPlaceholder": "Zum Beispiel: Antworte auf Deutsch. Ich schreibe Go, halte den Code idiomatisch und kurz.",
+  "instructionsTerms": "Anweisungen, Eigene Anweisungen, Systemprompt, Personalisieren, Vorlieben",
   "pageAbout": "Über",
   "pageAboutAbout": "Die Version von HyperAI und die Community dahinter.",
 

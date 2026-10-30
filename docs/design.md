@@ -383,6 +383,16 @@ A small button that floats over the conversation (scroll to end) rests at
   Show in Finder, the folder before any is written; Delete All…, faded
   where there are none). A setting's button is a pop-up button's box
   without its arrow (`settingButton`).
+- **Instructions** ([instructions.go](../instructions.go)), after General:
+  what every model is told, in every chat, about the user and how to
+  reply. A card holds its field, six lines tall at first and sixteen at
+  most, 14 on lines of 1.5, in a hairline, radius 8, its placeholder an
+  example; under it, at 12 `fg/70`, when they apply. What is typed is kept
+  at once (layout.json). They go first in what each reply is asked of,
+  from the next reply on, in the chats there are too, as the system
+  prompt: Anthropic's `system`, a system message first for those that
+  take OpenAI's API, and after Copilot's own; never in a chat kept, nor
+  in what a title is asked of.
 - **About** says what HyperAI is: a card of its own with the mark, 40 in
   the accent, beside "HyperAI" at 16/500 over its version at 12 `fg/70`
   ("Development build" where it was not packaged); Community, the three

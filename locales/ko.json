@@ -142,6 +142,12 @@
   "pageProvidersAbout": "응답의 출처: HyperAI가 사용하는 서비스와 그 API 키, 그리고 이 컴퓨터의 로컬 서버.",
   "pageModel": "기본 모델",
   "pageModelAbout": "새 채팅에서 사용하는 모델(입력창에서 바꾸기 전까지)과 채팅 제목을 짓는 모델입니다.",
+  "pageInstructions": "맞춤 지침",
+  "pageInstructionsAbout": "모든 채팅에서 모델에게 전하는 내용: 당신에 대한 것과 답변 방식.",
+  "instructionsCard": "맞춤 지침",
+  "instructionsAbout": "다음 답변부터 새 채팅과 기존 채팅 모두에서 모든 메시지와 함께 모든 모델에 전송됩니다. 비워 두면 사용하지 않습니다.",
+  "instructionsPlaceholder": "예: 한국어로 답해 주세요. Go를 쓰니 코드는 간결하고 관용적으로.",
+  "instructionsTerms": "지침, 맞춤 지침, 시스템 프롬프트, 개인화, 선호",
   "pageAbout": "정보",
   "pageAboutAbout": "HyperAI의 버전과 그 뒤의 커뮤니티.",
 

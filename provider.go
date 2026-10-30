@@ -19,9 +19,10 @@ import (
 )
 
 // turn is a message of a conversation as a provider sees it, with the
-// files sent with it.
+// files sent with it; first, where the user wrote any, their instructions,
+// of the role "system" (instructions.go).
 type turn struct {
-	Role    string
+	Role    string // "user", "assistant" or "system"
 	Content string
 	Files   []attachment
 }
@@ -424,7 +425,13 @@ var anthropicFallbacks = []string{"claude-fable-5-1", "claude-opus-5-5", "claude
 
 func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
 	var msgs []anthropic.BetaMessageParam
+	var system []anthropic.BetaTextBlockParam
 	for _, t := range turns {
+		if t.Role == "system" {
+			// The user's instructions, as its system prompt.
+			system = append(system, anthropic.BetaTextBlockParam{Text: t.Content})
+			continue
+		}
 		if t.Role == "assistant" {
 			msgs = append(msgs, anthropic.BetaMessageParam{OfAssistant: &anthropic.BetaAssistantMessageParam{
 				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(t.Content)}}})
@@ -433,7 +440,7 @@ func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, d
 		}
 	}
 	// Room for a long reply, which streaming lets take its time.
-	params := anthropic.BetaMessageNewParams{Model: model, MaxTokens: 64000, Messages: msgs}
+	params := anthropic.BetaMessageNewParams{Model: model, MaxTokens: 64000, Messages: msgs, System: system}
 	// The conversation is cached, as far as its last block: the next
 	// question reads it back, its files too, which every question sends
 	// again, at a tenth of the price or less, rather than all of it anew.

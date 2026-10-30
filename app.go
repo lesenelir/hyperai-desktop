@@ -292,6 +292,9 @@ type app struct {
 	rows         []chatRow
 	rowsFolds    [2]bool // foldPinned and foldChats as rows were made
 	chatList     ui.ListState
+	// instructions are what every model is told, in every chat, which the
+	// Instructions page sets and layout.json keeps (instructions.go).
+	instructions string
 	// foldPinned and foldChats fold the sidebar's sections, Pinned and
 	// Chats, which layout.json keeps.
 	foldPinned, foldChats bool
@@ -468,7 +471,7 @@ func (a *app) send(text string) {
 // model the composer asks, while the other chats stream theirs: as one is
 // sent, edited (resend), or its reply asked for again (regenerate).
 func (a *app) ask(th *thread) {
-	turns := th.turns()
+	turns := a.withInstructions(th.turns())
 	// The question goes to the top of the conversation, the reply coming
 	// in under it.
 	q := len(th.Messages) - 1
