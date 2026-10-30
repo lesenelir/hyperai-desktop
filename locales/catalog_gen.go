@@ -3734,6 +3734,104 @@ func (msgs Messages) RemoveKeyAbout() string {
 	return Catalog.Format(msgs.locale, "removeKeyAbout", nil)
 }
 
+// LocalRow says "Local server"
+// in the language the app shows.
+//
+// The first row of the card of a server on the user's computer, as Ollama,
+// which turns it on.
+func LocalRow() string { return In(i18n.Locale()).LocalRow() }
+
+// LocalRow says "Local server"
+// in the language of msgs.
+//
+// The first row of the card of a server on the user's computer, as Ollama,
+// which turns it on.
+func (msgs Messages) LocalRow() string {
+	return Catalog.Format(msgs.locale, "localRow", nil)
+}
+
+// LocalOff says "Off. Turn on to use its models on this computer, no key needed."
+// in the language the app shows.
+//
+// Under the first row of the card of a server on the user's computer while
+// it is off: on one line beside its buttons.
+func LocalOff() string { return In(i18n.Locale()).LocalOff() }
+
+// LocalOff says "Off. Turn on to use its models on this computer, no key needed."
+// in the language of msgs.
+//
+// Under the first row of the card of a server on the user's computer while
+// it is off: on one line beside its buttons.
+func (msgs Messages) LocalOff() string {
+	return Catalog.Format(msgs.locale, "localOff", nil)
+}
+
+// LocalOn says "Asks the models it runs on this computer."
+// in the language the app shows.
+//
+// Under the first row of the card of a server on the user's computer while
+// it is on.
+func LocalOn() string { return In(i18n.Locale()).LocalOn() }
+
+// LocalOn says "Asks the models it runs on this computer."
+// in the language of msgs.
+//
+// Under the first row of the card of a server on the user's computer while
+// it is on.
+func (msgs Messages) LocalOn() string {
+	return Catalog.Format(msgs.locale, "localOn", nil)
+}
+
+// LocalDownload says "Download"
+// in the language the app shows.
+//
+// The button that opens the website where a server for the user's computer,
+// as Ollama, is downloaded.
+func LocalDownload() string { return In(i18n.Locale()).LocalDownload() }
+
+// LocalDownload says "Download"
+// in the language of msgs.
+//
+// The button that opens the website where a server for the user's computer,
+// as Ollama, is downloaded.
+func (msgs Messages) LocalDownload() string {
+	return Catalog.Format(msgs.locale, "localDownload", nil)
+}
+
+// LocalSwitch says "Use {provider}"
+// in the language the app shows.
+//
+// The label of the switch that turns on a server on the user's computer,
+// for assistive technologies.
+func LocalSwitch(provider string) string { return In(i18n.Locale()).LocalSwitch(provider) }
+
+// LocalSwitch says "Use {provider}"
+// in the language of msgs.
+//
+// The label of the switch that turns on a server on the user's computer,
+// for assistive technologies.
+func (msgs Messages) LocalSwitch(provider string) string {
+	return Catalog.Format(msgs.locale, "localSwitch", map[string]any{"provider": provider})
+}
+
+// LocalUnreachable says "nothing answers at {url}. Is {provider} running?"
+// in the language the app shows.
+//
+// After "Couldn’t list its models:", where nothing answers at the
+// endpoint of a server on the user's computer, as when it is not running.
+func LocalUnreachable(url string, provider string) string {
+	return In(i18n.Locale()).LocalUnreachable(url, provider)
+}
+
+// LocalUnreachable says "nothing answers at {url}. Is {provider} running?"
+// in the language of msgs.
+//
+// After "Couldn’t list its models:", where nothing answers at the
+// endpoint of a server on the user's computer, as when it is not running.
+func (msgs Messages) LocalUnreachable(url string, provider string) string {
+	return Catalog.Format(msgs.locale, "localUnreachable", map[string]any{"url": url, "provider": provider})
+}
+
 // EndpointNone says "Not set yet"
 // in the language the app shows.
 //

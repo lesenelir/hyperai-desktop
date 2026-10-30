@@ -627,6 +627,24 @@
   },
   "removeKeyAbout": "To use it again, you’ll have to paste it again.",
   "@removeKeyAbout": { "description": "Under the question of the alert removing a provider's API key: the user would paste it again to use it." },
+  "localRow": "Local server",
+  "@localRow": { "description": "The first row of the card of a server on the user's computer, as Ollama, which turns it on." },
+  "localOff": "Off. Turn on to use its models on this computer, no key needed.",
+  "@localOff": { "description": "Under the first row of the card of a server on the user's computer while it is off: on one line beside its buttons." },
+  "localOn": "Asks the models it runs on this computer.",
+  "@localOn": { "description": "Under the first row of the card of a server on the user's computer while it is on." },
+  "localDownload": "Download",
+  "@localDownload": { "description": "The button that opens the website where a server for the user's computer, as Ollama, is downloaded." },
+  "localSwitch": "Use {provider}",
+  "@localSwitch": {
+    "description": "The label of the switch that turns on a server on the user's computer, for assistive technologies.",
+    "placeholders": { "provider": { "type": "String", "example": "Ollama" } }
+  },
+  "localUnreachable": "nothing answers at {url}. Is {provider} running?",
+  "@localUnreachable": {
+    "description": "After \"Couldn’t list its models:\", where nothing answers at the endpoint of a server on the user's computer, as when it is not running.",
+    "placeholders": { "url": { "type": "String", "example": "http://localhost:11434/v1" }, "provider": { "type": "String", "example": "Ollama" } }
+  },
   "endpointNone": "Not set yet",
   "@endpointNone": { "description": "Under the endpoint row of a provider the user added, before they give its endpoint." },
   "endpointAdd": "Add Endpoint",

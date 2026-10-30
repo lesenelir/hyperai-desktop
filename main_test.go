@@ -3436,3 +3436,59 @@ func TestCustomAnthropicProvider(t *testing.T) {
 		t.Errorf("with the key: %q, %v", key[1:], err)
 	}
 }
+
+// Ollama, and LM Studio, run on the user's computer: off until the user
+// turns them on, then offering the models they run, asked without a key,
+// and saying so where nothing answers.
+func TestLocalProviders(t *testing.T) {
+	var auth []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = append(auth, r.Header.Get("Authorization"))
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `{"object":"list","data":[{"id":"qwen3:8b"},{"id":"nomic-embed-text:latest"},{"id":"llama3.2:latest"}]}`)
+	}))
+	defer srv.Close()
+	a := newApp(nil)
+	tt := ui.NewTester(a.view, 1120, 2000)
+	a.loadKeys(&memKeyring{secrets: map[string][]byte{}})
+	a.setEndpoint("ollama", srv.URL+"/v1")
+	a.openSettings()
+	a.settingsPage = "providers"
+	tt.Frame()
+	if len(auth) != 0 || a.prov != nil || !tt.HasText("Off. Turn on to use its models on this computer, no key needed.") {
+		t.Fatalf("asked %q, asks %v while off; the page shows %q", auth, a.prov, tt.Texts())
+	}
+	if err := tt.Click("Use Ollama"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := a.shownModels(providerKindOf("ollama")); !slices.Equal(got, []string{"llama3.2:latest", "qwen3:8b"}) {
+		t.Fatalf("offers %q", got)
+	}
+	if a.prov == nil || a.prov.ID() != "ollama" || a.model != "llama3.2:latest" || !slices.Equal(auth, []string{""}) {
+		t.Errorf("asks %v's %q, sent the keys %q", a.prov, a.model, auth)
+	}
+	// Its download button gone, LM Studio's alone shows.
+	downloads := strings.Count(strings.Join(tt.Texts(), "\n"), "Download")
+	if !tt.HasText("Asks the models it runs on this computer.") || downloads != 2 {
+		t.Errorf("the page shows %q", tt.Texts())
+	}
+
+	// LM Studio, where nothing answers, says so.
+	srv.Close()
+	a.setOn("lmstudio", true)
+	a.setEndpoint("lmstudio", srv.URL+"/v1")
+	tt.Frame()
+	if want := "Couldn’t list its models: nothing answers at " + srv.URL + "/v1. Is LM Studio running?"; !tt.HasText(want) {
+		t.Errorf("no %q in %q", want, tt.Texts())
+	}
+
+	// Off, it is asked no more, and kept so.
+	a.setOn("ollama", false)
+	if a.prov != nil || a.confs["ollama"].On {
+		t.Errorf("asks %v once off", a.prov)
+	}
+}

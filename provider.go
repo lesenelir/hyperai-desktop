@@ -47,7 +47,10 @@ type provider interface {
 // others, the first by default, as many of them as it lists; chat, which
 // tells the models it lists that chat from the others, nil for all; open,
 // which returns the provider at an endpoint, for a key, offering models;
-// and, of one the user added, api, the API it takes (customAPIs).
+// local, of a server on the user's computer, which takes no key, offers
+// the models it runs, and is asked once the user turns it on, its keyURL
+// where it is downloaded; and, of one the user added, api, the API it
+// takes (customAPIs).
 type providerKind struct {
 	id, name string
 	baseURL  string
@@ -55,13 +58,14 @@ type providerKind struct {
 	models   []string
 	chat     func(model string) bool
 	open     func(k *providerKind, baseURL, key string, models []string) provider
+	local    bool
 	api      string
 }
 
 // providerKinds are the services HyperAI talks to, in the order the
-// Providers page and the composer's menu list them. All but Anthropic
-// take OpenAI's chat completions API, Google at an endpoint it keeps for
-// that.
+// Providers page and the composer's menu list them, the servers on the
+// user's computer last. All but Anthropic take OpenAI's chat completions
+// API, Google at an endpoint it keeps for that.
 var providerKinds = []providerKind{
 	{id: "openai", name: "OpenAI", baseURL: "https://api.openai.com/v1", keyURL: "https://platform.openai.com/api-keys",
 		models: []string{"gpt-5", "gpt-5-mini"}, chat: openAIChat, open: openChatCompletions},
@@ -73,6 +77,10 @@ var providerKinds = []providerKind{
 		models: []string{"anthropic/claude-sonnet-5.5", "anthropic/claude-opus-5.5", "anthropic/claude-haiku-5.5"}, open: openChatCompletions},
 	{id: "deepseek", name: "DeepSeek", baseURL: "https://api.deepseek.com/v1", keyURL: "https://platform.deepseek.com/api_keys",
 		models: []string{"deepseek-chat", "deepseek-reasoner"}, open: openChatCompletions},
+	{id: "ollama", name: "Ollama", baseURL: "http://localhost:11434/v1", keyURL: "https://ollama.com/download",
+		chat: localChat, open: openChatCompletions, local: true},
+	{id: "lmstudio", name: "LM Studio", baseURL: "http://localhost:1234/v1", keyURL: "https://lmstudio.ai/download",
+		chat: localChat, open: openChatCompletions, local: true},
 }
 
 // providerKindOf returns the kind of id, nil for none.
@@ -109,6 +117,10 @@ func geminiChat(model string) bool {
 	return openAIChat(model)
 }
 
+// localChat tells the models a server on the user's computer runs that
+// chat from those that embed, which its list holds too.
+func localChat(model string) bool { return !strings.Contains(model, "embed") }
+
 func openChatCompletions(k *providerKind, baseURL, key string, models []string) provider {
 	return &openAI{id: k.id, name: k.name, baseURL: baseURL, apiKey: key, models: models, client: http.DefaultClient}
 }
@@ -125,8 +137,8 @@ func (p *openAI) ID() string       { return p.id }
 func (p *openAI) Name() string     { return p.name }
 func (p *openAI) Models() []string { return p.models }
 
-// authorize gives req the API key, where there is one: a local server
-// the user added may take none.
+// authorize gives req the API key, where there is one: a server on the
+// user's computer may take none.
 func (p *openAI) authorize(req *http.Request) {
 	if p.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+p.apiKey)

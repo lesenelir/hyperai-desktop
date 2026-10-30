@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"maps"
 	"math/rand/v2"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -136,12 +137,14 @@ func (k fileKeyring) Delete(key string) error {
 // providers.json keeps it: its endpoint, "" for its kind's; the models the
 // composer offers, which are Models where Custom, the user having added
 // or removed one, and its kind's otherwise, as many of them as it lists;
-// and Listed, the models it listed last that chat.
+// Listed, the models it listed last that chat; and, of a server on the
+// user's computer, whether they turned it on.
 type providerConf struct {
 	BaseURL string   `json:"baseURL,omitempty"`
 	Custom  bool     `json:"custom,omitempty"`
 	Models  []string `json:"models,omitempty"`
 	Listed  []string `json:"listed,omitempty"`
+	On      bool     `json:"on,omitempty"`
 }
 
 // customProvider is a provider the user added, as providers.json keeps
@@ -275,14 +278,28 @@ func (a *app) kindOf(id string) *providerKind {
 	return nil
 }
 
-// ready reports whether the provider of kind can be asked: it has a key,
-// or, of those the user added, which a local server may serve without
-// one, an endpoint.
+// ready reports whether the provider of kind can be asked: it has a key;
+// of those the user added, which a local server may serve without one, an
+// endpoint; or, of a server on the user's computer, the user turned it on.
 func (a *app) ready(kind *providerKind) bool {
-	if kind.added() {
+	switch {
+	case kind.added():
 		return a.endpoint(kind) != ""
+	case kind.local:
+		c := a.confs[kind.id]
+		return c != nil && c.On
 	}
 	return a.key(kind.id) != ""
+}
+
+// setOn turns on, or off, the server on the user's computer id, and lists
+// the models it runs once it is on.
+func (a *app) setOn(id string, on bool) {
+	a.conf(id).On = on
+	a.saveConf()
+	delete(a.listErrors, id)
+	a.setProviders()
+	a.listModels(id)
 }
 
 // endpoint returns where the API of kind is: the user's, else its own.
@@ -303,7 +320,8 @@ func (a *app) shownModels(kind *providerKind) []string {
 	case c.Custom:
 		return c.Models
 	case len(kind.models) == 0:
-		// Of a provider the user added, which has none of its own.
+		// Of a provider the user added, or a server on their computer,
+		// which have none of their own.
 		return c.Listed
 	}
 	if len(c.Listed) > 0 {
@@ -437,6 +455,11 @@ func (a *app) listModels(id string) {
 		delete(a.listing, id)
 		if err != nil {
 			a.listErrors[id] = err.Error()
+			// Where nothing answers, as a server not running.
+			var dial *net.OpError
+			if kind.local && errors.As(err, &dial) && dial.Op == "dial" {
+				a.listErrors[id] = locales.LocalUnreachable(url, kind.name)
+			}
 			return
 		}
 		if kind.chat != nil {
@@ -507,20 +530,26 @@ func (a *app) providerTerms() []settingsTerm {
 }
 
 // providersPage builds the Providers page: a card of each provider, which
-// takes its API key and, once it has one, where its API is and the models
-// the composer offers of it; the card of each the user added, which takes
-// where its API is first, and a key, which it may need none of; the
-// button that adds another; and where the keys are kept.
+// takes its API key, or, of a server on the user's computer, turns it on,
+// and then shows where its API is and the models the composer offers of
+// it; the card of each the user added, which takes where its API is
+// first, and a key, which it may need none of; the button that adds
+// another; and where the keys are kept.
 func (a *app) providersPage(c *ui.Context) {
 	for _, kind := range a.kinds() {
 		a.settingsCard(c, kind.name, func() {
-			if kind.added() {
+			switch {
+			case kind.added():
 				a.addedRow(c, kind)
 				settingDivider(c)
 				a.endpointRow(c, kind)
 				settingDivider(c)
+				a.keyRow(c, kind)
+			case kind.local:
+				a.localRow(c, kind)
+			default:
+				a.keyRow(c, kind)
 			}
-			a.keyRow(c, kind)
 			if !a.ready(kind) {
 				return
 			}
@@ -545,6 +574,27 @@ func (a *app) providersPage(c *ui.Context) {
 		note = a.keyError
 	}
 	ui.Text(c, note).FontSize(12).LineHeight(1.5).TextColor(c.Theme().TextMuted).Padding(0, 4)
+}
+
+// localRow builds the row that turns on the server on the user's
+// computer of kind, with, while it is off, the button that opens where it
+// is downloaded.
+func (a *app) localRow(c *ui.Context, kind *providerKind) {
+	on := a.ready(kind)
+	about := locales.LocalOff()
+	if on {
+		about = locales.LocalOn()
+	}
+	a.settingRow(c, locales.LocalRow(), about, func() {
+		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+			if !on && a.settingButton(c, "download "+kind.id, locales.LocalDownload(), false) {
+				c.Services().OpenURL(kind.keyURL)
+			}
+			if ui.Switch(c.Key("local "+kind.id), &on).Label(locales.LocalSwitch(kind.name)).Changed() {
+				a.setOn(kind.id, on)
+			}
+		})
+	})
 }
 
 // addProviderCard builds the button whose menu adds a provider of the
