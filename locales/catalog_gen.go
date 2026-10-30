@@ -3848,6 +3848,338 @@ func (msgs Messages) LocalUnreachable(url string, provider string) string {
 	return Catalog.Format(msgs.locale, "localUnreachable", map[string]any{"url": url, "provider": provider})
 }
 
+// CopilotCLI says "Copilot CLI"
+// in the language the app shows.
+//
+// The row of GitHub Copilot's card that says where the Copilot CLI, which
+// HyperAI asks Copilot through, is installed.
+func CopilotCLI() string { return In(i18n.Locale()).CopilotCLI() }
+
+// CopilotCLI says "Copilot CLI"
+// in the language of msgs.
+//
+// The row of GitHub Copilot's card that says where the Copilot CLI, which
+// HyperAI asks Copilot through, is installed.
+func (msgs Messages) CopilotCLI() string {
+	return Catalog.Format(msgs.locale, "copilotCLI", nil)
+}
+
+// CopilotCLIMissing says "Not found. HyperAI asks Copilot through it: install it, then look again."
+// in the language the app shows.
+//
+// Under the Copilot CLI row where it is not installed.
+func CopilotCLIMissing() string { return In(i18n.Locale()).CopilotCLIMissing() }
+
+// CopilotCLIMissing says "Not found. HyperAI asks Copilot through it: install it, then look again."
+// in the language of msgs.
+//
+// Under the Copilot CLI row where it is not installed.
+func (msgs Messages) CopilotCLIMissing() string {
+	return Catalog.Format(msgs.locale, "copilotCLIMissing", nil)
+}
+
+// CopilotInstall says "Install"
+// in the language the app shows.
+//
+// The button that opens where the Copilot CLI's installation is told.
+func CopilotInstall() string { return In(i18n.Locale()).CopilotInstall() }
+
+// CopilotInstall says "Install"
+// in the language of msgs.
+//
+// The button that opens where the Copilot CLI's installation is told.
+func (msgs Messages) CopilotInstall() string {
+	return Catalog.Format(msgs.locale, "copilotInstall", nil)
+}
+
+// CopilotFind says "Look Again"
+// in the language the app shows.
+//
+// The button that looks for the Copilot CLI again, once it is installed.
+func CopilotFind() string { return In(i18n.Locale()).CopilotFind() }
+
+// CopilotFind says "Look Again"
+// in the language of msgs.
+//
+// The button that looks for the Copilot CLI again, once it is installed.
+func (msgs Messages) CopilotFind() string {
+	return Catalog.Format(msgs.locale, "copilotFind", nil)
+}
+
+// CopilotAccount says "GitHub account"
+// in the language the app shows.
+//
+// The row of GitHub Copilot's card that signs in to GitHub, as Copilot is
+// asked.
+func CopilotAccount() string { return In(i18n.Locale()).CopilotAccount() }
+
+// CopilotAccount says "GitHub account"
+// in the language of msgs.
+//
+// The row of GitHub Copilot's card that signs in to GitHub, as Copilot is
+// asked.
+func (msgs Messages) CopilotAccount() string {
+	return Catalog.Format(msgs.locale, "copilotAccount", nil)
+}
+
+// CopilotChecking says "Checking…"
+// in the language the app shows.
+//
+// Under the GitHub account row while HyperAI asks GitHub or the Copilot
+// CLI.
+func CopilotChecking() string { return In(i18n.Locale()).CopilotChecking() }
+
+// CopilotChecking says "Checking…"
+// in the language of msgs.
+//
+// Under the GitHub account row while HyperAI asks GitHub or the Copilot
+// CLI.
+func (msgs Messages) CopilotChecking() string {
+	return Catalog.Format(msgs.locale, "copilotChecking", nil)
+}
+
+// CopilotCode says "Enter {code} on GitHub to sign in."
+// in the language the app shows.
+//
+// Under the GitHub account row while signing in: the code to enter on
+// GitHub's page, which Open GitHub opens.
+func CopilotCode(code string) string { return In(i18n.Locale()).CopilotCode(code) }
+
+// CopilotCode says "Enter {code} on GitHub to sign in."
+// in the language of msgs.
+//
+// Under the GitHub account row while signing in: the code to enter on
+// GitHub's page, which Open GitHub opens.
+func (msgs Messages) CopilotCode(code string) string {
+	return Catalog.Format(msgs.locale, "copilotCode", map[string]any{"code": code})
+}
+
+// CopilotSignedIn says "Signed in as {user}"
+// in the language the app shows.
+//
+// Under the GitHub account row once signed in through HyperAI.
+func CopilotSignedIn(user string) string { return In(i18n.Locale()).CopilotSignedIn(user) }
+
+// CopilotSignedIn says "Signed in as {user}"
+// in the language of msgs.
+//
+// Under the GitHub account row once signed in through HyperAI.
+func (msgs Messages) CopilotSignedIn(user string) string {
+	return Catalog.Format(msgs.locale, "copilotSignedIn", map[string]any{"user": user})
+}
+
+// CopilotSignedInCLI says "Signed in as {user}, through the Copilot CLI"
+// in the language the app shows.
+//
+// Under the GitHub account row once signed in through the Copilot CLI's own
+// sign-in.
+func CopilotSignedInCLI(user string) string { return In(i18n.Locale()).CopilotSignedInCLI(user) }
+
+// CopilotSignedInCLI says "Signed in as {user}, through the Copilot CLI"
+// in the language of msgs.
+//
+// Under the GitHub account row once signed in through the Copilot CLI's own
+// sign-in.
+func (msgs Messages) CopilotSignedInCLI(user string) string {
+	return Catalog.Format(msgs.locale, "copilotSignedInCLI", map[string]any{"user": user})
+}
+
+// CopilotSignedInUnknown says "Signed in"
+// in the language the app shows.
+//
+// Under the GitHub account row once signed in, before HyperAI knows as
+// whom.
+func CopilotSignedInUnknown() string { return In(i18n.Locale()).CopilotSignedInUnknown() }
+
+// CopilotSignedInUnknown says "Signed in"
+// in the language of msgs.
+//
+// Under the GitHub account row once signed in, before HyperAI knows as
+// whom.
+func (msgs Messages) CopilotSignedInUnknown() string {
+	return Catalog.Format(msgs.locale, "copilotSignedInUnknown", nil)
+}
+
+// CopilotSignInCLI says "Not signed in. Sign in to the Copilot CLI first."
+// in the language the app shows.
+//
+// Under the GitHub account row while signed out, where HyperAI can only use
+// the Copilot CLI's sign-in.
+func CopilotSignInCLI() string { return In(i18n.Locale()).CopilotSignInCLI() }
+
+// CopilotSignInCLI says "Not signed in. Sign in to the Copilot CLI first."
+// in the language of msgs.
+//
+// Under the GitHub account row while signed out, where HyperAI can only use
+// the Copilot CLI's sign-in.
+func (msgs Messages) CopilotSignInCLI() string {
+	return Catalog.Format(msgs.locale, "copilotSignInCLI", nil)
+}
+
+// CopilotSignInAbout says "Not signed in."
+// in the language the app shows.
+//
+// Under the GitHub account row while signed out.
+func CopilotSignInAbout() string { return In(i18n.Locale()).CopilotSignInAbout() }
+
+// CopilotSignInAbout says "Not signed in."
+// in the language of msgs.
+//
+// Under the GitHub account row while signed out.
+func (msgs Messages) CopilotSignInAbout() string {
+	return Catalog.Format(msgs.locale, "copilotSignInAbout", nil)
+}
+
+// CopilotCopyCode says "Copy Code"
+// in the language the app shows.
+//
+// The button that copies the code to enter on GitHub's page.
+func CopilotCopyCode() string { return In(i18n.Locale()).CopilotCopyCode() }
+
+// CopilotCopyCode says "Copy Code"
+// in the language of msgs.
+//
+// The button that copies the code to enter on GitHub's page.
+func (msgs Messages) CopilotCopyCode() string {
+	return Catalog.Format(msgs.locale, "copilotCopyCode", nil)
+}
+
+// CopilotOpenGitHub says "Open GitHub"
+// in the language the app shows.
+//
+// The button that opens GitHub's page to enter the code on, copying the
+// code.
+func CopilotOpenGitHub() string { return In(i18n.Locale()).CopilotOpenGitHub() }
+
+// CopilotOpenGitHub says "Open GitHub"
+// in the language of msgs.
+//
+// The button that opens GitHub's page to enter the code on, copying the
+// code.
+func (msgs Messages) CopilotOpenGitHub() string {
+	return Catalog.Format(msgs.locale, "copilotOpenGitHub", nil)
+}
+
+// CopilotSignOut says "Sign Out"
+// in the language the app shows.
+//
+// The button that signs out of GitHub Copilot.
+func CopilotSignOut() string { return In(i18n.Locale()).CopilotSignOut() }
+
+// CopilotSignOut says "Sign Out"
+// in the language of msgs.
+//
+// The button that signs out of GitHub Copilot.
+func (msgs Messages) CopilotSignOut() string {
+	return Catalog.Format(msgs.locale, "copilotSignOut", nil)
+}
+
+// CopilotSignOutTitle says "Sign out of GitHub Copilot?"
+// in the language the app shows.
+//
+// The question of the alert signing out of GitHub Copilot.
+func CopilotSignOutTitle() string { return In(i18n.Locale()).CopilotSignOutTitle() }
+
+// CopilotSignOutTitle says "Sign out of GitHub Copilot?"
+// in the language of msgs.
+//
+// The question of the alert signing out of GitHub Copilot.
+func (msgs Messages) CopilotSignOutTitle() string {
+	return Catalog.Format(msgs.locale, "copilotSignOutTitle", nil)
+}
+
+// CopilotSignOutAbout says "To ask Copilot again, you’ll sign in with GitHub again."
+// in the language the app shows.
+//
+// Under the question of the alert signing out of GitHub Copilot, signed in
+// through HyperAI: its token goes.
+func CopilotSignOutAbout() string { return In(i18n.Locale()).CopilotSignOutAbout() }
+
+// CopilotSignOutAbout says "To ask Copilot again, you’ll sign in with GitHub again."
+// in the language of msgs.
+//
+// Under the question of the alert signing out of GitHub Copilot, signed in
+// through HyperAI: its token goes.
+func (msgs Messages) CopilotSignOutAbout() string {
+	return Catalog.Format(msgs.locale, "copilotSignOutAbout", nil)
+}
+
+// CopilotSignOutCLIAbout says "HyperAI stops asking Copilot as you. The Copilot CLI stays signed in."
+// in the language the app shows.
+//
+// Under the question of the alert signing out of GitHub Copilot, signed in
+// through the Copilot CLI, which stays signed in.
+func CopilotSignOutCLIAbout() string { return In(i18n.Locale()).CopilotSignOutCLIAbout() }
+
+// CopilotSignOutCLIAbout says "HyperAI stops asking Copilot as you. The Copilot CLI stays signed in."
+// in the language of msgs.
+//
+// Under the question of the alert signing out of GitHub Copilot, signed in
+// through the Copilot CLI, which stays signed in.
+func (msgs Messages) CopilotSignOutCLIAbout() string {
+	return Catalog.Format(msgs.locale, "copilotSignOutCLIAbout", nil)
+}
+
+// CopilotUseCLI says "Use CLI Sign-in"
+// in the language the app shows.
+//
+// The button that asks Copilot as the user the Copilot CLI is signed in as.
+func CopilotUseCLI() string { return In(i18n.Locale()).CopilotUseCLI() }
+
+// CopilotUseCLI says "Use CLI Sign-in"
+// in the language of msgs.
+//
+// The button that asks Copilot as the user the Copilot CLI is signed in as.
+func (msgs Messages) CopilotUseCLI() string {
+	return Catalog.Format(msgs.locale, "copilotUseCLI", nil)
+}
+
+// CopilotSignIn says "Sign In with GitHub"
+// in the language the app shows.
+//
+// The button that signs in to GitHub, in the browser, to ask Copilot.
+func CopilotSignIn() string { return In(i18n.Locale()).CopilotSignIn() }
+
+// CopilotSignIn says "Sign In with GitHub"
+// in the language of msgs.
+//
+// The button that signs in to GitHub, in the browser, to ask Copilot.
+func (msgs Messages) CopilotSignIn() string {
+	return Catalog.Format(msgs.locale, "copilotSignIn", nil)
+}
+
+// CopilotCLISignedOut says "The Copilot CLI isn’t signed in. Run copilot in Terminal and sign in with /login, then try again."
+// in the language the app shows.
+//
+// Under the GitHub account row where the Copilot CLI is not signed in, as
+// the user chose its sign-in.
+func CopilotCLISignedOut() string { return In(i18n.Locale()).CopilotCLISignedOut() }
+
+// CopilotCLISignedOut says "The Copilot CLI isn’t signed in. Run copilot in Terminal and sign in with /login, then try again."
+// in the language of msgs.
+//
+// Under the GitHub account row where the Copilot CLI is not signed in, as
+// the user chose its sign-in.
+func (msgs Messages) CopilotCLISignedOut() string {
+	return Catalog.Format(msgs.locale, "copilotCLISignedOut", nil)
+}
+
+// CopilotSignedOut says "Copilot doesn’t take this sign-in anymore. Sign out, then sign in again."
+// in the language the app shows.
+//
+// Under the GitHub account row where Copilot no longer takes the user's
+// sign-in.
+func CopilotSignedOut() string { return In(i18n.Locale()).CopilotSignedOut() }
+
+// CopilotSignedOut says "Copilot doesn’t take this sign-in anymore. Sign out, then sign in again."
+// in the language of msgs.
+//
+// Under the GitHub account row where Copilot no longer takes the user's
+// sign-in.
+func (msgs Messages) CopilotSignedOut() string {
+	return Catalog.Format(msgs.locale, "copilotSignedOut", nil)
+}
+
 // EndpointNone says "Not set yet"
 // in the language the app shows.
 //

@@ -25,6 +25,8 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/egoist/mygo/ui/markdown/parser"
+	copilot "github.com/github/copilot-sdk/go"
+	"github.com/github/copilot-sdk/go/rpc"
 
 	"hyperai-desktop/locales"
 	"hyperai-desktop/ratex"
@@ -2532,10 +2534,10 @@ func TestAbout(t *testing.T) {
 		t.Errorf("opened %q, want %q", got, want)
 	}
 	// The field finds the page by what it holds.
-	a.settingsQuery = "GitHub"
+	a.settingsQuery = "Science"
 	tt.Frame()
 	if m := a.settingsMatches(); len(m) != 1 || m[0].key != "about" {
-		t.Errorf("GitHub finds %+v", m)
+		t.Errorf("Science finds %+v", m)
 	}
 }
 
@@ -3621,4 +3623,237 @@ func TestThoughts(t *testing.T) {
 	if len(p.asked) != 2 || !slices.Equal(p.asked[1], want) {
 		t.Errorf("asked %q", p.asked)
 	}
+}
+
+func TestCopilotPrompt(t *testing.T) {
+	system, prompt := copilotPrompt([]turn{{"user", "Hi"}, {"assistant", "Hello."}, {"user", "Again"}})
+	if want := copilotSystem + "\n\nThe conversation so far, before the user's message:\n\nUser: Hi\n\nAssistant: Hello."; system != want || prompt != "Again" {
+		t.Errorf("system %q, prompt %q", system, prompt)
+	}
+	if system, prompt := copilotPrompt([]turn{{"user", "Hi"}}); system != copilotSystem || prompt != "Hi" {
+		t.Errorf("of one turn: system %q, prompt %q", system, prompt)
+	}
+}
+
+func TestFindCopilotCLI(t *testing.T) {
+	dir := t.TempDir()
+	cli := filepath.Join(dir, copilotNames()[0])
+	if err := os.WriteFile(cli, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("COPILOT_CLI_PATH", "")
+	t.Setenv("PATH", dir)
+	if got := findCopilotCLI(); got != cli {
+		t.Errorf("on the PATH: %q", got)
+	}
+	t.Setenv("COPILOT_CLI_PATH", "/opt/copilot")
+	if got := findCopilotCLI(); got != "/opt/copilot" {
+		t.Errorf("of COPILOT_CLI_PATH: %q", got)
+	}
+	// Its directory, and the installers', go on the PATH it runs with.
+	var path string
+	for _, kv := range cliEnv(cli) {
+		if p, ok := strings.CutPrefix(kv, "PATH="); ok {
+			path = p
+		}
+	}
+	if dirs := filepath.SplitList(path); len(dirs) < 3 || dirs[0] != dir || !slices.Contains(dirs, "/opt/homebrew/bin") {
+		t.Errorf("PATH %q", path)
+	}
+}
+
+// fakeCopilot is a Copilot runtime in memory: it is signed in as user,
+// offers models, and replies to what it is asked, which it keeps.
+type fakeCopilot struct {
+	token  string
+	user   string
+	models []string
+	asked  [][2]string
+	closed bool
+}
+
+func (f *fakeCopilot) User(ctx context.Context) (string, error)     { return f.user, nil }
+func (f *fakeCopilot) Models(ctx context.Context) ([]string, error) { return f.models, nil }
+func (f *fakeCopilot) Close()                                       { f.closed = true }
+
+func (f *fakeCopilot) Stream(ctx context.Context, model, system, prompt string, delta func(chunk)) error {
+	f.asked = append(f.asked, [2]string{system, prompt})
+	delta(chunk{Reasoning: "Greet back."})
+	delta(chunk{Text: "Hi from " + model})
+	return nil
+}
+
+// GitHub Copilot: its CLI found once installed, signed in through the
+// CLI's sign-in, or HyperAI's, through GitHub's device flow; then asked,
+// told the conversation; then signed out of.
+func TestCopilot(t *testing.T) {
+	user := ""
+	var made []*fakeCopilot
+	a := newApp(nil)
+	a.copilot.newRuntime = func(cli, dir, token string) copilotRuntime {
+		f := &fakeCopilot{token: token, user: user, models: []string{"gpt-5", "claude-sonnet-5-5"}}
+		made = append(made, f)
+		return f
+	}
+	kr := &memKeyring{secrets: map[string][]byte{}}
+	a.loadKeys(kr)
+	tt := ui.NewTester(a.view, 1120, 2000)
+	a.openSettings()
+	a.settingsPage = "providers"
+	tt.Frame()
+	if !tt.HasText("Not found. HyperAI asks Copilot through it: install it, then look again.") || tt.HasText("GitHub account") {
+		t.Fatalf("without the CLI: %q", tt.Texts())
+	}
+	cli := filepath.Join(t.TempDir(), "copilot")
+	t.Setenv("COPILOT_CLI_PATH", cli)
+	if err := tt.Click("Look Again"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.copilot.cli != cli || !tt.HasText("Not signed in. Sign in to the Copilot CLI first.") || tt.HasText("Sign In with GitHub") {
+		t.Fatalf("found %q: %q", a.copilot.cli, tt.Texts())
+	}
+
+	// The CLI's sign-in, where it has none, then where it has.
+	if err := tt.Click("Use CLI Sign-in"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.prov != nil || !tt.HasText("The Copilot CLI isn’t signed in. Run copilot in Terminal and sign in with /login, then try again.") {
+		t.Fatalf("asks %v; %q", a.prov, tt.Texts())
+	}
+	user = "octocat"
+	if err := tt.Click("Use CLI Sign-in"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("Signed in as octocat, through the Copilot CLI") || a.prov == nil || a.prov.ID() != "copilot" || a.model != "claude-sonnet-5-5" {
+		t.Fatalf("asks %v's %q; %q", a.prov, a.model, tt.Texts())
+	}
+	rt := made[len(made)-1]
+	if rt.token != "" || !a.confs["copilot"].On || len(kr.secrets) != 0 {
+		t.Errorf("token %q, on %v, keys %q", rt.token, a.confs["copilot"].On, kr.secrets)
+	}
+
+	// Asked, it is told the conversation before the question.
+	a.closeSettings()
+	a.send("Hi")
+	a.send("Again")
+	if len(rt.asked) != 2 || rt.asked[1][1] != "Again" || !strings.Contains(rt.asked[1][0], "User: Hi\n\nAssistant: Hi from claude-sonnet-5-5") {
+		t.Errorf("asked %q", rt.asked)
+	}
+	if r := a.current().Messages[3]; r.Text != "Hi from claude-sonnet-5-5" || r.Reasoning != "Greet back." {
+		t.Errorf("replied %q, reasoned %q", r.Text, r.Reasoning)
+	}
+
+	a.openSettings()
+	a.settingsPage = "providers"
+	tt.Frame()
+	// Signing out asks first, saying the CLI stays signed in; Escape keeps it.
+	if err := tt.Click("Sign Out"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if !tt.HasText("Sign out of GitHub Copilot?") || !tt.HasText("HyperAI stops asking Copilot as you. The Copilot CLI stays signed in.") {
+		t.Fatalf("no alert asking in %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Advance(time.Second)
+	if a.prov == nil || !a.confs["copilot"].On || rt.closed {
+		t.Fatalf("signed out on Escape")
+	}
+	if err := tt.Click("Sign Out"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	if a.prov != nil || a.confs["copilot"].On || !rt.closed || !tt.HasText("Use CLI Sign-in") {
+		t.Fatalf("signed out: asks %v, closed %v", a.prov, rt.closed)
+	}
+
+	// HyperAI's own sign-in, through GitHub's device flow.
+	polls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		if r.Form.Get("client_id") != "hyperai" || r.Header.Get("Accept") != "application/json" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		switch r.URL.Path {
+		case "/login/device/code":
+			fmt.Fprint(w, `{"device_code":"dc","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","interval":1,"expires_in":900}`)
+		case "/login/oauth/access_token":
+			if polls++; polls == 1 {
+				fmt.Fprint(w, `{"error":"authorization_pending"}`)
+				return
+			}
+			fmt.Fprint(w, `{"access_token":"gho_token","token_type":"bearer"}`)
+		}
+	}))
+	defer srv.Close()
+	githubClientID, githubURL, pollUnit = "hyperai", srv.URL, time.Millisecond
+	t.Cleanup(func() { githubClientID, githubURL, pollUnit = "", "https://github.com", time.Second })
+	tt.Frame()
+	if !tt.HasText("Not signed in.") {
+		t.Fatalf("with a client ID: %q", tt.Texts())
+	}
+	if err := tt.Click("Sign In with GitHub"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	rt = made[len(made)-1]
+	if polls != 2 || a.key("copilot") != "gho_token" || rt.token != "gho_token" || a.prov == nil || a.prov.ID() != "copilot" {
+		t.Fatalf("polls %d, key %q, token %q, asks %v", polls, a.key("copilot"), rt.token, a.prov)
+	}
+	if !tt.HasText("Signed in as octocat") || tt.HasText("Signed in as octocat, through the Copilot CLI") {
+		t.Errorf("the page shows %q", tt.Texts())
+	}
+	if err := tt.Click("Sign Out"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if !tt.HasText("To ask Copilot again, you’ll sign in with GitHub again.") {
+		t.Fatalf("no alert asking in %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	if a.key("copilot") != "" || a.prov != nil || len(kr.secrets) != 0 {
+		t.Errorf("signed out: key %q, asks %v", a.key("copilot"), a.prov)
+	}
+}
+
+// GitHub's device flow shows the code, and ends where the user declines.
+func TestDeviceLoginDeclined(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"error":"access_denied","error_description":"The authorization request was denied."}`)
+	}))
+	defer srv.Close()
+	githubURL, pollUnit = srv.URL, time.Millisecond
+	t.Cleanup(func() { githubURL, pollUnit = "https://github.com", time.Second })
+	d := &deviceLogin{DeviceCode: "dc", Interval: 1, ExpiresIn: 900}
+	if _, err := d.wait(context.Background()); err == nil || err.Error() != "The authorization request was denied." {
+		t.Errorf("error %v", err)
+	}
+}
+
+// A session asks for no tools, as empty mode wants said: an empty list,
+// which the SDK sends as [], not none, which it refuses.
+func TestCopilotSession(t *testing.T) {
+	s := copilotSession("gpt-5", "Be brief.")
+	if s.AvailableTools == nil || len(s.AvailableTools) != 0 || s.Model != "gpt-5" || s.SystemMessage.Mode != "replace" ||
+		s.SystemMessage.Content != "Be brief." || s.Streaming == nil || !*s.Streaming {
+		t.Errorf("session %+v", s)
+	}
+	if _, ok := must(s.OnPermissionRequest(nil, copilot.PermissionInvocation{})).(*rpc.PermissionDecisionReject); !ok {
+		t.Errorf("a tool's permission is not refused")
+	}
+}
+
+// must returns v, of a call that returned no error.
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
 }

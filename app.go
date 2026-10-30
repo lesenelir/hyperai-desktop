@@ -145,6 +145,7 @@ type app struct {
 	keyError     string
 	confs        map[string]*providerConf
 	custom       []*providerKind
+	copilot      copilotState // GitHub Copilot's CLI and sign-in (copilot.go)
 	defaultModel modelRef
 	confPath     string
 	confSaver    saver
@@ -301,6 +302,7 @@ type app struct {
 func newApp(p provider) *app {
 	a := &app{fallback: p, sideWidth: sidebarWidth, theme: "system",
 		textSize: defaultTextSize, body: bodySize, translucent: true, renderMath: true}
+	a.copilot.newRuntime = newCopilotSDK
 	a.setProviders()
 	// Math between single dollars too, as models write it within text:
 	// $x^2$, but not $5 and $10, which read as money.
@@ -477,15 +479,16 @@ func (a *app) askDelete(th *thread) {
 }
 
 // askRemove asks whether to remove the provider id the user added, or,
-// where key, the API key of the provider id, which the alert does once it
-// is confirmed.
+// where key, the API key of the provider id, or Copilot's sign-in, which
+// the alert does once it is confirmed.
 func (a *app) askRemove(id string, key bool) {
 	a.removing, a.removingKey, a.confirming = id, key, true
 }
 
 // deleteAlert builds the alert that asks to delete a chat, or all of
-// them, or to remove a provider or its key, while one is asked, and
-// deletes or removes what it asked about once Delete or Remove is chosen.
+// them, or to remove a provider or its key, or to sign out of Copilot,
+// while one is asked, and does what it asked about once Delete, Remove or
+// Sign Out is chosen.
 func (a *app) deleteAlert(c *ui.Context) {
 	if !a.confirming {
 		a.deleting, a.deletingAll, a.removing, a.removingKey = nil, false, "", false
@@ -498,10 +501,18 @@ func (a *app) deleteAlert(c *ui.Context) {
 	case a.deleting != nil:
 		title, about = locales.DeleteChatTitle(a.deleting.Title), locales.DeleteChatAbout()
 	case a.removing != "" && a.kindOf(a.removing) != nil:
-		name := a.kindOf(a.removing).name
-		title, about, button = locales.RemoveProviderTitle(name), locales.RemoveProviderAbout(), locales.ProviderRemove()
-		if a.removingKey {
-			title, about, button = locales.RemoveKeyTitle(name), locales.RemoveKeyAbout(), locales.KeyRemove()
+		kind := a.kindOf(a.removing)
+		switch {
+		case kind.copilot:
+			// Of HyperAI's sign-in, or the CLI's, which it keeps.
+			title, about, button = locales.CopilotSignOutTitle(), locales.CopilotSignOutCLIAbout(), locales.CopilotSignOut()
+			if a.key(kind.id) != "" {
+				about = locales.CopilotSignOutAbout()
+			}
+		case a.removingKey:
+			title, about, button = locales.RemoveKeyTitle(kind.name), locales.RemoveKeyAbout(), locales.KeyRemove()
+		default:
+			title, about, button = locales.RemoveProviderTitle(kind.name), locales.RemoveProviderAbout(), locales.ProviderRemove()
 		}
 	}
 	if ui.AlertDialog(c, &a.confirming, title, about, locales.Cancel(), button) == 1 {
@@ -510,6 +521,8 @@ func (a *app) deleteAlert(c *ui.Context) {
 			a.removeAll()
 		case a.deleting != nil:
 			a.remove(a.deleting)
+		case a.removing == "copilot":
+			a.signOutCopilot()
 		case a.removingKey:
 			a.setKey(a.removing, "")
 		case a.removing != "":

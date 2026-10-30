@@ -189,7 +189,7 @@ func apiAbout(api string) string {
 
 // added reports whether the user added kind, which has no endpoint until
 // they give it.
-func (k *providerKind) added() bool { return k.baseURL == "" }
+func (k *providerKind) added() bool { return k.api != "" }
 
 // modelRef names a model of a provider, by the provider's ID.
 type modelRef struct {
@@ -218,6 +218,7 @@ func (a *app) loadConf(dir string) {
 		return
 	}
 	a.confs, a.defaultModel = f.Providers, f.Default
+	a.copilot.dir = filepath.Join(dir, "copilot")
 	a.custom = nil
 	for _, p := range f.Custom {
 		a.custom = append(a.custom, customKind(p.ID, p.Name, p.API))
@@ -288,8 +289,18 @@ func (a *app) ready(kind *providerKind) bool {
 	case kind.local:
 		c := a.confs[kind.id]
 		return c != nil && c.On
+	case kind.copilot:
+		return a.copilot.cli != "" && a.copilotSignedIn()
 	}
 	return a.key(kind.id) != ""
+}
+
+// openKind returns the provider of kind at url, for key, offering models.
+func (a *app) openKind(kind *providerKind, url, key string, models []string) provider {
+	if kind.copilot {
+		return &copilotProvider{rt: a.copilotRuntime(), models: models}
+	}
+	return kind.open(kind, url, key, models)
 }
 
 // setOn turns on, or off, the server on the user's computer id, and lists
@@ -440,7 +451,7 @@ func (a *app) listModels(id string) {
 	// Opened of its own, as the composer offers none of its models where
 	// the user removed them all.
 	key, url := a.key(id), a.endpoint(kind)
-	p := kind.open(kind, url, key, nil)
+	p := a.openKind(kind, url, key, nil)
 	if a.listing == nil {
 		a.listing, a.listErrors = map[string]bool{}, map[string]string{}
 	}
@@ -503,7 +514,7 @@ func (a *app) setProviders() {
 	var provs []provider
 	for _, kind := range a.kinds() {
 		if models := a.shownModels(kind); a.ready(kind) && len(models) > 0 {
-			provs = append(provs, kind.open(kind, a.endpoint(kind), a.key(kind.id), models))
+			provs = append(provs, a.openKind(kind, a.endpoint(kind), a.key(kind.id), models))
 		}
 	}
 	if len(provs) == 0 && a.fallback != nil {
@@ -547,13 +558,15 @@ func (a *app) providersPage(c *ui.Context) {
 				a.keyRow(c, kind)
 			case kind.local:
 				a.localRow(c, kind)
+			case kind.copilot:
+				a.copilotRows(c)
 			default:
 				a.keyRow(c, kind)
 			}
 			if !a.ready(kind) {
 				return
 			}
-			if !kind.added() {
+			if !kind.added() && !kind.copilot {
 				settingDivider(c)
 				a.endpointRow(c, kind)
 			}

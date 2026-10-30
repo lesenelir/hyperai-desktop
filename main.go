@@ -29,6 +29,8 @@ func main() {
 			a = newApp(&demo{paced: true, rng: rand.New(rand.NewPCG(1, 2))})
 		} else {
 			a = newApp(nil)
+			// The Copilot CLI, where it is installed, to ask Copilot through.
+			a.copilot.cli = findCopilotCLI()
 			a.load()
 			// The API keys: from the system's credential store, or a file
 			// for a development build.
@@ -70,8 +72,11 @@ func main() {
 		} else {
 			a.focused = a.win.IsFocused
 			// The models of the providers that listed none yet, as they
-			// have them now.
+			// have them now, and whom Copilot asks as.
 			a.listUnlisted()
+			if a.copilotSignedIn() {
+				a.checkCopilot(false)
+			}
 			a.notify = func(title, body string, clicked func(), failed func(error)) {
 				notifyReply(a.win, title, body, clicked, failed)
 			}
@@ -83,6 +88,8 @@ func main() {
 			a.saver.wait()
 			a.layoutSaver.wait()
 			a.confSaver.wait()
+			// The Copilot CLI, if it runs, with it.
+			a.closeCopilot()
 		})
 	})
 	if err := mygo.App.Run(); err != nil {

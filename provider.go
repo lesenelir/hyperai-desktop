@@ -56,8 +56,9 @@ type provider interface {
 // which returns the provider at an endpoint, for a key, offering models;
 // local, of a server on the user's computer, which takes no key, offers
 // the models it runs, and is asked once the user turns it on, its keyURL
-// where it is downloaded; and, of one the user added, api, the API it
-// takes (customAPIs).
+// where it is downloaded; copilot, of GitHub Copilot, asked through its
+// CLI as the user signed in (copilot.go), which openKind opens, not open; and,
+// of one the user added, api, the API it takes (customAPIs).
 type providerKind struct {
 	id, name string
 	baseURL  string
@@ -66,6 +67,7 @@ type providerKind struct {
 	chat     func(model string) bool
 	open     func(k *providerKind, baseURL, key string, models []string) provider
 	local    bool
+	copilot  bool
 	api      string
 }
 
@@ -84,6 +86,7 @@ var providerKinds = []providerKind{
 		models: []string{"anthropic/claude-sonnet-5.5", "anthropic/claude-opus-5.5", "anthropic/claude-haiku-5.5"}, open: openChatCompletions},
 	{id: "deepseek", name: "DeepSeek", baseURL: "https://api.deepseek.com/v1", keyURL: "https://platform.deepseek.com/api_keys",
 		models: []string{"deepseek-chat", "deepseek-reasoner"}, open: openChatCompletions},
+	{id: "copilot", name: "GitHub Copilot", copilot: true},
 	{id: "ollama", name: "Ollama", baseURL: "http://localhost:11434/v1", keyURL: "https://ollama.com/download",
 		chat: localChat, open: openChatCompletions, local: true},
 	{id: "lmstudio", name: "LM Studio", baseURL: "http://localhost:1234/v1", keyURL: "https://lmstudio.ai/download",
