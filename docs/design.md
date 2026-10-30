@@ -156,7 +156,10 @@ A small button that floats over the conversation (scroll to end) rests at
   settings page shown does. Under the pointer, a `…` button (22, its icon
   14) fades in over the end of the title's line in 150 ms, its icon on the
   row's text's edge, the title cut short of it; it opens the chat's menu,
-  as a right click does: Rename…, Regenerate Title, Delete Chat…. A chat
+  as a right click does: Pin (or Unpin), Rename…, Regenerate Title,
+  Export, Delete Chat…. Pinned chats lead the sidebar, in a Pinned group
+  over the days', the latest pinned first, and leave their day's group
+  until unpinned. A chat
   renamed there shows its title as a field in place.
   The sidebar shows the desktop's material where it can, tinted with its
   own warm color (`sidebarTint`) so that it sits with the canvas.

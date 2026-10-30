@@ -416,7 +416,7 @@ func TestRowMoreButton(t *testing.T) {
 	tt.Advance(time.Second)
 	// Over the end of the title's line, as far in as the row's text.
 	tt.ClickAt(a.sideWidth-barClear-6-rowMoreSize/2, r.Y+r.H/2)
-	want := []string{locales.RenameChatItem(), locales.RegenerateTitleItem(), "-", locales.ExportChat(), "-", locales.DeleteChatItem()}
+	want := []string{locales.PinChat(), locales.RenameChatItem(), locales.RegenerateTitleItem(), "-", locales.ExportChat(), "-", locales.DeleteChatItem()}
 	if got := tt.Menu(); !slices.Equal(got, want) {
 		t.Fatalf("menu %q, want %q", got, want)
 	}

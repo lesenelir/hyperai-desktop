@@ -81,12 +81,16 @@ type message struct {
 
 // thread is a chat: its messages, and where its list is scrolled.
 type thread struct {
-	ID       int        `json:"id"`
-	Title    string     `json:"title"`
-	Updated  time.Time  `json:"updated"`            // when the user last sent in it, which orders the sidebar
-	Model    string     `json:"model,omitempty"`    // the model asked last
-	Provider string     `json:"provider,omitempty"` // Model's, "" in chats kept before it
-	Draft    string     `json:"draft,omitempty"`    // what its composer held as it was left
+	ID       int       `json:"id"`
+	Title    string    `json:"title"`
+	Updated  time.Time `json:"updated"`            // when the user last sent in it, which orders the sidebar
+	Model    string    `json:"model,omitempty"`    // the model asked last
+	Provider string    `json:"provider,omitempty"` // Model's, "" in chats kept before it
+	Draft    string    `json:"draft,omitempty"`    // what its composer held as it was left
+	// Pinned is when the user pinned the chat, which keeps it at the
+	// sidebar's top, zero where it is not (not pin, the question held at
+	// the conversation's top).
+	Pinned   time.Time  `json:"pinned,omitzero"`
 	Messages []*message `json:"messages"`
 	// Others are the messages of the versions not shown (versions.go).
 	Others []*message    `json:"others,omitempty"`
@@ -998,10 +1002,29 @@ func (a *app) threadMeta(c *ui.Context, th *thread, now time.Time) {
 	})
 }
 
+// togglePin pins th, at the sidebar's top, the latest pinned first, or
+// unpins it, back among the others by when it was updated.
+func (a *app) togglePin(th *thread) {
+	if th.Pinned.IsZero() {
+		th.Pinned = time.Now()
+	} else {
+		th.Pinned = time.Time{}
+	}
+	a.rev++
+	a.save()
+}
+
 // chatMenu fills m, th's menu, in the title bar or, inSidebar, its row's:
-// Rename… and Regenerate Title, faded where a title cannot be asked for,
+// Pin or Unpin, Rename… and Regenerate Title, faded where a title cannot be asked for,
 // then in the title bar Copy as Markdown, then Delete Chat….
 func (a *app) chatMenu(c *ui.Context, m *ui.Menu, th *thread, inSidebar bool) {
+	pin := locales.PinChat()
+	if !th.Pinned.IsZero() {
+		pin = locales.UnpinChat()
+	}
+	if m.Item(pin).Chosen() {
+		a.togglePin(th)
+	}
 	if m.Item(locales.RenameChatItem()).Chosen() {
 		a.startRename(th, inSidebar)
 	}
@@ -1044,16 +1067,29 @@ type group struct {
 	threads []*thread
 }
 
-// groupByDay groups threads as of now, the latest first.
+// groupByDay groups threads as of now, the latest first: those pinned
+// first, in Pinned, the latest pinned first, and the others by the day
+// they were updated.
 func groupByDay(threads []*thread, now time.Time) []group {
-	sorted := slices.Clone(threads)
+	var groups []group
+	var pinned, sorted []*thread
+	for _, th := range threads {
+		if th.Pinned.IsZero() {
+			sorted = append(sorted, th)
+		} else {
+			pinned = append(pinned, th)
+		}
+	}
+	if len(pinned) > 0 {
+		slices.SortStableFunc(pinned, func(x, y *thread) int { return y.Pinned.Compare(x.Pinned) })
+		groups = append(groups, group{title: locales.GroupPinned(), threads: pinned})
+	}
 	slices.SortStableFunc(sorted, func(x, y *thread) int { return y.Updated.Compare(x.Updated) })
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	// Each span holds the chats updated since its start, and not since the
 	// start of the span before it.
 	titles := []string{locales.GroupToday(), locales.GroupYesterday(), locales.GroupWeek(), locales.GroupMonth(), locales.GroupOlder()}
 	starts := []time.Time{today, today.AddDate(0, 0, -1), today.AddDate(0, 0, -7), today.AddDate(0, 0, -30), {}}
-	var groups []group
 	for _, th := range sorted {
 		i := slices.IndexFunc(starts, func(s time.Time) bool { return !th.Updated.Before(s) })
 		if n := len(groups); n == 0 || groups[n-1].title != titles[i] {

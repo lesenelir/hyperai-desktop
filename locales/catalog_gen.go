@@ -414,6 +414,54 @@ func (msgs Messages) RenameChatItem() string {
 	return Catalog.Format(msgs.locale, "renameChatItem", nil)
 }
 
+// PinChat says "Pin"
+// in the language the app shows.
+//
+// The chat's menu item, in the title bar and the sidebar, that keeps it at
+// the top of the sidebar, in Pinned.
+func PinChat() string { return In(i18n.Locale()).PinChat() }
+
+// PinChat says "Pin"
+// in the language of msgs.
+//
+// The chat's menu item, in the title bar and the sidebar, that keeps it at
+// the top of the sidebar, in Pinned.
+func (msgs Messages) PinChat() string {
+	return Catalog.Format(msgs.locale, "pinChat", nil)
+}
+
+// UnpinChat says "Unpin"
+// in the language the app shows.
+//
+// The chat's menu item that takes a pinned chat out of Pinned, back among
+// the others by when it was last updated.
+func UnpinChat() string { return In(i18n.Locale()).UnpinChat() }
+
+// UnpinChat says "Unpin"
+// in the language of msgs.
+//
+// The chat's menu item that takes a pinned chat out of Pinned, back among
+// the others by when it was last updated.
+func (msgs Messages) UnpinChat() string {
+	return Catalog.Format(msgs.locale, "unpinChat", nil)
+}
+
+// GroupPinned says "Pinned"
+// in the language the app shows.
+//
+// The title of the sidebar's first group: the chats the user pinned, the
+// latest pinned first.
+func GroupPinned() string { return In(i18n.Locale()).GroupPinned() }
+
+// GroupPinned says "Pinned"
+// in the language of msgs.
+//
+// The title of the sidebar's first group: the chats the user pinned, the
+// latest pinned first.
+func (msgs Messages) GroupPinned() string {
+	return Catalog.Format(msgs.locale, "groupPinned", nil)
+}
+
 // RegenerateTitleItem says "Regenerate Title"
 // in the language the app shows.
 //
