@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"maps"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"slices"
@@ -142,6 +144,50 @@ type providerConf struct {
 	Listed  []string `json:"listed,omitempty"`
 }
 
+// customProvider is a provider the user added, as providers.json keeps
+// it: its ID, as its key and settings are kept by, its name and the API
+// it takes. Its endpoint is its providerConf's.
+type customProvider struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	API  string `json:"api"`
+}
+
+// customAPIs are the APIs a provider the user adds may take: OpenAI's
+// chat completions, or Anthropic's Messages.
+var customAPIs = []string{"openai", "anthropic"}
+
+// customKind returns the kind of the provider the user added, id, named
+// name: one that takes api (customAPIs), OpenAI's for one it does not
+// know, at the endpoint the user gives, with a key or without, and offers
+// the models it lists until the user chooses.
+func customKind(id, name, api string) *providerKind {
+	if api == "anthropic" {
+		return &providerKind{id: id, name: name, api: api, open: openAnthropic}
+	}
+	return &providerKind{id: id, name: name, api: "openai", open: openChatCompletions}
+}
+
+// apiName returns what the Providers page calls api, of customAPIs.
+func apiName(api string) string {
+	if api == "anthropic" {
+		return locales.ProviderAnthropic()
+	}
+	return locales.ProviderOpenAI()
+}
+
+// apiAbout returns what the Providers page says of api, of customAPIs.
+func apiAbout(api string) string {
+	if api == "anthropic" {
+		return locales.ProviderAnthropicAbout()
+	}
+	return locales.ProviderOpenAIAbout()
+}
+
+// added reports whether the user added kind, which has no endpoint until
+// they give it.
+func (k *providerKind) added() bool { return k.baseURL == "" }
+
 // modelRef names a model of a provider, by the provider's ID.
 type modelRef struct {
 	Provider string `json:"provider"`
@@ -149,10 +195,12 @@ type modelRef struct {
 }
 
 // providersFile is what providers.json holds, beside the chats: the
-// model a new chat asks, and each provider's settings, by its ID.
+// model a new chat asks, each provider's settings, by its ID, and the
+// providers the user added, in order.
 type providersFile struct {
 	Default   modelRef                 `json:"default,omitzero"`
 	Providers map[string]*providerConf `json:"providers,omitempty"`
+	Custom    []customProvider         `json:"custom,omitempty"`
 }
 
 // loadConf reads the providers' settings kept in dir, if any.
@@ -167,6 +215,10 @@ func (a *app) loadConf(dir string) {
 		return
 	}
 	a.confs, a.defaultModel = f.Providers, f.Default
+	a.custom = nil
+	for _, p := range f.Custom {
+		a.custom = append(a.custom, customKind(p.ID, p.Name, p.API))
+	}
 }
 
 // saveConf keeps the providers' settings, where the app has a place for
@@ -175,7 +227,11 @@ func (a *app) saveConf() {
 	if a.confPath == "" {
 		return
 	}
-	b, err := json.MarshalIndent(providersFile{Default: a.defaultModel, Providers: a.confs}, "", "  ")
+	f := providersFile{Default: a.defaultModel, Providers: a.confs}
+	for _, kind := range a.custom {
+		f.Custom = append(f.Custom, customProvider{kind.id, kind.name, kind.api})
+	}
+	b, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		return
 	}
@@ -195,6 +251,40 @@ func (a *app) conf(id string) *providerConf {
 	return c
 }
 
+// kinds returns the kinds of provider the Providers page and the
+// composer's menu list, in that order: HyperAI's, then the user's.
+func (a *app) kinds() []*providerKind {
+	kinds := make([]*providerKind, 0, len(providerKinds)+len(a.custom))
+	for i := range providerKinds {
+		kinds = append(kinds, &providerKinds[i])
+	}
+	return append(kinds, a.custom...)
+}
+
+// kindOf returns the kind of the provider id, HyperAI's or the user's,
+// nil for none.
+func (a *app) kindOf(id string) *providerKind {
+	if kind := providerKindOf(id); kind != nil {
+		return kind
+	}
+	for _, kind := range a.custom {
+		if kind.id == id {
+			return kind
+		}
+	}
+	return nil
+}
+
+// ready reports whether the provider of kind can be asked: it has a key,
+// or, of those the user added, which a local server may serve without
+// one, an endpoint.
+func (a *app) ready(kind *providerKind) bool {
+	if kind.added() {
+		return a.endpoint(kind) != ""
+	}
+	return a.key(kind.id) != ""
+}
+
 // endpoint returns where the API of kind is: the user's, else its own.
 func (a *app) endpoint(kind *providerKind) string {
 	if c := a.confs[kind.id]; c != nil && c.BaseURL != "" {
@@ -212,6 +302,9 @@ func (a *app) shownModels(kind *providerKind) []string {
 		return kind.models
 	case c.Custom:
 		return c.Models
+	case len(kind.models) == 0:
+		// Of a provider the user added, which has none of its own.
+		return c.Listed
 	}
 	if len(c.Listed) > 0 {
 		listed := slices.DeleteFunc(slices.Clone(kind.models), func(m string) bool { return !slices.Contains(c.Listed, m) })
@@ -243,7 +336,8 @@ func (a *app) key(id string) string { return a.keys[id] }
 
 // setKey keeps key as the API key of the provider id, or forgets it for
 // "", asks the providers that have one from then on, and lists the
-// models of the one keyed, which tells too whether the key serves. Where
+// models of the one keyed, which tells too whether the key serves, and of
+// one the user added, which may serve without. Where
 // the credential store cannot keep it, the key serves until the app
 // quits, and the Providers page says why.
 func (a *app) setKey(id, key string) {
@@ -272,16 +366,14 @@ func (a *app) setKey(id, key string) {
 	a.keys = keys
 	delete(a.listErrors, id)
 	a.setProviders()
-	if key != "" {
-		a.listModels(id)
-	}
+	a.listModels(id)
 }
 
 // setEndpoint makes url where the API of the provider id is, its own for
 // "", and lists its models there.
 func (a *app) setEndpoint(id, url string) {
 	url = strings.TrimRight(strings.TrimSpace(url), "/")
-	if kind := providerKindOf(id); kind != nil && url == kind.baseURL {
+	if kind := a.kindOf(id); kind != nil && url == kind.baseURL {
 		url = ""
 	}
 	a.conf(id).BaseURL = url
@@ -302,7 +394,7 @@ func (a *app) setShown(id string, models []string) {
 // addModel offers model of the provider id in the composer too, last.
 func (a *app) addModel(id, model string) {
 	model = strings.TrimSpace(model)
-	shown := a.shownModels(providerKindOf(id))
+	shown := a.shownModels(a.kindOf(id))
 	if model == "" || slices.Contains(shown, model) {
 		return
 	}
@@ -311,7 +403,7 @@ func (a *app) addModel(id, model string) {
 
 // removeModel offers model of the provider id in the composer no more.
 func (a *app) removeModel(id, model string) {
-	shown := a.shownModels(providerKindOf(id))
+	shown := a.shownModels(a.kindOf(id))
 	a.setShown(id, slices.DeleteFunc(slices.Clone(shown), func(m string) bool { return m == model }))
 }
 
@@ -323,8 +415,8 @@ const listTimeout = 20 * time.Second
 // Providers page to add of. The composer offers no more of its own models
 // than it lists.
 func (a *app) listModels(id string) {
-	kind := providerKindOf(id)
-	if kind == nil || a.key(id) == "" {
+	kind := a.kindOf(id)
+	if kind == nil || !a.ready(kind) {
 		return
 	}
 	// Opened of its own, as the composer offers none of its models where
@@ -370,27 +462,25 @@ func (a *app) listModels(id string) {
 	}()
 }
 
-// listUnlisted lists the models of the providers with a key that have
-// listed none yet, as the app starts.
+// listUnlisted lists the models of the providers that can be asked that
+// have listed none yet, as the app starts.
 func (a *app) listUnlisted() {
-	for _, kind := range providerKinds {
+	for _, kind := range a.kinds() {
 		if c := a.confs[kind.id]; c == nil || len(c.Listed) == 0 {
 			a.listModels(kind.id)
 		}
 	}
 }
 
-// setProviders makes the providers with a key and a model those the
-// composer asks, the fallback where none is. The model chosen stays where its
+// setProviders makes the providers that can be asked and have a model
+// those the composer asks, the fallback where none is. The model chosen stays where its
 // provider offers it still; otherwise the chat's is chosen, or the
 // default.
 func (a *app) setProviders() {
 	var provs []provider
-	for i := range providerKinds {
-		kind := &providerKinds[i]
-		key, models := a.key(kind.id), a.shownModels(kind)
-		if key != "" && len(models) > 0 {
-			provs = append(provs, kind.open(kind, a.endpoint(kind), key, models))
+	for _, kind := range a.kinds() {
+		if models := a.shownModels(kind); a.ready(kind) && len(models) > 0 {
+			provs = append(provs, kind.open(kind, a.endpoint(kind), a.key(kind.id), models))
 		}
 	}
 	if len(provs) == 0 && a.fallback != nil {
@@ -410,7 +500,7 @@ func (a *app) setProviders() {
 // field finds it: each provider, by its name, and its rows.
 func (a *app) providerTerms() []settingsTerm {
 	var out []settingsTerm
-	for _, kind := range providerKinds {
+	for _, kind := range a.kinds() {
 		out = append(out, settingsTerm{kind.name, terms(locales.ProviderTerms())})
 	}
 	return out
@@ -418,17 +508,26 @@ func (a *app) providerTerms() []settingsTerm {
 
 // providersPage builds the Providers page: a card of each provider, which
 // takes its API key and, once it has one, where its API is and the models
-// the composer offers of it; and where the keys are kept.
+// the composer offers of it; the card of each the user added, which takes
+// where its API is first, and a key, which it may need none of; the
+// button that adds another; and where the keys are kept.
 func (a *app) providersPage(c *ui.Context) {
-	for i := range providerKinds {
-		kind := &providerKinds[i]
+	for _, kind := range a.kinds() {
 		a.settingsCard(c, kind.name, func() {
+			if kind.added() {
+				a.addedRow(c, kind)
+				settingDivider(c)
+				a.endpointRow(c, kind)
+				settingDivider(c)
+			}
 			a.keyRow(c, kind)
-			if a.key(kind.id) == "" {
+			if !a.ready(kind) {
 				return
 			}
-			settingDivider(c)
-			a.endpointRow(c, kind)
+			if !kind.added() {
+				settingDivider(c)
+				a.endpointRow(c, kind)
+			}
 			settingDivider(c)
 			a.modelsRow(c, kind)
 			for _, model := range a.shownModels(kind) {
@@ -437,6 +536,7 @@ func (a *app) providersPage(c *ui.Context) {
 			}
 		})
 	}
+	a.addProviderCard(c)
 	note := locales.KeysKept(platform())
 	if a.keysFile != "" {
 		note = locales.KeysKeptFile(platform(), homeRelative(a.keysFile))
@@ -447,11 +547,102 @@ func (a *app) providersPage(c *ui.Context) {
 	ui.Text(c, note).FontSize(12).LineHeight(1.5).TextColor(c.Theme().TextMuted).Padding(0, 4)
 }
 
+// addProviderCard builds the button whose menu adds a provider of the
+// user's, of the API chosen, or, once one is, the card of the field that
+// takes its name.
+func (a *app) addProviderCard(c *ui.Context) {
+	api, adding := strings.CutPrefix(a.editing, "add provider ")
+	if !adding {
+		ui.Row(c).Children(func() {
+			a.settingMenuButton(c, "add provider", locales.ProviderAdd(), func(m *ui.Menu) {
+				for _, api := range customAPIs {
+					if m.Item(apiName(api)).Chosen() {
+						a.edit("add provider "+api, "")
+					}
+				}
+			})
+		})
+		return
+	}
+	a.settingsCard(c, locales.ProviderNew(apiName(api)), func() {
+		a.settingRow(c, locales.ProviderName(), locales.ProviderNameAbout(), func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				if v, ok := a.editField(c, locales.ProviderName(), locales.ProviderName(), false); ok {
+					a.addProvider(v, api)
+				}
+			})
+		})
+	})
+}
+
+// addedRow builds the first row of the card of kind, which the user
+// added: what API it takes, and the buttons that rename and remove it,
+// or, while it is being renamed, the field that takes its name.
+func (a *app) addedRow(c *ui.Context, kind *providerKind) {
+	a.settingRow(c, apiName(kind.api), apiAbout(kind.api), func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			if a.editing == "name "+kind.id {
+				if v, ok := a.editField(c, locales.ProviderName(), locales.ProviderName(), false); ok {
+					a.renameProvider(kind.id, v)
+				}
+				return
+			}
+			if a.settingButton(c, "rename provider "+kind.id, locales.ProviderRename(), false) {
+				a.edit("name "+kind.id, kind.name)
+			}
+			if a.dangerButton(c, "remove provider "+kind.id, locales.ProviderRemove()) {
+				a.askRemove(kind.id, false)
+			}
+		})
+	})
+}
+
+// addProvider adds a provider of the user's named name, last, which
+// takes api (customAPIs), and shows the field of its endpoint, which it
+// needs first.
+func (a *app) addProvider(name, api string) {
+	id := ""
+	for id == "" || a.kindOf(id) != nil {
+		id = fmt.Sprintf("custom-%08x", rand.Uint32())
+	}
+	a.custom = append(a.custom, customKind(id, strings.TrimSpace(name), api))
+	a.saveConf()
+	a.edit("endpoint "+id, "")
+}
+
+// renameProvider names name the provider id the user added.
+func (a *app) renameProvider(id, name string) {
+	a.kindOf(id).name = strings.TrimSpace(name)
+	a.saveConf()
+	a.setProviders()
+}
+
+// removeProvider removes the provider id the user added, with its
+// settings and its key; a new chat asks another where it asked it.
+func (a *app) removeProvider(id string) {
+	a.custom = slices.DeleteFunc(a.custom, func(kind *providerKind) bool { return kind.id == id })
+	delete(a.confs, id)
+	delete(a.listing, id)
+	delete(a.listErrors, id)
+	if a.defaultModel.Provider == id {
+		a.defaultModel = modelRef{}
+	}
+	a.saveConf()
+	if a.key(id) != "" {
+		a.setKey(id, "")
+		return
+	}
+	a.setProviders()
+}
+
 // keyRow builds the row of kind's API key: whether it has one, and the
 // buttons that add, change and remove it, or, while it is being added or
 // changed, the field that takes it.
 func (a *app) keyRow(c *ui.Context, kind *providerKind) {
 	about := locales.KeyNone()
+	if kind.added() {
+		about = locales.KeyOptional()
+	}
 	if a.keys[kind.id] != "" {
 		about = locales.KeySet(keyEnd(a.keys[kind.id]))
 	}
@@ -464,15 +655,15 @@ func (a *app) keyRow(c *ui.Context, kind *providerKind) {
 				return
 			}
 			if a.keys[kind.id] != "" {
-				if a.settingButton(c, "remove key "+kind.id, locales.KeyRemove(), false) {
-					a.setKey(kind.id, "")
-				}
 				if a.settingButton(c, "change key "+kind.id, locales.KeyChange(), false) {
 					a.edit("key "+kind.id, "")
 				}
+				if a.dangerButton(c, "remove key "+kind.id, locales.KeyRemove()) {
+					a.askRemove(kind.id, true)
+				}
 				return
 			}
-			if a.settingButton(c, "get key "+kind.id, locales.KeyGet(), false) {
+			if kind.keyURL != "" && a.settingButton(c, "get key "+kind.id, locales.KeyGet(), false) {
 				c.Services().OpenURL(kind.keyURL)
 			}
 			if a.settingButton(c, "add key "+kind.id, locales.KeyAdd(), false) {
@@ -483,23 +674,40 @@ func (a *app) keyRow(c *ui.Context, kind *providerKind) {
 }
 
 // endpointRow builds the row of where kind's API is, which a proxy or a
-// compatible service changes.
+// compatible service changes, and which the user gives of one they added.
 func (a *app) endpointRow(c *ui.Context, kind *providerKind) {
-	url, custom := a.endpoint(kind), a.endpoint(kind) != kind.baseURL
+	url := a.endpoint(kind)
+	changed := !kind.added() && url != kind.baseURL
 	about := locales.EndpointDefault(url)
-	if custom {
+	switch {
+	case url == "":
+		about = locales.EndpointNone()
+	case changed || kind.added():
 		about = url
 	}
 	a.settingRow(c, locales.Endpoint(), about, func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			if a.editing == "endpoint "+kind.id {
-				if v, ok := a.editField(c, kind.baseURL, locales.EndpointLabel(kind.name), false); ok {
+				placeholder := kind.baseURL
+				switch kind.api {
+				case "openai":
+					placeholder = "http://localhost:8000/v1"
+				case "anthropic":
+					placeholder = "https://api.example.com/anthropic"
+				}
+				if v, ok := a.editField(c, placeholder, locales.EndpointLabel(kind.name), false); ok {
 					a.setEndpoint(kind.id, v)
 				}
 				return
 			}
-			if custom && a.settingButton(c, "reset endpoint "+kind.id, locales.EndpointReset(), false) {
+			if changed && a.settingButton(c, "reset endpoint "+kind.id, locales.EndpointReset(), false) {
 				a.setEndpoint(kind.id, "")
+			}
+			if url == "" {
+				if a.settingButton(c, "add endpoint "+kind.id, locales.EndpointAdd(), false) {
+					a.edit("endpoint "+kind.id, "")
+				}
+				return
 			}
 			if a.settingButton(c, "change endpoint "+kind.id, locales.KeyChange(), false) {
 				a.edit("endpoint "+kind.id, url)

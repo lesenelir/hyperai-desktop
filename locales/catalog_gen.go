@@ -3514,6 +3514,274 @@ func (msgs Messages) ModelIsDefault() string {
 	return Catalog.Format(msgs.locale, "modelIsDefault", nil)
 }
 
+// ProviderAdd says "Add Provider"
+// in the language the app shows.
+//
+// The button under the Providers page's cards whose menu adds a provider of
+// the user's own, of the API chosen.
+func ProviderAdd() string { return In(i18n.Locale()).ProviderAdd() }
+
+// ProviderAdd says "Add Provider"
+// in the language of msgs.
+//
+// The button under the Providers page's cards whose menu adds a provider of
+// the user's own, of the API chosen.
+func (msgs Messages) ProviderAdd() string {
+	return Catalog.Format(msgs.locale, "providerAdd", nil)
+}
+
+// ProviderNew says "New {api} provider"
+// in the language the app shows.
+//
+// The title of the card that takes the name of a provider being added: the
+// API it takes.
+func ProviderNew(api string) string { return In(i18n.Locale()).ProviderNew(api) }
+
+// ProviderNew says "New {api} provider"
+// in the language of msgs.
+//
+// The title of the card that takes the name of a provider being added: the
+// API it takes.
+func (msgs Messages) ProviderNew(api string) string {
+	return Catalog.Format(msgs.locale, "providerNew", map[string]any{"api": api})
+}
+
+// ProviderName says "Name"
+// in the language the app shows.
+//
+// The row of the card of a provider being added, and the placeholder and
+// label of the field that takes its name, as it is added or renamed.
+func ProviderName() string { return In(i18n.Locale()).ProviderName() }
+
+// ProviderName says "Name"
+// in the language of msgs.
+//
+// The row of the card of a provider being added, and the placeholder and
+// label of the field that takes its name, as it is added or renamed.
+func (msgs Messages) ProviderName() string {
+	return Catalog.Format(msgs.locale, "providerName", nil)
+}
+
+// ProviderNameAbout says "What the composer’s menu calls it."
+// in the language the app shows.
+//
+// Under the row that takes the name of a provider being added.
+func ProviderNameAbout() string { return In(i18n.Locale()).ProviderNameAbout() }
+
+// ProviderNameAbout says "What the composer’s menu calls it."
+// in the language of msgs.
+//
+// Under the row that takes the name of a provider being added.
+func (msgs Messages) ProviderNameAbout() string {
+	return Catalog.Format(msgs.locale, "providerNameAbout", nil)
+}
+
+// ProviderOpenAI says "OpenAI-compatible"
+// in the language the app shows.
+//
+// The first row of the card of a provider the user added that takes
+// OpenAI's chat completions API, and the item of the Add Provider menu that
+// adds one.
+func ProviderOpenAI() string { return In(i18n.Locale()).ProviderOpenAI() }
+
+// ProviderOpenAI says "OpenAI-compatible"
+// in the language of msgs.
+//
+// The first row of the card of a provider the user added that takes
+// OpenAI's chat completions API, and the item of the Add Provider menu that
+// adds one.
+func (msgs Messages) ProviderOpenAI() string {
+	return Catalog.Format(msgs.locale, "providerOpenAI", nil)
+}
+
+// ProviderOpenAIAbout says "Any service of OpenAI’s chat completions API, as vLLM, LiteLLM and llama.cpp serve."
+// in the language the app shows.
+//
+// Under the first row of the card of a provider the user added that takes
+// OpenAI's chat completions API.
+func ProviderOpenAIAbout() string { return In(i18n.Locale()).ProviderOpenAIAbout() }
+
+// ProviderOpenAIAbout says "Any service of OpenAI’s chat completions API, as vLLM, LiteLLM and llama.cpp serve."
+// in the language of msgs.
+//
+// Under the first row of the card of a provider the user added that takes
+// OpenAI's chat completions API.
+func (msgs Messages) ProviderOpenAIAbout() string {
+	return Catalog.Format(msgs.locale, "providerOpenAIAbout", nil)
+}
+
+// ProviderAnthropic says "Anthropic-compatible"
+// in the language the app shows.
+//
+// The first row of the card of a provider the user added that takes
+// Anthropic's Messages API, and the item of the Add Provider menu that adds
+// one.
+func ProviderAnthropic() string { return In(i18n.Locale()).ProviderAnthropic() }
+
+// ProviderAnthropic says "Anthropic-compatible"
+// in the language of msgs.
+//
+// The first row of the card of a provider the user added that takes
+// Anthropic's Messages API, and the item of the Add Provider menu that adds
+// one.
+func (msgs Messages) ProviderAnthropic() string {
+	return Catalog.Format(msgs.locale, "providerAnthropic", nil)
+}
+
+// ProviderAnthropicAbout says "Any service of Anthropic’s Messages API, as DeepSeek, Kimi and GLM offer."
+// in the language the app shows.
+//
+// Under the first row of the card of a provider the user added that takes
+// Anthropic's Messages API.
+func ProviderAnthropicAbout() string { return In(i18n.Locale()).ProviderAnthropicAbout() }
+
+// ProviderAnthropicAbout says "Any service of Anthropic’s Messages API, as DeepSeek, Kimi and GLM offer."
+// in the language of msgs.
+//
+// Under the first row of the card of a provider the user added that takes
+// Anthropic's Messages API.
+func (msgs Messages) ProviderAnthropicAbout() string {
+	return Catalog.Format(msgs.locale, "providerAnthropicAbout", nil)
+}
+
+// ProviderRename says "Rename"
+// in the language the app shows.
+//
+// The button that renames a provider the user added.
+func ProviderRename() string { return In(i18n.Locale()).ProviderRename() }
+
+// ProviderRename says "Rename"
+// in the language of msgs.
+//
+// The button that renames a provider the user added.
+func (msgs Messages) ProviderRename() string {
+	return Catalog.Format(msgs.locale, "providerRename", nil)
+}
+
+// ProviderRemove says "Remove"
+// in the language the app shows.
+//
+// The button that removes a provider the user added, with its key and its
+// settings.
+func ProviderRemove() string { return In(i18n.Locale()).ProviderRemove() }
+
+// ProviderRemove says "Remove"
+// in the language of msgs.
+//
+// The button that removes a provider the user added, with its key and its
+// settings.
+func (msgs Messages) ProviderRemove() string {
+	return Catalog.Format(msgs.locale, "providerRemove", nil)
+}
+
+// RemoveProviderTitle says "Remove “{provider}”?"
+// in the language the app shows.
+//
+// The question of the alert removing a provider the user added.
+func RemoveProviderTitle(provider string) string {
+	return In(i18n.Locale()).RemoveProviderTitle(provider)
+}
+
+// RemoveProviderTitle says "Remove “{provider}”?"
+// in the language of msgs.
+//
+// The question of the alert removing a provider the user added.
+func (msgs Messages) RemoveProviderTitle(provider string) string {
+	return Catalog.Format(msgs.locale, "removeProviderTitle", map[string]any{"provider": provider})
+}
+
+// RemoveProviderAbout says "Its API key and settings go with it. This can't be undone."
+// in the language the app shows.
+//
+// Under the question of the alert removing a provider the user added.
+func RemoveProviderAbout() string { return In(i18n.Locale()).RemoveProviderAbout() }
+
+// RemoveProviderAbout says "Its API key and settings go with it. This can't be undone."
+// in the language of msgs.
+//
+// Under the question of the alert removing a provider the user added.
+func (msgs Messages) RemoveProviderAbout() string {
+	return Catalog.Format(msgs.locale, "removeProviderAbout", nil)
+}
+
+// RemoveKeyTitle says "Remove the {provider} API key?"
+// in the language the app shows.
+//
+// The question of the alert removing a provider's API key.
+func RemoveKeyTitle(provider string) string { return In(i18n.Locale()).RemoveKeyTitle(provider) }
+
+// RemoveKeyTitle says "Remove the {provider} API key?"
+// in the language of msgs.
+//
+// The question of the alert removing a provider's API key.
+func (msgs Messages) RemoveKeyTitle(provider string) string {
+	return Catalog.Format(msgs.locale, "removeKeyTitle", map[string]any{"provider": provider})
+}
+
+// RemoveKeyAbout says "To use it again, you’ll have to paste it again."
+// in the language the app shows.
+//
+// Under the question of the alert removing a provider's API key: the user
+// would paste it again to use it.
+func RemoveKeyAbout() string { return In(i18n.Locale()).RemoveKeyAbout() }
+
+// RemoveKeyAbout says "To use it again, you’ll have to paste it again."
+// in the language of msgs.
+//
+// Under the question of the alert removing a provider's API key: the user
+// would paste it again to use it.
+func (msgs Messages) RemoveKeyAbout() string {
+	return Catalog.Format(msgs.locale, "removeKeyAbout", nil)
+}
+
+// EndpointNone says "Not set yet"
+// in the language the app shows.
+//
+// Under the endpoint row of a provider the user added, before they give its
+// endpoint.
+func EndpointNone() string { return In(i18n.Locale()).EndpointNone() }
+
+// EndpointNone says "Not set yet"
+// in the language of msgs.
+//
+// Under the endpoint row of a provider the user added, before they give its
+// endpoint.
+func (msgs Messages) EndpointNone() string {
+	return Catalog.Format(msgs.locale, "endpointNone", nil)
+}
+
+// EndpointAdd says "Add Endpoint"
+// in the language the app shows.
+//
+// The button that shows the field that takes the endpoint of a provider the
+// user added.
+func EndpointAdd() string { return In(i18n.Locale()).EndpointAdd() }
+
+// EndpointAdd says "Add Endpoint"
+// in the language of msgs.
+//
+// The button that shows the field that takes the endpoint of a provider the
+// user added.
+func (msgs Messages) EndpointAdd() string {
+	return Catalog.Format(msgs.locale, "endpointAdd", nil)
+}
+
+// KeyOptional says "None, which a local server may not need"
+// in the language the app shows.
+//
+// Under the API key row of a provider the user added that has no key: a
+// server on the user's computer often takes none.
+func KeyOptional() string { return In(i18n.Locale()).KeyOptional() }
+
+// KeyOptional says "None, which a local server may not need"
+// in the language of msgs.
+//
+// Under the API key row of a provider the user added that has no key: a
+// server on the user's computer often takes none.
+func (msgs Messages) KeyOptional() string {
+	return Catalog.Format(msgs.locale, "keyOptional", nil)
+}
+
 // DefaultModelCard says "New chats"
 // in the language the app shows.
 //

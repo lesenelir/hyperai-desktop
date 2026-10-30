@@ -45,9 +45,9 @@ type provider interface {
 // are kept by; its name; the endpoint its API is at, which the user may
 // change, as for a proxy; where its keys are made; the models the composer offers of it until the user chooses
 // others, the first by default, as many of them as it lists; chat, which
-// tells the models it lists that chat from the others, nil for all; and
-// open, which returns the provider at an endpoint, for a key, offering
-// models.
+// tells the models it lists that chat from the others, nil for all; open,
+// which returns the provider at an endpoint, for a key, offering models;
+// and, of one the user added, api, the API it takes (customAPIs).
 type providerKind struct {
 	id, name string
 	baseURL  string
@@ -55,6 +55,7 @@ type providerKind struct {
 	models   []string
 	chat     func(model string) bool
 	open     func(k *providerKind, baseURL, key string, models []string) provider
+	api      string
 }
 
 // providerKinds are the services HyperAI talks to, in the order the
@@ -113,7 +114,7 @@ func openChatCompletions(k *providerKind, baseURL, key string, models []string) 
 }
 
 // openAI streams replies through OpenAI's chat completions API, as OpenAI,
-// Google, OpenRouter and DeepSeek take it.
+// Google, OpenRouter, DeepSeek and the providers the user adds take it.
 type openAI struct {
 	id, name, baseURL, apiKey string
 	models                    []string
@@ -124,12 +125,20 @@ func (p *openAI) ID() string       { return p.id }
 func (p *openAI) Name() string     { return p.name }
 func (p *openAI) Models() []string { return p.models }
 
+// authorize gives req the API key, where there is one: a local server
+// the user added may take none.
+func (p *openAI) authorize(req *http.Request) {
+	if p.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
+}
+
 func (p *openAI) List(ctx context.Context) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/models", nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	p.authorize(req)
 	res, err := p.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -165,7 +174,7 @@ func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta f
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	p.authorize(req)
 	// Names the app in OpenRouter's activity log; the others ignore it.
 	req.Header.Set("X-Title", "HyperAI")
 	res, err := p.client.Do(req)
@@ -232,20 +241,27 @@ func statusError(res *http.Response) error {
 
 func openAnthropic(k *providerKind, baseURL, key string, models []string) provider {
 	// Of the key and endpoint given, and not the ANTHROPIC_ variables the
-	// SDK reads of the environment otherwise.
-	client := anthropic.NewClient(option.WithoutEnvironmentDefaults(), option.WithAPIKey(key), option.WithBaseURL(baseURL))
-	return &anthropicAPI{client: client, models: models}
+	// SDK reads of the environment otherwise; with no key, for a service
+	// the user added that takes none.
+	opts := []option.RequestOption{option.WithoutEnvironmentDefaults(), option.WithBaseURL(baseURL)}
+	if key != "" {
+		opts = append(opts, option.WithAPIKey(key))
+	}
+	return &anthropicAPI{id: k.id, name: k.name, client: anthropic.NewClient(opts...), models: models, compatible: k.added()}
 }
 
 // anthropicAPI streams replies from Claude, through Anthropic's Messages
-// API and its SDK.
+// API and its SDK, or from a service the user added that takes it, which
+// is compatible.
 type anthropicAPI struct {
-	client anthropic.Client
-	models []string
+	id, name   string
+	client     anthropic.Client
+	models     []string
+	compatible bool
 }
 
-func (p *anthropicAPI) ID() string       { return "anthropic" }
-func (p *anthropicAPI) Name() string     { return "Anthropic" }
+func (p *anthropicAPI) ID() string       { return p.id }
+func (p *anthropicAPI) Name() string     { return p.name }
 func (p *anthropicAPI) Models() []string { return p.models }
 
 func (p *anthropicAPI) List(ctx context.Context) ([]string, error) {
@@ -262,7 +278,8 @@ func (p *anthropicAPI) List(ctx context.Context) ([]string, error) {
 
 // anthropicFallbacks are the models whose declines Anthropic retries on
 // another model of its choosing, in the same stream, where a request asks
-// it to. Claude Haiku has none.
+// it to. Claude Haiku has none, nor do compatible services, which may not
+// know the beta.
 var anthropicFallbacks = []string{"claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"}
 
 func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, delta func(string)) error {
@@ -278,7 +295,7 @@ func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, d
 	}
 	// Room for a long reply, which streaming lets take its time.
 	params := anthropic.BetaMessageNewParams{Model: model, MaxTokens: 64000, Messages: msgs}
-	if slices.Contains(anthropicFallbacks, model) {
+	if !p.compatible && slices.Contains(anthropicFallbacks, model) {
 		params.Betas = []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01}
 		params.Fallbacks = anthropic.BetaFallbacksParamUnion{OfDefault: constant.ValueOf[constant.Default]()}
 	}

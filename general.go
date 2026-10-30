@@ -234,6 +234,16 @@ func homeRelative(path string) string {
 // label, as the pop-up buttons look, faded where disabled: it reports a
 // click.
 func (a *app) settingButton(c *ui.Context, key, label string, disabled bool) bool {
+	return a.rowButton(c, key, label, disabled, false)
+}
+
+// dangerButton builds a button of a settings row as settingButton does,
+// labeled in the theme's Danger color, of what removes for good.
+func (a *app) dangerButton(c *ui.Context, key, label string) bool {
+	return a.rowButton(c, key, label, false, true)
+}
+
+func (a *app) rowButton(c *ui.Context, key, label string, disabled, danger bool) bool {
 	t := c.Theme()
 	btn := ui.ButtonBase(c.Key(key)).Padding(5, 10).Radius(8).Background(a.pal.composer).Border(1, t.Border).
 		Label(label).Disabled(disabled)
@@ -243,6 +253,11 @@ func (a *app) settingButton(c *ui.Context, key, label string, disabled bool) boo
 	case btn.Hovered():
 		btn.Background(a.pal.fg.Alpha(0.04).Over(a.pal.composer))
 	}
-	btn.Children(func() { ui.Text(c, label).SingleLine() })
+	btn.Children(func() {
+		text := ui.Text(c, label).SingleLine()
+		if danger {
+			text.TextColor(t.Danger)
+		}
+	})
 	return btn.Clicked()
 }

@@ -3243,3 +3243,196 @@ func TestProviders(t *testing.T) {
 		}
 	}
 }
+
+// The user adds a provider of OpenAI's API by its name and endpoint, a
+// local one that takes no key, renames it, keeps it for the next start,
+// and removes it, with its key.
+func TestCustomProvider(t *testing.T) {
+	var auth []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = append(auth, r.Header.Get("Authorization"))
+		switch r.URL.Path {
+		case "/v1/models":
+			fmt.Fprint(w, `{"data":[{"id":"qwen3-32b"},{"id":"llama-4-8b"}]}`)
+		case "/v1/chat/completions":
+			fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\ndata: [DONE]\n\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	kr := &memKeyring{secrets: map[string][]byte{}}
+	a := newApp(nil)
+	// Tall, for its card, under HyperAI's.
+	tt := ui.NewTester(a.view, 1120, 2000)
+	a.loadKeys(kr)
+	a.openSettings()
+	a.settingsPage = "providers"
+	tt.Frame()
+	if err := tt.Click("Add Provider"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("OpenAI-compatible"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("New OpenAI-compatible provider") {
+		t.Errorf("the page shows %q", tt.Texts())
+	}
+	tt.Type("My vLLM")
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if len(a.custom) != 1 || a.custom[0].name != "My vLLM" || a.editing != "endpoint "+a.custom[0].id {
+		t.Fatalf("added %v, editing %q", a.custom, a.editing)
+	}
+	id := a.custom[0].id
+	// Its endpoint, and no key, lists its models, which the composer
+	// offers, and asks them without a key.
+	tt.Type(srv.URL + "/v1/")
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if got := a.shownModels(a.kindOf(id)); !slices.Equal(got, []string{"llama-4-8b", "qwen3-32b"}) {
+		t.Fatalf("offers %q, page %q", got, tt.Texts())
+	}
+	if a.prov == nil || a.prov.ID() != id || a.prov.Name() != "My vLLM" || a.model != "llama-4-8b" {
+		t.Fatalf("asks %v's %q", a.prov, a.model)
+	}
+	if !tt.HasText("OpenAI-compatible") || !tt.HasText(srv.URL+"/v1") || !tt.HasText("None, which a local server may not need") {
+		t.Errorf("the card shows %q", tt.Texts())
+	}
+	var reply strings.Builder
+	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, func(s string) { reply.WriteString(s) }); err != nil || reply.String() != "Hi" {
+		t.Errorf("replied %q, %v", reply.String(), err)
+	}
+	if !slices.Equal(auth, []string{"", ""}) {
+		t.Errorf("sent the keys %q", auth)
+	}
+	// A key, where it takes one, goes with what it asks.
+	a.setKey(id, "sk-local")
+	if auth[len(auth)-1] != "Bearer sk-local" {
+		t.Errorf("listed with %q", auth[len(auth)-1])
+	}
+
+	if err := tt.Click("Rename"); err != nil {
+		t.Fatal(err)
+	}
+	if a.editDraft != "My vLLM" {
+		t.Errorf("the field holds %q", a.editDraft)
+	}
+	a.editDraft = "Lab"
+	tt.Frame()
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if a.prov.Name() != "Lab" || !tt.HasText("Lab") {
+		t.Errorf("renamed %q, the page shows %q", a.prov.Name(), tt.Texts())
+	}
+	a.defaultModel = modelRef{id, "qwen3-32b"}
+
+	// Kept for the next start, its key apart.
+	dir := t.TempDir()
+	a.confPath = filepath.Join(dir, "providers.json")
+	a.saveConf()
+	a.confSaver.wait()
+	b := newApp(nil)
+	b.loadConf(dir)
+	b.loadKeys(kr)
+	if b.prov == nil || b.prov.ID() != id || b.prov.Name() != "Lab" || b.model != "qwen3-32b" {
+		t.Errorf("after a restart, asks %v's %q", b.prov, b.model)
+	}
+	if kept, _ := os.ReadFile(a.confPath); strings.Contains(string(kept), "sk-local") {
+		t.Errorf("providers.json holds a key: %s", kept)
+	}
+
+	// Removing its key, or it, asks first; Escape keeps them.
+	a.askRemove(id, true)
+	tt.Frame()
+	tt.Advance(time.Second)
+	if !tt.HasText("Remove the Lab API key?") {
+		t.Fatalf("no alert asking in %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Advance(time.Second)
+	// The first row's, before its key's.
+	if err := tt.Click("Remove"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.key(id) != "sk-local" || len(a.custom) != 1 || !tt.HasText("Remove “Lab”?") {
+		t.Fatalf("key %q, kinds %v, alert in %q", a.key(id), a.custom, tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	if len(a.custom) != 0 || a.confs[id] != nil || a.key(id) != "" || a.prov != nil || a.defaultModel != (modelRef{}) || tt.HasText("Lab") {
+		t.Errorf("removed: kinds %v, conf %v, key %q, asks %v, default %+v", a.custom, a.confs[id], a.key(id), a.prov, a.defaultModel)
+	}
+	if len(kr.secrets) != 0 {
+		t.Errorf("keeps %q", kr.secrets)
+	}
+}
+
+// A provider the user adds of Anthropic's Messages API: one that lists no
+// models, so the user names those it serves, and asks without a key, and
+// without the fallbacks of Anthropic's own.
+func TestCustomAnthropicProvider(t *testing.T) {
+	var body map[string]any
+	var key, beta []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/anthropic/v1/messages" {
+			http.NotFound(w, r)
+			return
+		}
+		// The key, as the SDK sends it for its API version.
+		key, beta = append(key, r.Header.Get("X-Api-Key")+r.Header.Get("Authorization")), append(beta, r.Header.Get("Anthropic-Beta"))
+		body = nil
+		json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		event := func(name, data string) { fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, data) }
+		event("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"m","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`)
+		event("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)
+		event("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}`)
+		event("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`)
+		event("message_stop", `{"type":"message_stop"}`)
+	}))
+	defer srv.Close()
+	a := newApp(nil)
+	tt := ui.NewTester(a.view, 1120, 2000)
+	a.loadKeys(&memKeyring{secrets: map[string][]byte{}})
+	a.openSettings()
+	a.settingsPage = "providers"
+	tt.Frame()
+	if err := tt.Click("Add Provider"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("Anthropic-compatible"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Type("Proxy")
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	id := a.custom[0].id
+	a.setEndpoint(id, srv.URL+"/anthropic")
+	tt.Frame()
+	if a.listErrors[id] == "" || a.prov != nil {
+		t.Errorf("listed %q, asks %v", a.confs[id].Listed, a.prov)
+	}
+	a.addModel(id, "claude-opus-5-5")
+	if a.prov == nil || a.prov.ID() != id || a.prov.Name() != "Proxy" || a.model != "claude-opus-5-5" {
+		t.Fatalf("asks %v's %q", a.prov, a.model)
+	}
+	tt.Frame()
+	if !tt.HasText("Anthropic-compatible") {
+		t.Errorf("the card shows %q", tt.Texts())
+	}
+	var reply strings.Builder
+	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, func(s string) { reply.WriteString(s) }); err != nil || reply.String() != "Hi" {
+		t.Errorf("replied %q, %v", reply.String(), err)
+	}
+	if key[0] != "" || beta[0] != "" || body["fallbacks"] != nil {
+		t.Errorf("key %q, beta %q, fallbacks %v", key[0], beta[0], body["fallbacks"])
+	}
+	a.setKey(id, "sk-proxy")
+	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, func(string) {}); err != nil || !strings.HasSuffix(key[1], "sk-proxy") {
+		t.Errorf("with the key: %q, %v", key[1:], err)
+	}
+}

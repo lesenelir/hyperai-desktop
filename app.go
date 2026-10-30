@@ -122,8 +122,9 @@ type app struct {
 	// which keyring keeps (nil in tests), in keysFile for a development
 	// build (appKeyring); keyError is what reading or
 	// keeping them last said, "" where it went well. confs are the
-	// providers' other settings, by ID, and defaultModel the model a new
-	// chat asks, which confPath keeps ("" in tests); listing tells the
+	// providers' other settings, by ID, custom the kinds of those the user
+	// added, and defaultModel the model a new chat asks, which confPath
+	// keeps ("" in tests); listing tells the
 	// providers whose models are being listed, and listErrors why those
 	// that could not be were not. The Providers page edits the row editing
 	// in editDraft, "" for none.
@@ -136,6 +137,7 @@ type app struct {
 	keysFile     string // the file keyring keeps the keys in, "" for the credential store
 	keyError     string
 	confs        map[string]*providerConf
+	custom       []*providerKind
 	defaultModel modelRef
 	confPath     string
 	confSaver    saver
@@ -273,7 +275,8 @@ type app struct {
 	// Whether a reply that ends while the window is in the background
 	// shows a notification, which notify shows and focused tells (nil in
 	// tests), notifyError why the last could not show; and the chat
-	// asked about deleting, all of them where deletingAll, while
+	// asked about deleting, all of them where deletingAll, or the provider
+	// asked about removing, by ID, its key alone where removingKey, while
 	// confirming shows the alert that asks.
 	notifyDone  bool
 	notify      func(title, body string, clicked func(), failed func(err error))
@@ -281,6 +284,8 @@ type app struct {
 	notifyError string
 	deleting    *thread
 	deletingAll bool
+	removing    string
+	removingKey bool
 	confirming  bool
 }
 
@@ -450,30 +455,48 @@ func (a *app) askDelete(th *thread) {
 	a.deleting, a.deletingAll, a.confirming = th, th == nil, true
 }
 
+// askRemove asks whether to remove the provider id the user added, or,
+// where key, the API key of the provider id, which the alert does once it
+// is confirmed.
+func (a *app) askRemove(id string, key bool) {
+	a.removing, a.removingKey, a.confirming = id, key, true
+}
+
 // deleteAlert builds the alert that asks to delete a chat, or all of
-// them, while one is asked, and deletes what it asked about once Delete
-// is chosen.
+// them, or to remove a provider or its key, while one is asked, and
+// deletes or removes what it asked about once Delete or Remove is chosen.
 func (a *app) deleteAlert(c *ui.Context) {
 	if !a.confirming {
-		a.deleting, a.deletingAll = nil, false
+		a.deleting, a.deletingAll, a.removing, a.removingKey = nil, false, "", false
 		return
 	}
-	title, about := "", locales.DeleteUndone()
+	title, about, button := "", locales.DeleteUndone(), locales.Delete()
 	switch {
 	case a.deletingAll:
 		title, about = locales.DeleteAllTitle(), locales.DeleteAllAbout(len(a.threads))
 	case a.deleting != nil:
 		title, about = locales.DeleteChatTitle(a.deleting.Title), locales.DeleteChatAbout()
+	case a.removing != "" && a.kindOf(a.removing) != nil:
+		name := a.kindOf(a.removing).name
+		title, about, button = locales.RemoveProviderTitle(name), locales.RemoveProviderAbout(), locales.ProviderRemove()
+		if a.removingKey {
+			title, about, button = locales.RemoveKeyTitle(name), locales.RemoveKeyAbout(), locales.KeyRemove()
+		}
 	}
-	if ui.AlertDialog(c, &a.confirming, title, about, locales.Cancel(), locales.Delete()) == 1 {
-		if a.deletingAll {
+	if ui.AlertDialog(c, &a.confirming, title, about, locales.Cancel(), button) == 1 {
+		switch {
+		case a.deletingAll:
 			a.removeAll()
-		} else if a.deleting != nil {
+		case a.deleting != nil:
 			a.remove(a.deleting)
+		case a.removingKey:
+			a.setKey(a.removing, "")
+		case a.removing != "":
+			a.removeProvider(a.removing)
 		}
 	}
 	if !a.confirming {
-		a.deleting, a.deletingAll = nil, false
+		a.deleting, a.deletingAll, a.removing, a.removingKey = nil, false, "", false
 	}
 }
 
