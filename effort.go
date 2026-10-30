@@ -16,13 +16,19 @@ import (
 // telling one that does not fails the reply. Which those are:
 //
 //   - Anthropic says, of each model, in its list (Capabilities.Effort);
-//     OpenRouter (supported_parameters) and Copilot
-//     (SupportedReasoningEfforts) too. Their lists keep them
-//     (providerConf.Efforts), listed once more where kept before they were.
-//   - OpenAI's and Google's lists do not: their reasoning models are known
+//     OpenRouter (reasoning.supported_efforts) and Copilot
+//     (SupportedReasoningEfforts) too; Google, in the list of its own API,
+//     which models think, all of which take the efforts its endpoint for
+//     OpenAI's does. Their lists keep them (providerConf.Efforts), listed
+//     once more where kept before they were.
+//   - OpenAI's list says nothing of them: its reasoning models are known
 //     by their names (effortRules).
 //   - The others, DeepSeek, the servers on the user's computer and the
 //     providers the user added, take none the app can be sure of.
+//
+// Where a model of OpenAI's API refuses the effort asked anyway, it is
+// asked again without, and the efforts its error says it takes, none
+// where it says none, are kept as its from then on (tookEfforts).
 //
 // The effort goes to the provider in what the reply is asked with
 // (withEffort): Anthropic's output_config.effort, OpenAI's and Google's
@@ -56,45 +62,69 @@ func effortTitle(effort string) string {
 // listsEfforts reports whether the provider id's list says the efforts of
 // its models.
 func listsEfforts(id string) bool {
-	return id == "anthropic" || id == "openrouter" || id == "copilot"
+	return id == "anthropic" || id == "openrouter" || id == "copilot" || id == "google"
 }
 
 // effortRules returns the efforts of model of the provider id whose list
 // does not say them, by its name: OpenAI's reasoning models, GPT-5's and
-// the o series', and Google's thinking models, Gemini 2.5's and since.
+// the o series'.
 func effortRules(id, model string) []string {
-	switch id {
-	case "openai":
-		switch {
-		case strings.HasPrefix(model, "gpt-5") && !strings.Contains(model, "-chat"):
-			return []string{"minimal", "low", "medium", "high"}
-		case len(model) > 1 && model[0] == 'o' && model[1] >= '1' && model[1] <= '9':
-			return []string{"low", "medium", "high"}
-		}
-	case "google":
-		for _, v := range []string{"gemini-2.5", "gemini-3", "gemini-4"} {
-			if strings.HasPrefix(model, v) {
-				return []string{"low", "medium", "high"}
-			}
-		}
+	if id != "openai" {
+		return nil
+	}
+	switch {
+	case strings.HasPrefix(model, "gpt-5") && !strings.Contains(model, "-chat"):
+		return []string{"minimal", "low", "medium", "high"}
+	case len(model) > 1 && model[0] == 'o' && model[1] >= '1' && model[1] <= '9':
+		return []string{"low", "medium", "high"}
 	}
 	return nil
 }
 
 // effortsFor returns the efforts model of p takes, least first, nil for
-// none: as its list said them, where it says them, else by its name.
+// none: as its list said them, where it says them, or the model, refusing
+// one; else by its name.
 func (a *app) effortsFor(p provider, model string) []string {
 	if p == nil {
 		return nil
 	}
 	id := p.ID()
-	if listsEfforts(id) {
-		if c := a.confs[id]; c != nil {
-			return c.Efforts[model]
+	if c := a.confs[id]; c != nil {
+		if e, ok := c.Efforts[model]; ok {
+			return e
 		}
+	}
+	if listsEfforts(id) {
 		return nil
 	}
 	return effortRules(id, model)
+}
+
+// tookEfforts keeps of as the efforts model of the provider id takes, as
+// it said refusing the one asked, for the composer to offer those alone.
+func (a *app) tookEfforts(id, model string, of []string) {
+	c := a.conf(id)
+	if c.Efforts == nil {
+		c.Efforts = map[string][]string{}
+	}
+	c.Efforts[model] = of
+	a.saveConf()
+}
+
+// refusedEfforts reports whether msg, an error of OpenAI's API or one
+// like it, is the model's refusing the effort asked, and returns the
+// efforts it says the model takes, as OpenAI's does ("Supported values
+// are: 'low', 'medium', and 'high'."), nil for none.
+func refusedEfforts(msg string) ([]string, bool) {
+	if !strings.Contains(msg, "reasoning_effort") {
+		return nil, false
+	}
+	i := strings.Index(msg, "upported values")
+	if i < 0 {
+		return nil, true
+	}
+	words := strings.FieldsFunc(msg[i:], func(r rune) bool { return r < 'a' || r > 'z' })
+	return orderEfforts(words), true
 }
 
 // askedEffort returns the effort the composer asks of its model: the one

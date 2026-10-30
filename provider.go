@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -29,11 +30,14 @@ type turn struct {
 
 // chunk is a piece of a reply as it streams in: of its text, or of the
 // reasoning the model did before it, which some models show; or, as it
-// ends, what it took (Usage), where the provider counts it.
+// ends, what it took (Usage), where the provider counts it; or, as it
+// begins, the efforts the model takes (Efforts), nil for none, as it said
+// refusing the one asked (effort.go).
 type chunk struct {
 	Text      string
 	Reasoning string
 	Usage     *usage
+	Efforts   *[]string
 }
 
 // provider answers conversations with a language model.
@@ -152,7 +156,7 @@ type openAI struct {
 	models                    []string
 	client                    *http.Client
 	// listed are the efforts of the models List listed, as OpenRouter's
-	// list says them (effort.go).
+	// and Google's lists say them (effort.go).
 	listed map[string][]string
 }
 
@@ -172,6 +176,9 @@ func (p *openAI) authorize(req *http.Request) {
 }
 
 func (p *openAI) List(ctx context.Context) ([]string, error) {
+	if p.id == "google" && strings.HasSuffix(p.baseURL, "/openai") {
+		return p.listGoogle(ctx)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/models", nil)
 	if err != nil {
 		return nil, err
@@ -188,40 +195,114 @@ func (p *openAI) List(ctx context.Context) ([]string, error) {
 	var list struct {
 		Data []struct {
 			ID string `json:"id"`
-			// SupportedParameters are what OpenRouter's model takes:
-			// "reasoning", where it takes an effort.
-			SupportedParameters []string `json:"supported_parameters"`
+			// Reasoning is how OpenRouter's model thinks, where it does:
+			// SupportedEfforts the efforts it takes, null for all those
+			// OpenRouter does, none where they are left out.
+			Reasoning *struct {
+				SupportedEfforts json.RawMessage `json:"supported_efforts"`
+			} `json:"reasoning"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&list); err != nil {
 		return nil, fmt.Errorf("reading the models: %w", err)
 	}
 	var ids []string
-	p.listed = map[string][]string{}
+	listed := map[string][]string{}
 	for _, m := range list.Data {
 		// Google's may name a model by its path in its own API,
 		// "models/gemini-…", where chats name it bare.
 		id := strings.TrimPrefix(m.ID, "models/")
 		ids = append(ids, id)
-		if slices.Contains(m.SupportedParameters, "reasoning") {
-			p.listed[id] = []string{"low", "medium", "high"}
+		if m.Reasoning == nil || len(m.Reasoning.SupportedEfforts) == 0 {
+			continue
+		}
+		var of []string
+		if json.Unmarshal(m.Reasoning.SupportedEfforts, &of) == nil {
+			if of == nil {
+				of = efforts
+			}
+			if e := orderEfforts(of); e != nil {
+				listed[id] = e
+			}
 		}
 	}
+	p.listed = listed
+	return ids, nil
+}
+
+// listGoogle lists Google's models in its own API, page by page, as the
+// endpoint for OpenAI's that replies come through does not say which
+// think: those take the efforts reasoning_effort does, which Google makes
+// each model's levels or budgets of.
+func (p *openAI) listGoogle(ctx context.Context) ([]string, error) {
+	var ids []string
+	listed := map[string][]string{}
+	for page := ""; ; {
+		u := strings.TrimSuffix(p.baseURL, "/openai") + "/models?pageSize=1000"
+		if page != "" {
+			u += "&pageToken=" + url.QueryEscape(page)
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("x-goog-api-key", p.apiKey)
+		res, err := p.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if res.StatusCode != http.StatusOK {
+			err := statusError(res)
+			res.Body.Close()
+			return nil, err
+		}
+		var list struct {
+			Models []struct {
+				Name     string `json:"name"`
+				Thinking bool   `json:"thinking"`
+			} `json:"models"`
+			NextPageToken string `json:"nextPageToken"`
+		}
+		err = json.NewDecoder(res.Body).Decode(&list)
+		res.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("reading the models: %w", err)
+		}
+		for _, m := range list.Models {
+			id := strings.TrimPrefix(m.Name, "models/")
+			ids = append(ids, id)
+			if m.Thinking {
+				listed[id] = []string{"minimal", "low", "medium", "high"}
+			}
+		}
+		if page = list.NextPageToken; page == "" {
+			break
+		}
+	}
+	p.listed = listed
 	return ids, nil
 }
 
 func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
 	// What the reply takes, in a last chunk of the stream (stream_options),
 	// as OpenAI, Google, OpenRouter, DeepSeek, Ollama and LM Studio give
-	// it; asked again without where a server will not take it.
-	res, err := p.request(ctx, model, turns, true)
-	if err == nil && res.StatusCode == http.StatusBadRequest {
+	// it; asked again without where a server will not take it. The effort
+	// too, where the model refuses it, saying the efforts it takes, which
+	// the app offers of it from then on.
+	counted, effort := true, effortOf(ctx)
+	res, err := p.request(ctx, model, turns, counted, effort)
+	for err == nil && res.StatusCode == http.StatusBadRequest {
 		err = statusError(res)
 		res.Body.Close()
-		if !strings.Contains(err.Error(), "stream_options") {
+		if of, ok := refusedEfforts(err.Error()); ok && effort != "" {
+			effort = ""
+			delta(chunk{Efforts: &of})
+		} else if counted && strings.Contains(err.Error(), "stream_options") {
+			counted = false
+		} else {
 			return err
 		}
-		res, err = p.request(ctx, model, turns, false)
+		res, err = p.request(ctx, model, turns, counted, effort)
 	}
 	if err != nil {
 		return err
@@ -345,13 +426,13 @@ func openAIMessages(turns []turn) []map[string]any {
 
 // request asks model to reply to turns, streamed, the usage too where
 // usage: the response, whose status the caller reads.
-func (p *openAI) request(ctx context.Context, model string, turns []turn, usage bool) (*http.Response, error) {
+func (p *openAI) request(ctx context.Context, model string, turns []turn, usage bool, effort string) (*http.Response, error) {
 	fields := map[string]any{"model": model, "messages": openAIMessages(turns), "stream": true}
 	if usage {
 		fields["stream_options"] = map[string]any{"include_usage": true}
 	}
 	// The effort asked, as OpenRouter takes it, or OpenAI and Google.
-	if e := effortOf(ctx); e != "" {
+	if e := effort; e != "" {
 		if p.id == "openrouter" {
 			fields["reasoning"] = map[string]any{"effort": e}
 		} else {

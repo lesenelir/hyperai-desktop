@@ -388,10 +388,12 @@ A small button that floats over the conversation (scroll to end) rests at
   over a menu of Default (none sent: the model's own) and the efforts the
   model takes, least first, the one chosen checked; only where the model
   takes any, as telling one that takes none fails the reply. Which those
-  are: Anthropic's, OpenRouter's and Copilot's lists say (providers.json
-  keeps it, listed once more where kept before); OpenAI's reasoning models
-  (GPT-5, the o series) and Google's thinking ones (Gemini 2.5 and since)
-  by their names; none of the others. It goes as each API takes it
+  are: Anthropic's, OpenRouter's and Copilot's lists say, and Google's own
+  which models think (providers.json keeps it, listed once more where kept
+  before); OpenAI's, whose list says nothing of them, by their names (GPT-5,
+  the o series), where a model that refuses the effort asked is asked again
+  without, and offers from then on those its error says it takes; none of
+  the others. It goes as each API takes it
   (output_config.effort, reasoning_effort, reasoning.effort, Copilot's
   session), kept with the chat, and the one chosen last is a new chat's
   (layout.json).

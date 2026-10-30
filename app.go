@@ -526,8 +526,16 @@ func (a *app) ask(th *thread) {
 		}
 		return prov.Stream(ctx, model, turns, delta)
 	}
+	// What came, and the efforts the model said it takes, refusing the one
+	// asked.
+	take := func(ch chunk) {
+		if ch.Efforts != nil {
+			a.tookEfforts(prov.ID(), model, *ch.Efforts)
+		}
+		reply.add(ch)
+	}
 	if a.post == nil {
-		finish(stream(reply.add))
+		finish(stream(take))
 		return
 	}
 	// The model streams on a goroutine of its own, and the view shows what
@@ -537,7 +545,7 @@ func (a *app) ask(th *thread) {
 		batch := newBatcher(func(ch chunk) {
 			a.post(func() {
 				if reply.streaming {
-					reply.add(ch)
+					take(ch)
 				}
 			})
 		})

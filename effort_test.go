@@ -17,8 +17,8 @@ import (
 	"hyperai-desktop/locales"
 )
 
-// OpenAI's and Google's models take efforts by their names; the others'
-// none, but as their lists say.
+// OpenAI's models take efforts by their names; the others' none, but as
+// their lists say.
 func TestEffortRules(t *testing.T) {
 	for _, c := range []struct {
 		id, model string
@@ -30,9 +30,7 @@ func TestEffortRules(t *testing.T) {
 		{"openai", "o3", []string{"low", "medium", "high"}},
 		{"openai", "o4-mini", []string{"low", "medium", "high"}},
 		{"openai", "gpt-4o", nil},
-		{"google", "gemini-3.8-flash", []string{"low", "medium", "high"}},
-		{"google", "gemini-2.5-pro", []string{"low", "medium", "high"}},
-		{"google", "gemini-2.0-flash", nil},
+		{"google", "gemini-3.8-flash", nil},
 		{"deepseek", "deepseek-reasoner", nil},
 		{"ollama", "gpt-oss:20b", nil},
 	} {
@@ -43,8 +41,9 @@ func TestEffortRules(t *testing.T) {
 }
 
 // Anthropic's list says each model's efforts, which the providers' list
-// keeps, listing once more those kept before; OpenRouter's, where a model
-// takes reasoning.
+// keeps, listing once more those kept before; OpenRouter's, those it says
+// or all where it says null; Google's own, which models think, page by
+// page.
 func TestEffortsListed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -73,15 +72,96 @@ func TestEffortsListed(t *testing.T) {
 	}
 
 	or := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"data":[{"id":"anthropic/claude-opus-5.5","supported_parameters":["tools","reasoning"]},{"id":"meta/llama","supported_parameters":["tools"]}]}`)
+		fmt.Fprint(w, `{"data":[{"id":"anthropic/claude-opus-5.5","reasoning":{"supported_efforts":["max","xhigh","high","medium","low","none"]}},`+
+			`{"id":"openai/gpt-5","reasoning":{"supported_efforts":null}},{"id":"x/fixed","reasoning":{"mandatory":true}},{"id":"meta/llama"}]}`)
 	}))
 	defer or.Close()
 	p := &openAI{id: "openrouter", baseURL: or.URL, client: or.Client()}
 	if _, err := p.List(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if got := p.ListedEfforts(); len(got) != 1 || !slices.Equal(got["anthropic/claude-opus-5.5"], []string{"low", "medium", "high"}) {
+	if got := p.ListedEfforts(); len(got) != 2 || !slices.Equal(got["anthropic/claude-opus-5.5"], []string{"low", "medium", "high", "xhigh", "max"}) ||
+		!slices.Equal(got["openai/gpt-5"], efforts) {
 		t.Errorf("OpenRouter's %v", got)
+	}
+
+	var keys []string
+	g := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		keys = append(keys, r.Header.Get("x-goog-api-key"))
+		if r.URL.Path != "/v1beta/models" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("pageToken") == "" {
+			fmt.Fprint(w, `{"models":[{"name":"models/gemini-3.8-flash","thinking":true},{"name":"models/gemini-2.0-flash"}],"nextPageToken":"2"}`)
+			return
+		}
+		fmt.Fprint(w, `{"models":[{"name":"models/gemini-4-argon","thinking":true}]}`)
+	}))
+	defer g.Close()
+	p = &openAI{id: "google", baseURL: g.URL + "/v1beta/openai", apiKey: "k", client: g.Client()}
+	ids, err := p.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	thinks := []string{"minimal", "low", "medium", "high"}
+	if got := p.ListedEfforts(); !slices.Equal(ids, []string{"gemini-3.8-flash", "gemini-2.0-flash", "gemini-4-argon"}) ||
+		len(got) != 2 || !slices.Equal(got["gemini-3.8-flash"], thinks) || !slices.Equal(got["gemini-4-argon"], thinks) ||
+		!slices.Equal(keys, []string{"k", "k"}) {
+		t.Errorf("Google's %q: %v, keys %q", ids, got, keys)
+	}
+}
+
+// A model of OpenAI's API that refuses the effort asked is asked again
+// without, and offers from then on the efforts its error says it takes,
+// none where it says none.
+func TestEffortRefused(t *testing.T) {
+	refusal := ""
+	var asked []any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		asked = append(asked, body["reasoning_effort"])
+		if body["reasoning_effort"] != nil && refusal != "" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":{"message":%q,"param":"reasoning_effort"}}`, refusal)
+			return
+		}
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\ndata: [DONE]\n\n")
+	}))
+	defer srv.Close()
+	a := newApp(nil)
+	a.keys = map[string]string{"openai": "k"}
+	a.conf("openai").BaseURL = srv.URL
+	a.conf("openai").Listed = []string{"gpt-5", "gpt-5-nano"}
+	a.setProviders()
+	p := a.providerOf(modelRef{"openai", "gpt-5"})
+	if p == nil {
+		t.Fatal("no OpenAI")
+	}
+
+	refusal = "Unsupported value: 'reasoning_effort' does not support 'minimal' with this model. Supported values are: 'low', 'medium', and 'high'."
+	a.pick(p, "gpt-5")
+	a.effort = "minimal"
+	a.send("Hi")
+	if th := a.current(); th.Messages[len(th.Messages)-1].Text != "Hi" || !slices.Equal(asked, []any{"minimal", nil}) {
+		t.Fatalf("asked %v, replied %+v", asked, th.Messages)
+	}
+	if got := a.effortsFor(p, "gpt-5"); !slices.Equal(got, []string{"low", "medium", "high"}) || a.askedEffort() != "" {
+		t.Errorf("then offers %q, asks %q", got, a.askedEffort())
+	}
+
+	refusal = "Unsupported parameter: 'reasoning_effort' is not supported with this model."
+	asked = nil
+	a.pick(p, "gpt-5-nano")
+	a.effort = "high"
+	a.send("Again")
+	if !slices.Equal(asked, []any{"high", nil}) || a.effortsFor(p, "gpt-5-nano") != nil {
+		t.Errorf("asked %v, then offers %q", asked, a.effortsFor(p, "gpt-5-nano"))
+	}
+	// Kept, as the providers' settings are.
+	if e, ok := a.confs["openai"].Efforts["gpt-5-nano"]; !ok || e != nil {
+		t.Errorf("kept %v", a.confs["openai"].Efforts)
 	}
 }
 
