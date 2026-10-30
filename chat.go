@@ -752,9 +752,9 @@ func (a *app) composerTools(c *ui.Context, ready bool) ui.Element {
 	return row
 }
 
-// askForProvider says, as the user sends while no provider has an API
-// key, that one needs a key first, with the button that goes to the page
-// that takes it; the draft stays. Sending again shows the toast anew,
+// askForProvider says, as the user sends while no provider can be asked,
+// that one needs a key, or a local server on, first, with the button that
+// goes to the page that sets them up; the draft stays. Sending again shows the toast anew,
 // rather than another.
 func (a *app) askForProvider(c *ui.Context) {
 	c.AddToast(ui.Toast{ID: "no provider", Title: locales.NoProviderTitle(), Description: locales.NoProviderAbout(),
@@ -762,7 +762,7 @@ func (a *app) askForProvider(c *ui.Context) {
 }
 
 // modelPicker builds the button that chooses the model to ask, or, where
-// no provider has a key, that goes to the page that takes one.
+// no provider can be asked, that goes to the page that sets one up.
 func (a *app) modelPicker(c *ui.Context) {
 	t := c.Theme()
 	if a.prov == nil {

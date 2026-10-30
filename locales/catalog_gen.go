@@ -1380,13 +1380,13 @@ func (msgs Messages) PageProviders() string {
 	return Catalog.Format(msgs.locale, "pageProviders", nil)
 }
 
-// PageProvidersAbout says "Where replies come from: the services HyperAI asks, with your API key for each."
+// PageProvidersAbout says "Where replies come from: the services HyperAI asks, with your API keys, and the servers on this computer."
 // in the language the app shows.
 //
 // Under the Providers page's title.
 func PageProvidersAbout() string { return In(i18n.Locale()).PageProvidersAbout() }
 
-// PageProvidersAbout says "Where replies come from: the services HyperAI asks, with your API key for each."
+// PageProvidersAbout says "Where replies come from: the services HyperAI asks, with your API keys, and the servers on this computer."
 // in the language of msgs.
 //
 // Under the Providers page's title.
@@ -3938,17 +3938,17 @@ func (msgs Messages) DefaultModelTerms() string {
 	return Catalog.Format(msgs.locale, "defaultModelTerms", nil)
 }
 
-// NoteAddKey says "Add an API key to start chatting"
+// NoteAddKey says "Set up a provider to start chatting"
 // in the language the app shows.
 //
-// The link at the foot of an empty chat while no provider has an API key,
+// The link at the foot of an empty chat while no provider can be asked,
 // which opens the Providers page.
 func NoteAddKey() string { return In(i18n.Locale()).NoteAddKey() }
 
-// NoteAddKey says "Add an API key to start chatting"
+// NoteAddKey says "Set up a provider to start chatting"
 // in the language of msgs.
 //
-// The link at the foot of an empty chat while no provider has an API key,
+// The link at the foot of an empty chat while no provider can be asked,
 // which opens the Providers page.
 func (msgs Messages) NoteAddKey() string {
 	return Catalog.Format(msgs.locale, "noteAddKey", nil)
@@ -3970,16 +3970,16 @@ func (msgs Messages) ModelAddProvider() string {
 	return Catalog.Format(msgs.locale, "modelAddProvider", nil)
 }
 
-// DefaultModelNone says "No provider has an API key yet."
+// DefaultModelNone says "No provider is set up yet."
 // in the language the app shows.
 //
-// Under the Default model page's row while no provider has an API key.
+// Under the Default model page's row while no provider can be asked.
 func DefaultModelNone() string { return In(i18n.Locale()).DefaultModelNone() }
 
-// DefaultModelNone says "No provider has an API key yet."
+// DefaultModelNone says "No provider is set up yet."
 // in the language of msgs.
 //
-// Under the Default model page's row while no provider has an API key.
+// Under the Default model page's row while no provider can be asked.
 func (msgs Messages) DefaultModelNone() string {
 	return Catalog.Format(msgs.locale, "defaultModelNone", nil)
 }
@@ -4000,18 +4000,18 @@ func (msgs Messages) NoProviderTitle() string {
 	return Catalog.Format(msgs.locale, "noProviderTitle", nil)
 }
 
-// NoProviderAbout says "Add an API key of OpenAI, Anthropic, Google, OpenRouter or DeepSeek to send messages."
+// NoProviderAbout says "Add an API key, or turn on a local server, to send messages."
 // in the language the app shows.
 //
 // Under the title of the toast that shows as the user sends while no
-// provider has an API key.
+// provider can be asked: none has an API key, and no local server is on.
 func NoProviderAbout() string { return In(i18n.Locale()).NoProviderAbout() }
 
-// NoProviderAbout says "Add an API key of OpenAI, Anthropic, Google, OpenRouter or DeepSeek to send messages."
+// NoProviderAbout says "Add an API key, or turn on a local server, to send messages."
 // in the language of msgs.
 //
 // Under the title of the toast that shows as the user sends while no
-// provider has an API key.
+// provider can be asked: none has an API key, and no local server is on.
 func (msgs Messages) NoProviderAbout() string {
 	return Catalog.Format(msgs.locale, "noProviderAbout", nil)
 }

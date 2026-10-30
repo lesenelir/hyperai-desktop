@@ -3033,7 +3033,7 @@ func TestProviders(t *testing.T) {
 		if len(a.threads) != 0 || a.draft != "Hello" || tt.HasText("hyperai-demo") {
 			t.Fatalf("%s without a key: chats %d, draft %q, texts %q", how, len(a.threads), a.draft, tt.Texts())
 		}
-		if texts("Add an API key of OpenAI, Anthropic, Google, OpenRouter or DeepSeek to send messages.") != 1 || texts("No provider yet") != 1 {
+		if texts("Add an API key, or turn on a local server, to send messages.") != 1 || texts("No provider yet") != 1 {
 			t.Fatalf("%s: no one toast that says why in %q", how, tt.Texts())
 		}
 	}
@@ -3063,13 +3063,13 @@ func TestProviders(t *testing.T) {
 	a.openSettings()
 	a.settingsPage = "model"
 	tt.Frame()
-	if !tt.HasText("No provider has an API key yet.") {
+	if !tt.HasText("No provider is set up yet.") {
 		t.Errorf("the Default model page shows %q", tt.Texts())
 	}
 	a.closeSettings()
 	a.draft = ""
 	tt.Frame()
-	if err := tt.Click("Add an API key to start chatting"); err != nil {
+	if err := tt.Click("Set up a provider to start chatting"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Advance(time.Second)

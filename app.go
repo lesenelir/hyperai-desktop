@@ -145,7 +145,7 @@ type app struct {
 	listErrors   map[string]string
 	editing      string
 	editDraft    string
-	needProvider bool // the composer sent while no provider has a key
+	needProvider bool // the composer sent while no provider can be asked
 	// collapsed hides the sidebar, sideWidth wide as it shows; resizing
 	// tells that the pointer drags its edge, which pressed it resizeFrom
 	// wide and went resizeBy since (layout.go).
@@ -289,7 +289,7 @@ type app struct {
 	confirming  bool
 }
 
-// newApp returns the app, which asks p until a provider has an API key
+// newApp returns the app, which asks p until a provider can be asked
 // (loadKeys): nothing, for nil, until then.
 func newApp(p provider) *app {
 	a := &app{fallback: p, sideWidth: sidebarWidth, theme: "system",
