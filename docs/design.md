@@ -255,7 +255,9 @@ A small button that floats over the conversation (scroll to end) rests at
   and the sidebar, has Export, and under it PDF…, HTML… and JSON…, which
   ask where in the system's dialog, from Documents, named by the title;
   a toast then says it went, with Show in Finder, or why it could not.
-  What goes is the path shown. The page holds all it shows: the light
+  The page and the PDF hold the path shown, a message with versions
+  marked under it, "Version 2 of 3" at 12 `fg/70`; to export another,
+  show it first. The page holds all it shows: the light
   palette's colors, the system font at 15 on lines of 1.6, 780 wide at
   most; the questions in their bubbles on the right, their images in
   them; the replies' Markdown, their reasoning folded under how long it
@@ -265,8 +267,10 @@ A small button that floats over the conversation (scroll to end) rests at
   script and loads nothing (its Content Security Policy), whatever a
   reply wrote as HTML. The PDF is that page, A4, printed by the system's
   web view in a window that never shows. The JSON is the chat for
-  programs: its messages' roles, texts, times, files by name and type,
-  reasoning, errors and usage.
+  programs, the whole tree: every version of every message, oldest first,
+  each with its ID and the one it follows (`parent`, 0 for the first), its
+  role, text, time, files by name and type, reasoning, error and usage;
+  and `path`, the IDs of those shown, in order.
 - **Math** in replies — `$…$`, `\(…\)`, `$$…$$` and `\[…\]`, but not
   dollars of money ($5) — is set as KaTeX sets it, by RaTeX
   ([ratex/](../ratex), [katex.go](../katex.go)), a KaTeX-compatible

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -182,4 +183,57 @@ func TestExportMenu(t *testing.T) {
 		t.Errorf("not exported from the menu: %v", err)
 	}
 	_ = th
+}
+
+// A chat of versions: its JSON holds the whole tree, every version, each by
+// the one it follows, and the path shown; its page, the path shown, its
+// messages of versions marked as such.
+func TestExportVersions(t *testing.T) {
+	a := newApp(&counter{})
+	a.send("Q1")
+	th := a.current()
+	a.regenerate(th, 1)         // a reply beside the first
+	a.resend(th, 0, "Q1 again") // a question beside the first, and its reply
+	dir := t.TempDir()
+	to := filepath.Join(dir, "tree.json")
+	a.saveFile = func(title, path, ext string) string { return to }
+	a.exportChat(th, exportJSON)
+	b, err := os.ReadFile(to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Path     []int
+		Messages []struct {
+			ID, Parent int
+			Text       string
+		}
+	}
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	var tree []string
+	for _, m := range got.Messages {
+		tree = append(tree, fmt.Sprintf("%d<%d %s", m.ID, m.Parent, m.Text))
+	}
+	if want := "2<0 Q1, 3<2 Answer 1, 4<2 Answer 2, 5<0 Q1 again, 6<5 Answer 3"; strings.Join(tree, ", ") != want {
+		t.Errorf("tree %q, want %q", strings.Join(tree, ", "), want)
+	}
+	if !slices.Equal(got.Path, []int{5, 6}) {
+		t.Errorf("path %v", got.Path)
+	}
+
+	page := a.exportDoc(th, true).html()
+	if !strings.Contains(page, `<div class="bubble">Q1 again</div><p class="version">`+locales.VersionOf(2, 2)+`</p>`) ||
+		strings.Count(page, `class="version"`) != 1 || strings.Contains(page, "Answer 1") {
+		t.Errorf("the page of the second question: %s", page[strings.Index(page, "<main>"):])
+	}
+	// Back to the first question: its version, and its reply's, the second
+	// asked for, shown last.
+	a.showVersion(th, 0, th.versions(th.Messages[0])[0])
+	page = a.exportDoc(th, true).html()
+	if !strings.Contains(page, `<div class="bubble">Q1</div><p class="version">`+locales.VersionOf(1, 2)+`</p>`) ||
+		!strings.Contains(page, "Answer 2") || !strings.Contains(page, `<p class="version">`+locales.VersionOf(2, 2)+`</p></section>`) {
+		t.Errorf("the page of the first question: %s", page[strings.Index(page, "<main>"):])
+	}
 }

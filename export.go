@@ -26,7 +26,10 @@ import (
 // a page (HTML) that holds all it shows, its images and the fonts of its
 // math in it; the same page printed as a PDF, A4, by the system's web view
 // (printPDF); and JSON, for programs. What is exported is the path shown,
-// as Copy as Markdown copies it. The chat is read on the main thread,
+// as Copy as Markdown copies it, its messages with versions marked as
+// such (Version 2 of 3); the JSON holds the whole tree, every version of
+// every message, each with the one it follows, and the path shown, by
+// their IDs. The chat is read on the main thread,
 // where it is safe to, and its math laid out there, where RaTeX is
 // (exportDoc); the files are read and written on a goroutine.
 
@@ -53,10 +56,14 @@ type exportFile struct {
 	path string
 }
 
-// exportMsg is a message as exported. body is a reply's Markdown as HTML,
-// its math drawn (exportDoc), and thought what the fold over its
-// reasoning says.
+// exportMsg is a message as exported: its ID and the one it follows, 0
+// for a chat's first, by which the JSON's tree holds together. body is a
+// reply's Markdown as HTML, its math drawn (exportDoc), thought what the
+// fold over its reasoning says, and version which of its versions it is,
+// where it has others.
 type exportMsg struct {
+	ID         int          `json:"id"`
+	Parent     int          `json:"parent"`
 	Role       string       `json:"role"`
 	Text       string       `json:"text"`
 	Time       time.Time    `json:"time,omitzero"`
@@ -68,16 +75,20 @@ type exportMsg struct {
 	Usage      *usage       `json:"usage,omitempty"`
 	body       string
 	thought    string
+	version    string
 }
 
 // exportDoc is a chat as exported, with what its page says in the app's
-// language, and the KaTeX fonts its math uses.
+// language, and the KaTeX fonts its math uses. Messages are the path shown,
+// for a page; for the JSON, every version of every message, oldest first,
+// Path the IDs of those shown, in order.
 type exportDoc struct {
 	Title    string      `json:"title"`
 	Model    string      `json:"model,omitempty"`
 	Provider string      `json:"provider,omitempty"`
 	Updated  time.Time   `json:"updated,omitzero"`
 	Exported time.Time   `json:"exported"`
+	Path     []int       `json:"path"`
 	Messages []exportMsg `json:"messages"`
 	lang     string
 	meta     string
@@ -86,9 +97,10 @@ type exportDoc struct {
 	pal      *palette
 }
 
-// exportDoc returns th as exported, now; its replies' Markdown as HTML,
-// where page, its math laid out by RaTeX, where it started and the
-// settings set math.
+// exportDoc returns th as exported, now: where page, the path shown, its
+// replies' Markdown as HTML, its math laid out by RaTeX, where it started
+// and the settings set math, and its messages' versions marked; else
+// every version of every message, the tree the JSON holds.
 func (a *app) exportDoc(th *thread, page bool) *exportDoc {
 	now := time.Now()
 	lang := i18n.Locale()
@@ -101,11 +113,21 @@ func (a *app) exportDoc(th *thread, page bool) *exportDoc {
 		d.meta = strings.TrimPrefix(th.Model+" · "+updated, " · ")
 	}
 	fonts := map[string]bool{}
+	msgs := th.Messages
+	if !page {
+		msgs = th.all()
+		slices.SortFunc(msgs, func(x, y *message) int { return x.ID - y.ID })
+	}
 	for _, m := range th.Messages {
+		if !m.streaming {
+			d.Path = append(d.Path, m.ID)
+		}
+	}
+	for _, m := range msgs {
 		if m.streaming {
 			continue
 		}
-		e := exportMsg{Role: m.Role, Text: m.Text, Time: m.Time, Reasoning: strings.TrimSpace(m.Reasoning),
+		e := exportMsg{ID: m.ID, Parent: m.Parent, Role: m.Role, Text: m.Text, Time: m.Time, Reasoning: strings.TrimSpace(m.Reasoning),
 			Elapsed: m.Elapsed, FirstToken: m.FirstToken, Usage: m.Usage}
 		if m.Error != "" {
 			e.Error = m.errorText()
@@ -122,6 +144,9 @@ func (a *app) exportDoc(th *thread, page bool) *exportDoc {
 			if e.Reasoning != "" {
 				e.thought = locales.ThoughtFor(seconds(m.Reasoned))
 			}
+		}
+		if vs := th.versions(m); page && len(vs) > 1 {
+			e.version = locales.VersionOf(slices.Index(vs, m)+1, len(vs))
 		}
 		d.Messages = append(d.Messages, e)
 	}
@@ -283,6 +308,8 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid %[4]s}
 .thoughts summary{cursor:default}
 .thoughts div{white-space:pre-wrap;border-left:2px solid %[4]s;padding-left:12px;margin-top:8px}
 .error{color:%[7]s;font-size:14px}
+.version{font-size:12px;color:%[3]s;margin:0}
+.reply .version{margin-top:8px}
 a{color:%[8]s}
 code{font:0.875em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:%[8]s}
 pre{background:%[6]s;border:1px solid %[4]s;border-radius:10px;padding:12px 14px;overflow-x:auto}
@@ -318,6 +345,9 @@ svg.tex{overflow:visible}
 			if m.Text != "" {
 				fmt.Fprintf(&b, `<div class="bubble">%s</div>`, html.EscapeString(m.Text))
 			}
+			if m.version != "" {
+				fmt.Fprintf(&b, `<p class="version">%s</p>`, html.EscapeString(m.version))
+			}
 			b.WriteString("</section>\n")
 			continue
 		}
@@ -329,6 +359,9 @@ svg.tex{overflow:visible}
 		b.WriteString(m.body)
 		if m.Error != "" {
 			fmt.Fprintf(&b, `<p class="error">%s</p>`, html.EscapeString(m.Error))
+		}
+		if m.version != "" {
+			fmt.Fprintf(&b, `<p class="version">%s</p>`, html.EscapeString(m.version))
 		}
 		b.WriteString("</section>\n")
 	}
