@@ -216,12 +216,12 @@ func (p *held) Name() string                               { return "Held" }
 func (p *held) Models() []string                           { return []string{"held"} }
 func (p *held) List(ctx context.Context) ([]string, error) { return p.Models(), nil }
 
-func (p *held) Stream(ctx context.Context, model string, turns []turn, delta func(string)) error {
+func (p *held) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
 	q := turns[len(turns)-1].Content
-	delta("Reply to " + q)
+	delta(chunk{Text: "Reply to " + q})
 	select {
 	case <-p.release(q):
-		delta(", done.")
+		delta(chunk{Text: ", done."})
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -511,7 +511,7 @@ func TestChatCompletionsStream(t *testing.T) {
 	defer srv.Close()
 	p := &openAI{name: "OpenRouter", baseURL: srv.URL, apiKey: "key", models: []string{"m"}, client: srv.Client()}
 	var got strings.Builder
-	if err := p.Stream(context.Background(), "m", []turn{{Role: "user", Content: "Hi"}}, func(s string) { got.WriteString(s) }); err != nil {
+	if err := p.Stream(context.Background(), "m", []turn{{Role: "user", Content: "Hi"}}, func(ch chunk) { got.WriteString(ch.Text) }); err != nil {
 		t.Fatal(err)
 	}
 	if got.String() != "Hello!" {
@@ -520,12 +520,12 @@ func TestChatCompletionsStream(t *testing.T) {
 
 	// An error after the reply began ends it.
 	failing := &openAI{baseURL: srv.URL, apiKey: "key", client: &http.Client{Transport: failTransport{srv.Client().Transport}}}
-	if err := failing.Stream(context.Background(), "m", nil, func(string) {}); err == nil || err.Error() != "Provider returned error" {
+	if err := failing.Stream(context.Background(), "m", nil, func(chunk) {}); err == nil || err.Error() != "Provider returned error" {
 		t.Errorf("error %v for an error mid-stream", err)
 	}
 
 	p.apiKey = "wrong"
-	if err := p.Stream(context.Background(), "m", nil, func(string) {}); err == nil || !strings.Contains(err.Error(), "400") {
+	if err := p.Stream(context.Background(), "m", nil, func(chunk) {}); err == nil || !strings.Contains(err.Error(), "400") {
 		t.Errorf("error %v for a bad key", err)
 	}
 }
@@ -590,29 +590,29 @@ func (f failTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 func TestBatcher(t *testing.T) {
 	var mu sync.Mutex
 	var commits []string
-	b := newBatcher(func(s string) {
+	b := newBatcher(func(ch chunk) {
 		mu.Lock()
-		commits = append(commits, s)
+		commits = append(commits, ch.Reasoning+">"+ch.Text)
 		mu.Unlock()
 	})
 	// The first chunk commits at once; those coming within commitInterval
-	// of it wait and commit together.
-	b.add("a")
+	// of it wait and commit together, their reasoning and text each.
+	b.add(chunk{Reasoning: "a"})
 	time.Sleep(commitInterval / 5)
-	for _, s := range []string{"b", "c", "d"} {
-		b.add(s)
+	for _, ch := range []chunk{{Reasoning: "b"}, {Text: "c"}, {Text: "d"}} {
+		b.add(ch)
 		time.Sleep(time.Millisecond)
 	}
 	time.Sleep(2 * commitInterval)
-	b.add("e")
-	b.add("f")
+	b.add(chunk{Text: "e"})
+	b.add(chunk{Text: "f"})
 	b.close() // commits what is left at once
-	b.add("g")
+	b.add(chunk{Text: "g"})
 	time.Sleep(2 * commitInterval)
 	mu.Lock()
 	defer mu.Unlock()
-	if got := strings.Join(commits, "|"); got != "a|bcd|ef" {
-		t.Errorf("commits %q, want a|bcd|ef", got)
+	if got := strings.Join(commits, "|"); got != "a>|b>cd|>ef" {
+		t.Errorf("commits %q, want a>|b>cd|>ef", got)
 	}
 }
 
@@ -2824,7 +2824,7 @@ func TestAnthropicStream(t *testing.T) {
 	p := client("key")
 	turns := []turn{{Role: "user", Content: "Hi"}, {Role: "assistant", Content: "Hello."}, {Role: "user", Content: "Again"}}
 	var got strings.Builder
-	if err := p.Stream(context.Background(), "claude-opus-5-5", turns, func(s string) { got.WriteString(s) }); err != nil {
+	if err := p.Stream(context.Background(), "claude-opus-5-5", turns, func(ch chunk) { got.WriteString(ch.Text) }); err != nil {
 		t.Fatal(err)
 	}
 	if got.String() != "Hello!" {
@@ -2839,7 +2839,7 @@ func TestAnthropicStream(t *testing.T) {
 	if body["fallbacks"] != "default" || !strings.Contains(beta, "server-side-fallback-2026-07-01") || body["max_tokens"] != float64(64000) {
 		t.Errorf("fallbacks %v, beta %q, max_tokens %v", body["fallbacks"], beta, body["max_tokens"])
 	}
-	if err := p.Stream(context.Background(), "claude-haiku-5-5", turns, func(string) {}); err != nil || body["fallbacks"] != nil {
+	if err := p.Stream(context.Background(), "claude-haiku-5-5", turns, func(chunk) {}); err != nil || body["fallbacks"] != nil {
 		t.Errorf("Haiku: error %v, fallbacks %v", err, body["fallbacks"])
 	}
 
@@ -2849,7 +2849,7 @@ func TestAnthropicStream(t *testing.T) {
 		{"key", "overloaded", "Overloaded"},
 		{"wrong", "claude-opus-5-5", "401 Unauthorized: invalid x-api-key"},
 	} {
-		if err := client(c.key).Stream(context.Background(), c.model, turns, func(string) {}); err == nil || err.Error() != c.want {
+		if err := client(c.key).Stream(context.Background(), c.model, turns, func(chunk) {}); err == nil || err.Error() != c.want {
 			t.Errorf("%s with %q: error %v, want %q", c.model, c.key, err, c.want)
 		}
 	}
@@ -3301,7 +3301,7 @@ func TestCustomProvider(t *testing.T) {
 		t.Errorf("the card shows %q", tt.Texts())
 	}
 	var reply strings.Builder
-	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, func(s string) { reply.WriteString(s) }); err != nil || reply.String() != "Hi" {
+	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, func(ch chunk) { reply.WriteString(ch.Text) }); err != nil || reply.String() != "Hi" {
 		t.Errorf("replied %q, %v", reply.String(), err)
 	}
 	if !slices.Equal(auth, []string{"", ""}) {
@@ -3388,8 +3388,12 @@ func TestCustomAnthropicProvider(t *testing.T) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		event := func(name, data string) { fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, data) }
 		event("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"m","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`)
-		event("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)
-		event("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}`)
+		// Reasoning first, unasked, as DeepSeek's reasoner does.
+		event("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}`)
+		event("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Greet back."}}`)
+		event("content_block_stop", `{"type":"content_block_stop","index":0}`)
+		event("content_block_start", `{"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}`)
+		event("content_block_delta", `{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Hi"}}`)
 		event("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`)
 		event("message_stop", `{"type":"message_stop"}`)
 	}))
@@ -3424,15 +3428,16 @@ func TestCustomAnthropicProvider(t *testing.T) {
 	if !tt.HasText("Anthropic-compatible") {
 		t.Errorf("the card shows %q", tt.Texts())
 	}
-	var reply strings.Builder
-	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, func(s string) { reply.WriteString(s) }); err != nil || reply.String() != "Hi" {
-		t.Errorf("replied %q, %v", reply.String(), err)
+	var reply, reasoning strings.Builder
+	delta := func(ch chunk) { reply.WriteString(ch.Text); reasoning.WriteString(ch.Reasoning) }
+	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, delta); err != nil || reply.String() != "Hi" || reasoning.String() != "Greet back." {
+		t.Errorf("replied %q, reasoned %q, %v", reply.String(), reasoning.String(), err)
 	}
 	if key[0] != "" || beta[0] != "" || body["fallbacks"] != nil {
 		t.Errorf("key %q, beta %q, fallbacks %v", key[0], beta[0], body["fallbacks"])
 	}
 	a.setKey(id, "sk-proxy")
-	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, func(string) {}); err != nil || !strings.HasSuffix(key[1], "sk-proxy") {
+	if err := a.prov.Stream(context.Background(), a.model, []turn{{"user", "Hello"}}, func(chunk) {}); err != nil || !strings.HasSuffix(key[1], "sk-proxy") {
 		t.Errorf("with the key: %q, %v", key[1:], err)
 	}
 }
@@ -3490,5 +3495,130 @@ func TestLocalProviders(t *testing.T) {
 	a.setOn("ollama", false)
 	if a.prov != nil || a.confs["ollama"].On {
 		t.Errorf("asks %v once off", a.prov)
+	}
+}
+
+func TestThinkTags(t *testing.T) {
+	for _, c := range []struct {
+		chunks          []string
+		reasoning, text string
+	}{
+		{[]string{"<think>", "Plan.", "</think>", "\n\nAnswer."}, "Plan.", "Answer."},
+		// Tags split between chunks, after space.
+		{[]string{"\n <th", "ink>a", "b</thi", "nk>  c"}, "ab", "c"},
+		{[]string{"<think>a</", "b</think>c"}, "a</b", "c"},
+		// The tags open the reply, or are the text's.
+		{[]string{"Use <think>", " tags.</think>"}, "", "Use <think> tags.</think>"},
+		{[]string{"<t", "able>"}, "", "<table>"},
+		{[]string{"<think>a</think>b</think>c"}, "a", "b</think>c"},
+		// The reply ends in the tags, or before a word.
+		{[]string{"<think>Hmm"}, "Hmm", ""},
+		{[]string{"<thi"}, "", "<thi"},
+		{[]string{"<think>a</think>\n"}, "a", ""},
+	} {
+		var th thinkTags
+		var got chunk
+		for _, s := range c.chunks {
+			ch := th.feed(s)
+			got.Reasoning, got.Text = got.Reasoning+ch.Reasoning, got.Text+ch.Text
+		}
+		ch := th.flush()
+		got.Reasoning, got.Text = got.Reasoning+ch.Reasoning, got.Text+ch.Text
+		if got != (chunk{Text: c.text, Reasoning: c.reasoning}) {
+			t.Errorf("%q: reasoning %q, text %q; want %q, %q", c.chunks, got.Reasoning, got.Text, c.reasoning, c.text)
+		}
+	}
+}
+
+// A reply's reasoning, as each service of OpenAI's API sends it: in
+// reasoning_content, reasoning, or <think> tags opening its text; a
+// reasoning that is not a string is none.
+func TestStreamReasoning(t *testing.T) {
+	events := map[string][]string{
+		"deepseek":   {`{"reasoning_content":"Think."}`, `{"reasoning_content":null,"content":"Hi"}`},
+		"openrouter": {`{"reasoning":"Think."}`, `{"content":"Hi","reasoning_details":[]}`},
+		"lmstudio":   {`{"content":"<think>Think."}`, `{"content":"</think>\n\nHi"}`},
+		"other":      {`{"reasoning":{"effort":"low"}}`, `{"content":"Hi"}`},
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct{ Model string }
+		json.NewDecoder(r.Body).Decode(&body)
+		for _, d := range events[body.Model] {
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":%s}]}\n\n", d)
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+	p := &openAI{baseURL: srv.URL, client: srv.Client()}
+	for model, want := range map[string]string{"deepseek": "Think.", "openrouter": "Think.", "lmstudio": "Think.", "other": ""} {
+		var got chunk
+		err := p.Stream(context.Background(), model, nil, func(ch chunk) {
+			got.Reasoning, got.Text = got.Reasoning+ch.Reasoning, got.Text+ch.Text
+		})
+		if err != nil || got != (chunk{Text: "Hi", Reasoning: want}) {
+			t.Errorf("%s: reasoning %q, text %q, %v", model, got.Reasoning, got.Text, err)
+		}
+	}
+}
+
+// thinker reasons, then replies, at once, keeping what it was asked.
+type thinker struct{ asked [][]turn }
+
+func (p *thinker) ID() string                                 { return "thinker" }
+func (p *thinker) Name() string                               { return "Thinker" }
+func (p *thinker) Models() []string                           { return []string{"thinker"} }
+func (p *thinker) List(ctx context.Context) ([]string, error) { return p.Models(), nil }
+
+func (p *thinker) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
+	p.asked = append(p.asked, turns)
+	delta(chunk{Reasoning: "\nThe user greets. "})
+	delta(chunk{Reasoning: "Greet back.\n"})
+	delta(chunk{Text: "Hi there."})
+	return nil
+}
+
+// A reply's reasoning shows folded over it, under how long it took, which
+// unfolds it; it is kept, but asked of no provider again.
+func TestThoughts(t *testing.T) {
+	p := &thinker{}
+	a := newApp(p)
+	tt := ui.NewTester(a.view, 1120, 760)
+	tt.Type("Hello")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	reply := a.current().Messages[1]
+	if reply.Reasoning != "\nThe user greets. Greet back.\n" || reply.Text != "Hi there." {
+		t.Fatalf("reasoning %q, text %q", reply.Reasoning, reply.Text)
+	}
+	thought := "Thought for " + seconds(reply.Reasoned)
+	if !tt.HasText(thought) || tt.HasText("The user greets. Greet back.") {
+		t.Fatalf("not folded: %q", tt.Texts())
+	}
+	if err := tt.Click(thought); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if !tt.HasText("The user greets. Greet back.") || !tt.HasText("Hi there.") {
+		t.Errorf("not unfolded: %q", tt.Texts())
+	}
+	if err := tt.Click(thought); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if tt.HasText("The user greets. Greet back.") {
+		t.Errorf("not folded again: %q", tt.Texts())
+	}
+
+	// Kept with the chat.
+	b, _ := json.Marshal(reply)
+	var kept message
+	if json.Unmarshal(b, &kept) != nil || kept.Reasoning != reply.Reasoning || kept.Reasoned != reply.Reasoned {
+		t.Errorf("kept %s", b)
+	}
+	// The next question asks the reply's text alone.
+	a.send("Again")
+	want := []turn{{"user", "Hello"}, {"assistant", "Hi there."}, {"user", "Again"}}
+	if len(p.asked) != 2 || !slices.Equal(p.asked[1], want) {
+		t.Errorf("asked %q", p.asked)
 	}
 }

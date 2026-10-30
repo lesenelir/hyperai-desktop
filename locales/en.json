@@ -113,6 +113,11 @@
     "description": "The rule over a reply once it is written: how long it took.",
     "placeholders": { "duration": { "type": "String", "example": "2m 5s" } }
   },
+  "thoughtFor": "Thought for {duration}",
+  "@thoughtFor": {
+    "description": "The button over a reply that shows what the model reasoned before it, folded: how long it reasoned.",
+    "placeholders": { "duration": { "type": "String", "example": "12s" } }
+  },
   "durationSeconds": "{s}s",
   "@durationSeconds": {
     "description": "A duration under a minute, shortly: \"4s\".",

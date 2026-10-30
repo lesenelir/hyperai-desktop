@@ -275,6 +275,9 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 		if m.streaming || m.Elapsed > 0 {
 			worked(c, m)
 		}
+		if strings.TrimSpace(m.Reasoning) != "" {
+			a.thoughts(c, m)
+		}
 		switch {
 		case m.streaming && m.Text == "":
 		case m.streaming && anew:
@@ -302,6 +305,40 @@ func (a *app) message(c *ui.Context, m *message, hover, last bool) {
 				a.messageTime(c, m)
 			})
 		}
+	})
+}
+
+// thoughts builds what the model reasoned before reply m: as it comes,
+// until the reply's text does, and then folded under how long it took,
+// which unfolds it, muted, by a rule down its side.
+func (a *app) thoughts(c *ui.Context, m *message) {
+	t := c.Theme()
+	if !m.streaming || m.Text != "" {
+		label := locales.ThoughtFor(seconds(m.Reasoned))
+		ui.Row(c).Children(func() {
+			btn := ui.ButtonBase(c).Gap(4).AlignItems(ui.Center).TextColor(t.TextMuted).Label(label).Expanded(m.thoughtsOpen)
+			if btn.Hovered() {
+				btn.TextColor(t.Text)
+			}
+			btn.Children(func() {
+				ui.Text(c, label).FontSize(13)
+				chevron := ui.Icon(c, chevronIcon).Size(14, 14)
+				if !m.thoughtsOpen {
+					chevron.Rotate(-90)
+				}
+			})
+			if btn.Clicked() {
+				m.thoughtsOpen = !m.thoughtsOpen
+			}
+		})
+		if !m.thoughtsOpen {
+			return
+		}
+	}
+	ui.Row(c).Gap(12).AlignItems(ui.Stretch).Children(func() {
+		ui.Box(c).Width(2).Shrink(0).Radius(1).Background(t.Border)
+		ui.Text(c, strings.TrimSpace(m.Reasoning)).Grow(1).MinWidth(0).FontSize(13).LineHeight(1.6).
+			TextColor(t.TextMuted).Selectable()
 	})
 }
 

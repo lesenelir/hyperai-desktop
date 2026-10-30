@@ -48,6 +48,7 @@
   "showLess": "접기",
   "thinking": "생각 중…",
   "workedFor": "작업 시간 {duration}",
+  "thoughtFor": "생각한 시간 {duration}",
   "durationSeconds": "{s}초",
   "durationMinutes": "{m}분 {s}초",
   "replyStopped": "중지됨.",

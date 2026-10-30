@@ -23,6 +23,13 @@ type turn struct {
 	Content string `json:"content"`
 }
 
+// chunk is a piece of a reply as it streams in: of its text, or of the
+// reasoning the model did before it, which some models show.
+type chunk struct {
+	Text      string
+	Reasoning string
+}
+
 // provider answers conversations with a language model.
 type provider interface {
 	// ID is the provider's, as its keys and settings are kept by: its
@@ -35,9 +42,9 @@ type provider interface {
 	// List returns the models the provider has, as its API lists them.
 	List(ctx context.Context) ([]string, error)
 	// Stream asks model to reply to turns, calling delta with each piece of
-	// the reply as it comes. It returns once the reply ends, ctx is
-	// canceled or the request fails.
-	Stream(ctx context.Context, model string, turns []turn, delta func(string)) error
+	// the reply as it comes, of its text or its reasoning. It returns once
+	// the reply ends, ctx is canceled or the request fails.
+	Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error
 }
 
 // providerKind is a service the Providers page offers, which replies come
@@ -176,7 +183,7 @@ func (p *openAI) List(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
-func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta func(string)) error {
+func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
 	body, err := json.Marshal(map[string]any{"model": model, "messages": turns, "stream": true})
 	if err != nil {
 		return err
@@ -198,7 +205,17 @@ func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta f
 		return statusError(res)
 	}
 	// The reply comes as server-sent events, a chunk of JSON per line, and
-	// comments (": OPENROUTER PROCESSING") while the model warms up.
+	// comments (": OPENROUTER PROCESSING") while the model warms up. Its
+	// reasoning comes as reasoning_content (DeepSeek, Kimi, GLM, Qwen,
+	// vLLM), as reasoning (OpenRouter, Ollama), or in <think> tags opening
+	// its text (LM Studio, llama.cpp), which think takes out.
+	var think thinkTags
+	// end gives what think held back, as the reply ends.
+	end := func() {
+		if rest := think.flush(); rest != (chunk{}) {
+			delta(rest)
+		}
+	}
 	sc := bufio.NewScanner(res.Body)
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
 	for sc.Scan() {
@@ -208,30 +225,55 @@ func (p *openAI) Stream(ctx context.Context, model string, turns []turn, delta f
 		}
 		data = strings.TrimSpace(data)
 		if data == "[DONE]" {
+			end()
 			return nil
 		}
-		var chunk struct {
+		var event struct {
 			// Error is set when the request fails after the reply began.
 			Error *struct {
 				Message string `json:"message"`
 			} `json:"error"`
 			Choices []struct {
 				Delta struct {
-					Content string `json:"content"`
+					Content          string      `json:"content"`
+					ReasoningContent looseString `json:"reasoning_content"`
+					Reasoning        looseString `json:"reasoning"`
 				} `json:"delta"`
 			} `json:"choices"`
 		}
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
 			return fmt.Errorf("reading the reply: %w", err)
 		}
-		if chunk.Error != nil {
-			return errors.New(chunk.Error.Message)
+		if event.Error != nil {
+			return errors.New(event.Error.Message)
 		}
-		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
-			delta(chunk.Choices[0].Delta.Content)
+		if len(event.Choices) == 0 {
+			continue
+		}
+		d := event.Choices[0].Delta
+		ch := think.feed(d.Content)
+		ch.Reasoning = string(d.ReasoningContent) + string(d.Reasoning) + ch.Reasoning
+		if ch != (chunk{}) {
+			delta(ch)
 		}
 	}
-	return sc.Err()
+	if err := sc.Err(); err != nil {
+		return err
+	}
+	end()
+	return nil
+}
+
+// looseString is a string of a reply's JSON, "" where the field holds
+// another type, as one a service names as others do but fills otherwise.
+type looseString string
+
+func (s *looseString) UnmarshalJSON(b []byte) error {
+	var v string
+	if json.Unmarshal(b, &v) == nil {
+		*s = looseString(v)
+	}
+	return nil
 }
 
 // statusError returns what a response that failed says, under its
@@ -294,7 +336,7 @@ func (p *anthropicAPI) List(ctx context.Context) ([]string, error) {
 // know the beta.
 var anthropicFallbacks = []string{"claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"}
 
-func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, delta func(string)) error {
+func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
 	var msgs []anthropic.BetaMessageParam
 	for _, t := range turns {
 		block := anthropic.NewBetaTextBlock(t.Content)
@@ -317,8 +359,17 @@ func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, d
 	for stream.Next() {
 		switch ev := stream.Current().AsAny().(type) {
 		case anthropic.BetaRawContentBlockDeltaEvent:
-			if d, ok := ev.Delta.AsAny().(anthropic.BetaTextDelta); ok && d.Text != "" {
-				delta(d.Text)
+			switch d := ev.Delta.AsAny().(type) {
+			case anthropic.BetaTextDelta:
+				if d.Text != "" {
+					delta(chunk{Text: d.Text})
+				}
+			// Of the services that think aloud, as DeepSeek's and Kimi's
+			// reasoning models do, unasked.
+			case anthropic.BetaThinkingDelta:
+				if d.Thinking != "" {
+					delta(chunk{Reasoning: d.Thinking})
+				}
 			}
 		case anthropic.BetaRawMessageDeltaEvent:
 			// Declined, by the model or its safeguards, and by its fallback

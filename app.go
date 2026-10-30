@@ -47,11 +47,18 @@ type message struct {
 	Elapsed float64 `json:"elapsed,omitempty"`
 	// Time is when the question was sent, or the reply ended; zero in
 	// chats saved before messages kept it.
-	Time      time.Time `json:"time,omitzero"`
-	streaming bool
-	started   time.Time
-	preview   string  // the outline's preview of Text, once it is complete
-	height    float32 // how tall its row was laid out last
+	Time time.Time `json:"time,omitzero"`
+	// Reasoning is what the model reasoned before a reply, where it shows
+	// it, which goes to no provider again; Reasoned is how many seconds
+	// it took, until the reply's text began.
+	Reasoning string  `json:"reasoning,omitempty"`
+	Reasoned  float64 `json:"reasoned,omitempty"`
+	// thoughtsOpen shows Reasoning whole, once the text began.
+	thoughtsOpen bool
+	streaming    bool
+	started      time.Time
+	preview      string  // the outline's preview of Text, once it is complete
+	height       float32 // how tall its row was laid out last
 	// A question's lines, as wrapped at wrapWidth; whether it shows whole
 	// while it is long; and whether to bring it back into view, collapsed.
 	lines     int
@@ -381,17 +388,17 @@ func (a *app) send(text string) {
 	// chooses another for the composer while this one streams.
 	prov, model := a.prov, a.model
 	if a.post == nil {
-		finish(prov.Stream(ctx, model, turns, func(s string) { reply.Text += s }))
+		finish(prov.Stream(ctx, model, turns, reply.add))
 		return
 	}
 	// The model streams on a goroutine of its own, and the view shows what
 	// came through Window.Update, which runs on the main thread in order:
 	// in batches, so that tens of chunks a second commit some 20 times.
 	go func() {
-		batch := newBatcher(func(s string) {
+		batch := newBatcher(func(ch chunk) {
 			a.post(func() {
 				if reply.streaming {
-					reply.Text += s
+					reply.add(ch)
 				}
 			})
 		})
@@ -405,11 +412,25 @@ func (a *app) send(text string) {
 	}()
 }
 
-// end ends m streaming in, noting when, and how long it took.
+// add adds ch to the reply m streaming in, noting how long it reasoned as
+// its text begins.
+func (m *message) add(ch chunk) {
+	m.Reasoning += ch.Reasoning
+	if ch.Text != "" && m.Text == "" && m.Reasoning != "" {
+		m.Reasoned = time.Since(m.started).Seconds()
+	}
+	m.Text += ch.Text
+}
+
+// end ends m streaming in, noting when, and how long it took, and it
+// reasoned, where its text never began.
 func (m *message) end() {
 	m.streaming = false
 	m.Time = time.Now()
 	m.Elapsed = m.Time.Sub(m.started).Seconds()
+	if m.Reasoning != "" && m.Text == "" {
+		m.Reasoned = m.Elapsed
+	}
 }
 
 // stop stops the reply streaming in th, if any, keeping what came.

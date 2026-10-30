@@ -682,6 +682,22 @@ func (msgs Messages) WorkedFor(duration string) string {
 	return Catalog.Format(msgs.locale, "workedFor", map[string]any{"duration": duration})
 }
 
+// ThoughtFor says "Thought for {duration}"
+// in the language the app shows.
+//
+// The button over a reply that shows what the model reasoned before it,
+// folded: how long it reasoned.
+func ThoughtFor(duration string) string { return In(i18n.Locale()).ThoughtFor(duration) }
+
+// ThoughtFor says "Thought for {duration}"
+// in the language of msgs.
+//
+// The button over a reply that shows what the model reasoned before it,
+// folded: how long it reasoned.
+func (msgs Messages) ThoughtFor(duration string) string {
+	return Catalog.Format(msgs.locale, "thoughtFor", map[string]any{"duration": duration})
+}
+
 // DurationSeconds says "{s}s"
 // in the language the app shows.
 //

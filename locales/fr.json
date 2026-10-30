@@ -48,6 +48,7 @@
   "showLess": "Afficher moins",
   "thinking": "Réflexion…",
   "workedFor": "Terminé en {duration}",
+  "thoughtFor": "Réflexion : {duration}",
   "durationSeconds": "{s} s",
   "durationMinutes": "{m} min {s} s",
   "replyStopped": "Interrompue.",

@@ -60,11 +60,11 @@ func (p *demo) Name() string                               { return "Demo" }
 func (p *demo) Models() []string                           { return []string{"hyperai-demo"} }
 func (p *demo) List(ctx context.Context) ([]string, error) { return p.Models(), nil }
 
-func (p *demo) Stream(ctx context.Context, model string, turns []turn, delta func(string)) error {
+func (p *demo) Stream(ctx context.Context, model string, turns []turn, delta func(chunk)) error {
 	src := demoReplies[p.replies%len(demoReplies)]
 	p.replies++
 	if !p.paced {
-		delta(src)
+		delta(chunk{Text: src})
 		return nil
 	}
 	if err := sleep(ctx, 600*time.Millisecond); err != nil { // thinking
@@ -79,7 +79,7 @@ func (p *demo) Stream(ctx context.Context, model string, turns []turn, delta fun
 		if err := sleep(ctx, time.Duration(8+p.intN(30))*time.Millisecond); err != nil {
 			return err
 		}
-		delta(src[i : i+n])
+		delta(chunk{Text: src[i : i+n]})
 		i += n
 	}
 	return nil

@@ -48,6 +48,7 @@
   "showLess": "Weniger anzeigen",
   "thinking": "Denkt nach …",
   "workedFor": "Fertig nach {duration}",
+  "thoughtFor": "Nachgedacht: {duration}",
   "durationSeconds": "{s} Sek.",
   "durationMinutes": "{m} Min. {s} Sek.",
   "replyStopped": "Gestoppt.",
