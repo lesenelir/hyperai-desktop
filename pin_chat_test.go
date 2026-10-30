@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -84,5 +86,53 @@ func TestPinChat(t *testing.T) {
 	again.loadFrom(dir)
 	if got := sidebar(again); !slices.Equal(got, []string{pinned, "Second", today, "Third", "First"}) {
 		t.Errorf("kept: rows %q", got)
+	}
+}
+
+// Pinning a chat glides the sidebar to its top, where the chat went, out
+// of view where the list kept its place; unpinning leaves the sidebar
+// where it is.
+func TestPinScrollsToTop(t *testing.T) {
+	a := newApp(&counter{})
+	tt := ui.NewTester(a.view, 1120, 760)
+	for i := range 25 {
+		a.newChat()
+		a.send(fmt.Sprintf("Chat %02d", i+1))
+	}
+	tt.Frame()
+	a.chatScroll.ScrollTo(0, 600, ui.Animation{})
+	tt.Advance(time.Second)
+	if a.chatScroll.Y < 100 {
+		t.Fatalf("the sidebar did not scroll: %v of %v", a.chatScroll.Y, a.chatScroll.MaxY)
+	}
+	r, ok := tt.Find("Chat 10")
+	if !ok || r.Y < 0 || r.Y > 760 {
+		t.Fatalf("Chat 10 out of view at %v", r)
+	}
+	if err := tt.RightClick("Chat 10"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem(locales.PinChat()); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	// A glide, which settles within a DIP of its end.
+	if a.chatScroll.Y > 1 {
+		t.Errorf("pinned: the sidebar at %v", a.chatScroll.Y)
+	}
+	p, _ := tt.Find(locales.GroupPinned())
+	r, _ = tt.Find("Chat 10")
+	if !tt.HasText(locales.GroupPinned()) || p.Y < 0 || r.Y < p.Y || r.Y > p.Y+60 {
+		t.Errorf("pinned: its group at %v, the chat at %v", p, r)
+	}
+
+	// Unpinned, from far down: the sidebar stays.
+	a.chatScroll.ScrollTo(0, 600, ui.Animation{})
+	tt.Advance(time.Second)
+	y := a.chatScroll.Y
+	a.togglePin(a.thread(strconv.Itoa(a.threads[9].ID)))
+	tt.Advance(time.Second)
+	if a.chatScroll.Y == 0 || a.chatScroll.Y < y-100 {
+		t.Errorf("unpinned: the sidebar went from %v to %v", y, a.chatScroll.Y)
 	}
 }

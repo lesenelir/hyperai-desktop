@@ -159,7 +159,10 @@ A small button that floats over the conversation (scroll to end) rests at
   as a right click does: Pin (or Unpin), Rename…, Regenerate Title,
   Export, Delete Chat…. Pinned chats lead the sidebar, in a Pinned group
   over the days', the latest pinned first, and leave their day's group
-  until unpinned. A chat
+  until unpinned. Pinning glides the sidebar to its top, where the chat
+  went (its list keeps the row at its top where it is as rows come over
+  it, which left the chat out of view); unpinning leaves it where it is,
+  as what is put away is not followed. A chat
   renamed there shows its title as a field in place.
   The sidebar shows the desktop's material where it can, tinted with its
   own warm color (`sidebarTint`) so that it sits with the canvas.

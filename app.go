@@ -291,6 +291,9 @@ type app struct {
 	rowsLang     string
 	rows         []chatRow
 	chatList     ui.ListState
+	// chatScroll is where the sidebar's list is scrolled, which glides to
+	// its top as a chat is pinned.
+	chatScroll ui.ScrollState
 	// searching shows the search (search.go), for query on searchTab: hits
 	// are the chats it found, as of hitsQuery and hitsRev; searchSel is the
 	// row chosen, as of the query searchQuery, and searchHover the one under
@@ -854,7 +857,7 @@ func (a *app) sidebar(c *ui.Context) {
 		} else {
 			ui.Text(c, rows[i].group).FontSize(12).TextColor(t.TextMuted).Padding(14, 20, 6, 20)
 		}
-	}).Grow(1).MinHeight(0).Padding(6, 0, 12, 0).Label(locales.SidebarChats())
+	}).Grow(1).MinHeight(0).Padding(6, 0, 12, 0).Label(locales.SidebarChats()).TrackScroll(&a.chatScroll)
 	a.settingsRow(c)
 }
 
@@ -1002,11 +1005,15 @@ func (a *app) threadMeta(c *ui.Context, th *thread, now time.Time) {
 	})
 }
 
-// togglePin pins th, at the sidebar's top, the latest pinned first, or
-// unpins it, back among the others by when it was updated.
+// togglePin pins th, at the sidebar's top, the latest pinned first, and
+// glides the sidebar there, where its list, which keeps the row at its
+// top where it is as rows come over it, left it out of view; or unpins
+// it, back among the others by when it was updated, the sidebar where it
+// is: what is unpinned is put away, not followed.
 func (a *app) togglePin(th *thread) {
 	if th.Pinned.IsZero() {
 		th.Pinned = time.Now()
+		a.chatScroll.ScrollTo(0, 0, ui.Smooth)
 	} else {
 		th.Pinned = time.Time{}
 	}
