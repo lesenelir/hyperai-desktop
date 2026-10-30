@@ -1,0 +1,74 @@
+# The checks of DEVELOPMENT.md, run on every pull request and push to
+# master. They run on macOS, where the app is developed and its UI tests
+# are known to pass; the repository is public, so its minutes are free.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# A newer push to the same branch or pull request makes an older run moot.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Format, vet and generated files
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Not formatted with gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go vet for Linux and Windows
+        run: |
+          GOOS=linux go vet ./...
+          GOOS=windows go vet ./...
+
+      - name: mygo vet
+        run: go tool mygo vet .
+
+      - name: Strings in all languages
+        run: go tool mygo i18n check
+
+      # locales/catalog_gen.go is generated from locales/*.json, and go.sum
+      # from go.mod: a change to one without the other leaves a diff.
+      - name: Generated files up to date
+        run: |
+          go tool mygo generate
+          go mod tidy
+          git diff --exit-code
+
+  test:
+    name: Tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: go test
+        run: CGO_ENABLED=0 go test ./...
+
+      # Required for changes to streaming or concurrency (DEVELOPMENT.md).
+      - name: go test -race
+        run: go test -race ./...
