@@ -157,9 +157,12 @@ A small button that floats over the conversation (scroll to end) rests at
   14) fades in over the end of the title's line in 150 ms, its icon on the
   row's text's edge, the title cut short of it; it opens the chat's menu,
   as a right click does: Pin (or Unpin), Rename…, Regenerate Title,
-  Export, Delete Chat…. Pinned chats lead the sidebar, in a Pinned group
-  over the days', the latest pinned first, and leave their day's group
-  until unpinned. Pinning glides the sidebar to its top, where the chat
+  Export, Delete Chat…. The chats are in two sections, each titled
+  at 12/500 `fg/70` by a chevron, a wash and `fg` under the pointer, which
+  fold and unfold them, the chevron turned while folded (layout.json
+  keeps it): Pinned, where any are, the latest pinned first, and Chats,
+  12 under it, the others under the days' titles (12/400). Pinned chats
+  leave their day until unpinned; pinning unfolds Pinned. Pinning glides the sidebar to its top, where the chat
   went (its list keeps the row at its top where it is as rows come over
   it, which left the chat out of view); unpinning leaves it where it is,
   as what is put away is not followed. A chat

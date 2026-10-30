@@ -290,7 +290,11 @@ type app struct {
 	rowsDay      time.Time
 	rowsLang     string
 	rows         []chatRow
+	rowsFolds    [2]bool // foldPinned and foldChats as rows were made
 	chatList     ui.ListState
+	// foldPinned and foldChats fold the sidebar's sections, Pinned and
+	// Chats, which layout.json keeps.
+	foldPinned, foldChats bool
 	// chatScroll is where the sidebar's list is scrolled, which glides to
 	// its top as a chat is pinned.
 	chatScroll ui.ScrollState
@@ -849,11 +853,16 @@ func (a *app) sidebar(c *ui.Context) {
 		if th := rows[i].th; th != nil {
 			return th.ID
 		}
+		if s := rows[i].section; s != 0 {
+			return "section " + strconv.Itoa(int(s))
+		}
 		return "group " + rows[i].group
 	}
 	ui.List(c.Key("chats"), &a.chatList, len(rows), func(i int) {
 		if th := rows[i].th; th != nil {
 			a.threadRow(c, th, now)
+		} else if rows[i].section != 0 {
+			a.sectionRow(c, rows[i])
 		} else {
 			ui.Text(c, rows[i].group).FontSize(12).TextColor(t.TextMuted).Padding(14, 20, 6, 20)
 		}
@@ -864,27 +873,90 @@ func (a *app) sidebar(c *ui.Context) {
 // chatRow is a row of the sidebar: a chat, or the title of a group of them
 // when th is nil.
 type chatRow struct {
-	group string
-	th    *thread
+	group   string
+	th      *thread
+	section section
 }
+
+// section is a section of the sidebar, which folds: its chats pinned, and
+// the others, by day; 0 for none, a row that is no section's title.
+type section int
+
+const (
+	sectionPinned section = iota + 1
+	sectionChats
+)
 
 // chatRows returns the sidebar's rows as of now, grouping the chats by day
 // again only when they changed, or the day or the language did.
 func (a *app) chatRows(now time.Time) []chatRow {
 	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	lang := i18n.Locale()
-	if a.rows != nil && a.rowsRev == a.rev && a.rowsDay.Equal(day) && a.rowsLang == lang {
+	folds := [2]bool{a.foldPinned, a.foldChats}
+	if a.rows != nil && a.rowsRev == a.rev && a.rowsDay.Equal(day) && a.rowsLang == lang && a.rowsFolds == folds {
 		return a.rows
 	}
-	rows := make([]chatRow, 0, len(a.threads)+5)
+	// Two sections, which fold: Pinned, where any are, and Chats, the
+	// others by day, under the days' titles.
+	rows := make([]chatRow, 0, len(a.threads)+7)
+	chats := false
 	for _, g := range groupByDay(a.threads, now) {
+		if g.pinned {
+			rows = append(rows, chatRow{group: g.title, section: sectionPinned})
+			if !a.foldPinned {
+				for _, th := range g.threads {
+					rows = append(rows, chatRow{th: th})
+				}
+			}
+			continue
+		}
+		if !chats {
+			chats = true
+			rows = append(rows, chatRow{group: locales.SidebarChats(), section: sectionChats})
+		}
+		if a.foldChats {
+			continue
+		}
 		rows = append(rows, chatRow{group: g.title})
 		for _, th := range g.threads {
 			rows = append(rows, chatRow{th: th})
 		}
 	}
-	a.rows, a.rowsRev, a.rowsDay, a.rowsLang = rows, a.rev, day, lang
+	a.rows, a.rowsRev, a.rowsDay, a.rowsLang, a.rowsFolds = rows, a.rev, day, lang, folds
 	return rows
+}
+
+// sectionRow builds the title of a section of the sidebar, which folds and
+// unfolds it as clicked: what it holds at 12, at 500 over the days' titles
+// under it, by a chevron, turned while folded; brought up the ladder, on a
+// wash, under the pointer. After Pinned, Chats stands apart from it.
+func (a *app) sectionRow(c *ui.Context, r chatRow) {
+	t := c.Theme()
+	fold := &a.foldPinned
+	if r.section == sectionChats {
+		fold = &a.foldChats
+	}
+	top := float32(rowGap / 2)
+	if r.section == sectionChats && len(a.rows) > 0 && a.rows[0].section == sectionPinned {
+		top = 12
+	}
+	b := ui.ButtonBase(c.Key("section "+strconv.Itoa(int(r.section)))).Margin(top, barClear, rowGap/2, 8).Padding(6, 12).
+		Radius(8).Gap(4).Justify(ui.Start).AlignItems(ui.Center).TextColor(t.TextMuted).Label(r.group).Expanded(!*fold)
+	if b.Hovered() {
+		b.Background(a.pal.fg.Alpha(0.04)).TextColor(t.Text)
+	}
+	b.Children(func() {
+		ui.Text(c, r.group).FontSize(12).FontWeight(500).SingleLine()
+		chevron := ui.Icon(c, chevronIcon).Size(12, 12)
+		if *fold {
+			chevron.Rotate(-90)
+		}
+	})
+	// Once the list is built, whose rows it changes.
+	b.OnClick(func() {
+		*fold = !*fold
+		a.saveLayout()
+	})
 }
 
 // navRow creates a row of the sidebar's that does something: an icon, its
@@ -1014,6 +1086,11 @@ func (a *app) togglePin(th *thread) {
 	if th.Pinned.IsZero() {
 		th.Pinned = time.Now()
 		a.chatScroll.ScrollTo(0, 0, ui.Smooth)
+		// Where Pinned is folded, it unfolds, to show where the chat went.
+		if a.foldPinned {
+			a.foldPinned = false
+			a.saveLayout()
+		}
 	} else {
 		th.Pinned = time.Time{}
 	}
@@ -1072,6 +1149,7 @@ func ago(t, now time.Time) string {
 type group struct {
 	title   string
 	threads []*thread
+	pinned  bool
 }
 
 // groupByDay groups threads as of now, the latest first: those pinned
@@ -1089,7 +1167,7 @@ func groupByDay(threads []*thread, now time.Time) []group {
 	}
 	if len(pinned) > 0 {
 		slices.SortStableFunc(pinned, func(x, y *thread) int { return y.Pinned.Compare(x.Pinned) })
-		groups = append(groups, group{title: locales.GroupPinned(), threads: pinned})
+		groups = append(groups, group{title: locales.GroupPinned(), threads: pinned, pinned: true})
 	}
 	slices.SortStableFunc(sorted, func(x, y *thread) int { return y.Updated.Compare(x.Updated) })
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())

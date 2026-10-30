@@ -319,8 +319,9 @@ func TestChatsStreamAtOnce(t *testing.T) {
 		t.Errorf("A's reply %q", got)
 	}
 	tt.Frame()
-	// It stays under B, sent in later, though it ended last.
-	if rows := a.chatRows(time.Now()); len(rows) < 3 || rows[1].th != chatB || rows[2].th != chatA {
+	// It stays under B, sent in later, though it ended last: under Chats'
+	// title and Today's.
+	if rows := a.chatRows(time.Now()); len(rows) < 4 || rows[2].th != chatB || rows[3].th != chatA {
 		t.Errorf("the sidebar lists B then A? %+v", rows)
 	}
 	if !chatA.unread || chatB.unread || texts("Replying") != 0 || texts("New reply") != 1 {
@@ -337,7 +338,7 @@ func TestChatsStreamAtOnce(t *testing.T) {
 		t.Fatalf("A sends again: %d messages, streams %v", len(chatA.Messages), chatA.busy != nil)
 	}
 	// Sent in, A goes to the top.
-	if rows := a.chatRows(time.Now()); rows[1].th != chatA {
+	if rows := a.chatRows(time.Now()); rows[2].th != chatA {
 		t.Errorf("A not at the top once sent in again")
 	}
 

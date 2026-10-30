@@ -43,6 +43,9 @@ type layout struct {
 	Language string `json:"language,omitempty"`
 	// MathSource shows math in replies as its LaTeX, rather than set.
 	MathSource bool `json:"mathSource,omitempty"`
+	// FoldPinned and FoldChats fold the sidebar's sections.
+	FoldPinned bool `json:"foldPinned,omitempty"`
+	FoldChats  bool `json:"foldChats,omitempty"`
 }
 
 // loadLayout reads the layout kept in dir, if any.
@@ -77,6 +80,7 @@ func (a *app) loadLayout(dir string) {
 		a.sendWith = sendCmdReturn
 	}
 	a.keptChat, a.notifyDone, a.renderMath = l.Chat, l.Notify, !l.MathSource
+	a.foldPinned, a.foldChats = l.FoldPinned, l.FoldChats
 	if slices.ContainsFunc(languages, func(lang struct{ tag, name string }) bool { return lang.tag == l.Language }) {
 		a.language = l.Language
 	}
@@ -91,7 +95,7 @@ func (a *app) saveLayout() {
 	l := layout{SidebarWidth: a.sideWidth, Theme: a.theme, TextSize: textSizes[a.textSize],
 		OpaqueSidebar: !a.translucent, ReduceMotion: a.reduceMotion,
 		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme, Chat: a.keptChat, Notify: a.notifyDone, Language: a.language,
-		MathSource: !a.renderMath}
+		MathSource: !a.renderMath, FoldPinned: a.foldPinned, FoldChats: a.foldChats}
 	if a.onLaunch == launchLast {
 		l.OnLaunch = "last"
 	}

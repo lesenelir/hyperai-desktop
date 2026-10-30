@@ -40,8 +40,8 @@ func TestPinChat(t *testing.T) {
 		a.send(q)
 	}
 	tt.Frame()
-	today := "[" + locales.GroupToday() + "]"
-	if got := sidebar(a); !slices.Equal(got, []string{today, "Third", "Second", "First"}) {
+	today, chats := "["+locales.GroupToday()+"]", "["+locales.SidebarChats()+"]"
+	if got := sidebar(a); !slices.Equal(got, []string{chats, today, "Third", "Second", "First"}) {
 		t.Fatalf("rows %q", got)
 	}
 
@@ -56,7 +56,7 @@ func TestPinChat(t *testing.T) {
 		tt.Advance(time.Second)
 	}
 	pinned := "[" + locales.GroupPinned() + "]"
-	if got := sidebar(a); !slices.Equal(got, []string{pinned, "Second", "First", today, "Third"}) {
+	if got := sidebar(a); !slices.Equal(got, []string{pinned, "Second", "First", chats, today, "Third"}) {
 		t.Errorf("pinned: rows %q", got)
 	}
 	if !tt.HasText(locales.GroupPinned()) {
@@ -76,7 +76,7 @@ func TestPinChat(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Advance(time.Second)
-	if got := sidebar(a); !slices.Equal(got, []string{pinned, "Second", today, "Third", "First"}) {
+	if got := sidebar(a); !slices.Equal(got, []string{pinned, "Second", chats, today, "Third", "First"}) {
 		t.Errorf("unpinned: rows %q", got)
 	}
 
@@ -84,7 +84,7 @@ func TestPinChat(t *testing.T) {
 	a.saver.wait()
 	again := newApp(&counter{})
 	again.loadFrom(dir)
-	if got := sidebar(again); !slices.Equal(got, []string{pinned, "Second", today, "Third", "First"}) {
+	if got := sidebar(again); !slices.Equal(got, []string{pinned, "Second", chats, today, "Third", "First"}) {
 		t.Errorf("kept: rows %q", got)
 	}
 }
@@ -134,5 +134,78 @@ func TestPinScrollsToTop(t *testing.T) {
 	tt.Advance(time.Second)
 	if a.chatScroll.Y == 0 || a.chatScroll.Y < y-100 {
 		t.Errorf("unpinned: the sidebar went from %v to %v", y, a.chatScroll.Y)
+	}
+}
+
+// The sidebar's sections, Pinned and Chats, fold and unfold as their
+// titles are clicked, the chats in them gone while folded; layout.json
+// keeps it. Pinning a chat unfolds Pinned, to show where it went.
+func TestFoldSections(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&counter{})
+	a.loadFrom(dir)
+	t.Cleanup(func() { a.saver.wait(); a.layoutSaver.wait() })
+	tt := ui.NewTester(a.view, 1120, 760)
+	for _, q := range []string{"First", "Second"} {
+		a.newChat()
+		a.send(q)
+	}
+	a.togglePin(a.thread("1"))
+	tt.Advance(time.Second)
+	pinned, chats, today := "["+locales.GroupPinned()+"]", "["+locales.SidebarChats()+"]", "["+locales.GroupToday()+"]"
+	if got := sidebar(a); !slices.Equal(got, []string{pinned, "First", chats, today, "Second"}) {
+		t.Fatalf("rows %q", got)
+	}
+
+	// Chats, folded with its title, over Today's (13 over its row; 26 under
+	// Pinned's, folded): the list, named Chats too, is found by the name
+	// first.
+	clickChats := func(under ui.Rect, by float32) {
+		t.Helper()
+		tt.ClickAt(30, under.Y+by) // past the row's margin
+		tt.Advance(time.Second)
+	}
+	td, _ := tt.Find(locales.GroupToday())
+	clickChats(td, -13)
+	if got := sidebar(a); !slices.Equal(got, []string{pinned, "First", chats}) || tt.HasText(locales.GroupToday()) {
+		t.Errorf("Chats folded: rows %q", got)
+	}
+	// Pinned too, and both kept.
+	if err := tt.Click(locales.GroupPinned()); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if got := sidebar(a); !slices.Equal(got, []string{pinned, chats}) {
+		t.Errorf("both folded: rows %q", got)
+	}
+	a.layoutSaver.wait()
+	again := newApp(&counter{})
+	again.loadFrom(dir)
+	if !again.foldPinned || !again.foldChats {
+		t.Errorf("kept: pinned %v, chats %v", again.foldPinned, again.foldChats)
+	}
+
+	// Pinning unfolds Pinned; Chats, of none left, goes.
+	a.togglePin(a.thread("4"))
+	tt.Advance(time.Second)
+	if got := sidebar(a); !slices.Equal(got, []string{pinned, "Second", "First"}) {
+		t.Errorf("pinned while folded: rows %q", got)
+	}
+
+	// Pinned folded again, Chats unfolded under it, then Pinned.
+	a.togglePin(a.thread("4"))
+	tt.Advance(time.Second)
+	if err := tt.Click(locales.GroupPinned()); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	p, _ := tt.Find(locales.GroupPinned())
+	clickChats(p, p.H+26)
+	if err := tt.Click(locales.GroupPinned()); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if got := sidebar(a); !slices.Equal(got, []string{pinned, "First", chats, today, "Second"}) {
+		t.Errorf("unfolded: rows %q", got)
 	}
 }
