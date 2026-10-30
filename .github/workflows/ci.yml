@@ -1,6 +1,10 @@
 # The checks of DEVELOPMENT.md, run on every pull request and push to
 # master. They run on macOS, where the app is developed and its UI tests
 # are known to pass; the repository is public, so its minutes are free.
+#
+# One job, so that one cache keeps all it compiles: two jobs share
+# setup-go's key, and the second to finish fails to save its own. The key
+# follows this file too, as the steps decide what the cache holds.
 name: CI
 
 on:
@@ -18,13 +22,16 @@ permissions:
 
 jobs:
   check:
-    name: Format, vet and generated files
+    name: Check
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            .github/workflows/ci.yml
 
       - name: gofmt
         run: |
@@ -35,13 +42,11 @@ jobs:
             exit 1
           fi
 
+      # No file is built for one platform only (runtime.GOOS decides
+      # instead), and only macOS is released, so Linux and Windows aren't
+      # vetted: building their releases will check them.
       - name: go vet
         run: go vet ./...
-
-      - name: go vet for Linux and Windows
-        run: |
-          GOOS=linux go vet ./...
-          GOOS=windows go vet ./...
 
       - name: mygo vet
         run: go tool mygo vet .
@@ -57,18 +62,8 @@ jobs:
           go mod tidy
           git diff --exit-code
 
-  test:
-    name: Tests
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: go test
-        run: CGO_ENABLED=0 go test ./...
-
-      # Required for changes to streaming or concurrency (DEVELOPMENT.md).
+      # The tests, with the race detector: required for changes to
+      # streaming or concurrency (DEVELOPMENT.md), and the same tests
+      # without it would only repeat them.
       - name: go test -race
         run: go test -race ./...
