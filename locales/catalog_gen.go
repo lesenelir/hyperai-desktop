@@ -380,6 +380,22 @@ func (msgs Messages) TitleFailed() string {
 	return Catalog.Format(msgs.locale, "titleFailed", nil)
 }
 
+// ChatOptions says "Options for “{title}”"
+// in the language the app shows.
+//
+// Names, to assistive technology, the button of a sidebar row that opens
+// the chat's menu; its tooltip says More.
+func ChatOptions(title string) string { return In(i18n.Locale()).ChatOptions(title) }
+
+// ChatOptions says "Options for “{title}”"
+// in the language of msgs.
+//
+// Names, to assistive technology, the button of a sidebar row that opens
+// the chat's menu; its tooltip says More.
+func (msgs Messages) ChatOptions(title string) string {
+	return Catalog.Format(msgs.locale, "chatOptions", map[string]any{"title": title})
+}
+
 // GroupToday says "Today"
 // in the language the app shows.
 //

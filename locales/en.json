@@ -51,6 +51,11 @@
   "@renameLabel": { "description": "Names the field that renames a chat, to assistive technology." },
   "titleFailed": "Couldn’t regenerate the title",
   "@titleFailed": { "description": "The title of the toast that shows as a title asked for with Regenerate Title could not be made; what the provider said goes under it." },
+  "chatOptions": "Options for “{title}”",
+  "@chatOptions": {
+    "description": "Names, to assistive technology, the button of a sidebar row that opens the chat's menu; its tooltip says More.",
+    "placeholders": { "title": { "type": "String", "example": "How do I cache?" } }
+  },
   "groupToday": "Today",
   "@groupToday": { "description": "The sidebar's group of the chats updated today." },
   "groupYesterday": "Yesterday",

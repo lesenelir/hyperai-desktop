@@ -25,6 +25,7 @@
   "regenerateTitleItem": "タイトルを再生成",
   "renameLabel": "チャットのタイトル",
   "titleFailed": "タイトルを再生成できませんでした",
+  "chatOptions": "「{title}」のオプション",
   "groupToday": "今日",
   "groupYesterday": "昨日",
   "groupWeek": "過去 7 日間",

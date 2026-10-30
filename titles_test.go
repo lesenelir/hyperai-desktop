@@ -392,3 +392,36 @@ func TestRenameEscapeKeepsReply(t *testing.T) {
 		(<-posts)()
 	}
 }
+
+// A row of the sidebar shows, under the pointer, the button of its menu,
+// the one its right click opens, which does not open its chat.
+func TestRowMoreButton(t *testing.T) {
+	a, tt := newTester()
+	tt.Type("How do I cache?")
+	tt.Key(0, ui.KeyEnter)
+	first := a.current()
+	a.newChat()
+	tt.Frame()
+	tt.Type("Plan the release")
+	tt.Key(0, ui.KeyEnter)
+	shown := a.selected
+	r, ok := tt.Find("How do I cache?")
+	if !ok {
+		t.Fatalf("no row in %q", tt.Texts())
+	}
+	tt.Move(r.X+4, r.Y+r.H/2)
+	tt.Advance(time.Second)
+	// Over the end of the title's line, as far in as the row's text.
+	tt.ClickAt(a.sideWidth-barClear-6-rowMoreSize/2, r.Y+r.H/2)
+	want := []string{locales.RenameChatItem(), locales.RegenerateTitleItem(), "-", locales.DeleteChatItem()}
+	if got := tt.Menu(); !slices.Equal(got, want) {
+		t.Fatalf("menu %q, want %q", got, want)
+	}
+	if err := tt.ChooseMenuItem(locales.RenameChatItem()); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.selected != shown || a.renaming != strconv.Itoa(first.ID) || !a.renameInSidebar {
+		t.Errorf("shown %q (was %q), renaming %q in the sidebar %v", a.selected, shown, a.renaming, a.renameInSidebar)
+	}
+}

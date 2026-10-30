@@ -25,6 +25,7 @@
   "regenerateTitleItem": "Régénérer le titre",
   "renameLabel": "Titre de la discussion",
   "titleFailed": "Impossible de régénérer le titre",
+  "chatOptions": "Options de « {title} »",
   "groupToday": "Aujourd’hui",
   "groupYesterday": "Hier",
   "groupWeek": "7 derniers jours",

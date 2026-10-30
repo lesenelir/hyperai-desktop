@@ -25,6 +25,7 @@
   "regenerateTitleItem": "Titel neu erzeugen",
   "renameLabel": "Chat-Titel",
   "titleFailed": "Titel konnte nicht neu erzeugt werden",
+  "chatOptions": "Optionen für „{title}“",
   "groupToday": "Heute",
   "groupYesterday": "Gestern",
   "groupWeek": "Letzte 7 Tage",

@@ -25,6 +25,7 @@
   "regenerateTitleItem": "제목 다시 생성",
   "renameLabel": "채팅 제목",
   "titleFailed": "제목을 다시 생성할 수 없음",
+  "chatOptions": "‘{title}’ 옵션",
   "groupToday": "오늘",
   "groupYesterday": "어제",
   "groupWeek": "지난 7일",

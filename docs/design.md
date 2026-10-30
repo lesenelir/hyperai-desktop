@@ -153,7 +153,11 @@ A small button that floats over the conversation (scroll to end) rests at
   35%.
 - **Sidebar rows**: a title over the model and age, as the rows of every
   list. The chat shown takes a 7% wash and its title 500, in `fg`, as a
-  settings page shown does.
+  settings page shown does. Under the pointer, a `…` button (22, its icon
+  14) fades in over the end of the title's line in 150 ms, its icon on the
+  row's text's edge, the title cut short of it; it opens the chat's menu,
+  as a right click does: Rename…, Regenerate Title, Delete Chat…. A chat
+  renamed there shows its title as a field in place.
   The sidebar shows the desktop's material where it can, tinted with its
   own warm color (`sidebarTint`) so that it sits with the canvas.
 - **Composer**: on `composer`, radius 24, a hairline and the rest shadow.

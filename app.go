@@ -859,26 +859,56 @@ func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 		})
 		return
 	}
-	row := ui.ButtonBase(c.Key(th.ID)).Margin(rowGap/2, barClear, rowGap/2, 8).Padding(8, 12).Radius(8).Justify(ui.Start).Label(th.Title)
-	switch {
-	case selected:
-		row.Background(a.pal.fg.Alpha(0.07))
-	case row.Hovered():
-		row.Background(a.pal.fg.Alpha(0.04))
-	}
-	row.Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-			title := ui.Text(c, th.Title).SingleLine()
-			if selected {
-				title.FontWeight(500)
-			}
-			a.threadMeta(c, th, now)
+	// The row and, beside it rather than in it, the button of its menu,
+	// which the pointer over either shows: over the button, the row keeps
+	// its wash.
+	box := ui.Box(c.Key("chat " + id))
+	hover := box.Hovered()
+	box.Children(func() {
+		row := ui.ButtonBase(c.Key(th.ID)).Margin(rowGap/2, barClear, rowGap/2, 8).Padding(8, 12).Radius(8).Justify(ui.Start).Label(th.Title)
+		switch {
+		case selected:
+			row.Background(a.pal.fg.Alpha(0.07))
+		case hover:
+			row.Background(a.pal.fg.Alpha(0.04))
+		}
+		row.Children(func() {
+			ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+				title := ui.Text(c, th.Title).SingleLine()
+				if selected {
+					title.FontWeight(500)
+				}
+				if hover {
+					// Short of the button, which would cover its end.
+					title.Margin(0, rowMoreSize-6+4, 0, 0)
+				}
+				a.threadMeta(c, th, now)
+			})
 		})
+		row.ContextMenu(func(m *ui.Menu) { a.chatMenu(c, m, th, true) })
+		if row.Clicked() {
+			a.open(id)
+		}
+		a.rowMoreButton(c, th, hover)
 	})
-	row.ContextMenu(func(m *ui.Menu) { a.chatMenu(c, m, th, true) })
-	if row.Clicked() {
-		a.open(id)
-	}
+}
+
+// rowMoreSize is the size of the button of a sidebar row's menu.
+const rowMoreSize = 22
+
+// rowMoreButton builds the button that opens th's menu, the one its row's
+// right click does, over the right end of its title's line, its icon on
+// the row's text's edge: fading in as the pointer is over the row (hover),
+// as a message's actions do.
+func (a *app) rowMoreButton(c *ui.Context, th *thread, hover bool) {
+	t := c.Theme()
+	_, line := c.MeasureText(0, ui.Span{Text: "x", Size: t.FontSize})
+	// Its tooltip More, as the title bar's; named by its chat, as every
+	// row has one.
+	more := iconButtonSized(c.Key("more"), moreIcon, locales.More(), 14).Size(rowMoreSize, rowMoreSize).
+		Absolute().Top(rowGap/2 + 8 + line/2 - rowMoreSize/2).Right(barClear + 6).Label(locales.ChatOptions(th.Title))
+	more.Opacity(more.Animate("opacity", shown(hover), revealDuration))
+	more.Menu(func(m *ui.Menu) { a.chatMenu(c, m, th, true) })
 }
 
 // threadMeta builds the line under th's title in the sidebar: the model it

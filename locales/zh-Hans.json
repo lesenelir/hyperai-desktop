@@ -25,6 +25,7 @@
   "regenerateTitleItem": "重新生成标题",
   "renameLabel": "对话标题",
   "titleFailed": "无法重新生成标题",
+  "chatOptions": "“{title}”的选项",
   "groupToday": "今天",
   "groupYesterday": "昨天",
   "groupWeek": "过去 7 天",
