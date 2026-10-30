@@ -173,6 +173,11 @@ type app struct {
 	custom       []*providerKind
 	copilot      copilotState // GitHub Copilot's CLI and sign-in (copilot.go)
 	defaultModel modelRef
+	// noTitles has no model name the chats, and titleModel is the model
+	// that does, zero for each chat's own provider's cheapest (titles.go),
+	// which the Default model page chooses and confPath keeps.
+	noTitles     bool
+	titleModel   modelRef
 	confPath     string
 	confSaver    saver
 	listing      map[string]bool
@@ -429,7 +434,7 @@ func (a *app) send(text string) {
 	prov, model, dir := a.prov, a.model, a.filesDir
 	// A chat just started is named by a model, beside its reply; of files
 	// alone, it keeps the first's name.
-	if started && text != "" && a.nameChats {
+	if started && text != "" && a.nameChats && !a.noTitles {
 		a.nameChat(th, prov, model, text)
 	}
 	stream := func(delta func(chunk)) error {

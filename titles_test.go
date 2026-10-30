@@ -3,9 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
+
+	"hyperai-desktop/locales"
 )
 
 // namer replies to questions, and names chats as a model does, round its
@@ -137,5 +142,76 @@ func TestTitleBesideReply(t *testing.T) {
 		case <-deadline:
 			t.Fatalf("title %q, replying %v", th.Title, th.busy != nil)
 		}
+	}
+}
+
+// The Default model page chooses the model that names new chats, of each
+// chat's provider's cheapest at first, and turns the names off, which
+// fades the choice out of reach; providers.json keeps both.
+func TestTitleSettings(t *testing.T) {
+	dir := t.TempDir()
+	p := &namer{title: "Caching"}
+	a := newApp(p)
+	a.loadFrom(dir)
+	a.nameChats = true
+	tt := ui.NewTester(a.view, 1120, 760)
+	a.openSettings()
+	a.settingsPage = "model"
+	tt.Frame()
+	for _, s := range []string{locales.TitlesCard(), locales.TitlesRow(), locales.TitleModelRow(), locales.TitleModelAuto()} {
+		if !tt.HasText(s) {
+			t.Fatalf("no %q in %q", s, tt.Texts())
+		}
+	}
+	toggle(t, tt, locales.TitleModelRow(), locales.TitleModelAbout())
+	// Automatic, the one chosen at first, then the models offered.
+	if got, want := tt.Menu(), []string{locales.TitleModelAuto(), "-", "claude-opus-5-5"}; !slices.Equal(got, want) {
+		t.Fatalf("menu %q, want %q", got, want)
+	}
+	if err := tt.ChooseMenuItem("claude-opus-5-5"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.titleModel != (modelRef{"anthropic", "claude-opus-5-5"}) {
+		t.Fatalf("title model %+v", a.titleModel)
+	}
+	// Asked in place of the provider's cheapest.
+	a.closeSettings()
+	a.send("How do I cache?")
+	if strings.Join(p.titled, ",") != "claude-opus-5-5" || a.current().Title != "Caching" {
+		t.Errorf("asked %v, title %q", p.titled, a.current().Title)
+	}
+
+	// Off: no chat is named, and the model is out of reach.
+	a.openSettings()
+	a.settingsPage = "model"
+	tt.Frame()
+	toggle(t, tt, locales.TitlesRow(), locales.TitlesAbout())
+	if !a.noTitles {
+		t.Fatal("the switch did not turn the titles off")
+	}
+	tt.CloseMenu()
+	toggle(t, tt, locales.TitleModelRow(), locales.TitleModelAbout())
+	if m := tt.Menu(); len(m) != 0 {
+		t.Errorf("the title model opens while off: %q", m)
+	}
+	a.closeSettings()
+	a.newChat()
+	a.send("Another question")
+	if len(p.titled) != 1 || a.current().Title != "Another question" {
+		t.Errorf("named while off: asked %v, title %q", p.titled, a.current().Title)
+	}
+
+	// Kept for the next start.
+	a.confSaver.wait()
+	again := newApp(p)
+	again.loadConf(dir)
+	if !again.noTitles || again.titleModel != (modelRef{"anthropic", "claude-opus-5-5"}) {
+		t.Errorf("kept noTitles %v, model %+v", again.noTitles, again.titleModel)
+	}
+	// A provider removed takes its model with it: Automatic again.
+	again.removeProvider("anthropic")
+	if again.titleModel != (modelRef{}) {
+		t.Errorf("title model %+v after its provider went", again.titleModel)
 	}
 }

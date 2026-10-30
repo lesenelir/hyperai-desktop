@@ -1534,13 +1534,13 @@ func (msgs Messages) PageModel() string {
 	return Catalog.Format(msgs.locale, "pageModel", nil)
 }
 
-// PageModelAbout says "The model a new chat asks, until it is changed in the composer."
+// PageModelAbout says "The model a new chat asks, until it is changed in the composer, and the one that names it."
 // in the language the app shows.
 //
 // Under the Default model page's title.
 func PageModelAbout() string { return In(i18n.Locale()).PageModelAbout() }
 
-// PageModelAbout says "The model a new chat asks, until it is changed in the composer."
+// PageModelAbout says "The model a new chat asks, until it is changed in the composer, and the one that names it."
 // in the language of msgs.
 //
 // Under the Default model page's title.
@@ -4440,6 +4440,108 @@ func DefaultModelNone() string { return In(i18n.Locale()).DefaultModelNone() }
 // Under the Default model page's row while no provider can be asked.
 func (msgs Messages) DefaultModelNone() string {
 	return Catalog.Format(msgs.locale, "defaultModelNone", nil)
+}
+
+// TitlesCard says "Chat titles"
+// in the language the app shows.
+//
+// The title of the Default model page's card of how new chats are named.
+func TitlesCard() string { return In(i18n.Locale()).TitlesCard() }
+
+// TitlesCard says "Chat titles"
+// in the language of msgs.
+//
+// The title of the Default model page's card of how new chats are named.
+func (msgs Messages) TitlesCard() string {
+	return Catalog.Format(msgs.locale, "titlesCard", nil)
+}
+
+// TitlesRow says "Generate titles"
+// in the language the app shows.
+//
+// The switch that has a model name each new chat.
+func TitlesRow() string { return In(i18n.Locale()).TitlesRow() }
+
+// TitlesRow says "Generate titles"
+// in the language of msgs.
+//
+// The switch that has a model name each new chat.
+func (msgs Messages) TitlesRow() string {
+	return Catalog.Format(msgs.locale, "titlesRow", nil)
+}
+
+// TitlesAbout says "A model names each new chat in a few words, in place of the start of its first message."
+// in the language the app shows.
+//
+// Under the switch that has a model name each new chat.
+func TitlesAbout() string { return In(i18n.Locale()).TitlesAbout() }
+
+// TitlesAbout says "A model names each new chat in a few words, in place of the start of its first message."
+// in the language of msgs.
+//
+// Under the switch that has a model name each new chat.
+func (msgs Messages) TitlesAbout() string {
+	return Catalog.Format(msgs.locale, "titlesAbout", nil)
+}
+
+// TitleModelRow says "Title model"
+// in the language the app shows.
+//
+// The pop-up button that chooses the model that names new chats.
+func TitleModelRow() string { return In(i18n.Locale()).TitleModelRow() }
+
+// TitleModelRow says "Title model"
+// in the language of msgs.
+//
+// The pop-up button that chooses the model that names new chats.
+func (msgs Messages) TitleModelRow() string {
+	return Catalog.Format(msgs.locale, "titleModelRow", nil)
+}
+
+// TitleModelAuto says "Automatic"
+// in the language the app shows.
+//
+// The title model's choice, first in its menu, that asks each chat's own
+// provider on its cheapest model.
+func TitleModelAuto() string { return In(i18n.Locale()).TitleModelAuto() }
+
+// TitleModelAuto says "Automatic"
+// in the language of msgs.
+//
+// The title model's choice, first in its menu, that asks each chat's own
+// provider on its cheapest model.
+func (msgs Messages) TitleModelAuto() string {
+	return Catalog.Format(msgs.locale, "titleModelAuto", nil)
+}
+
+// TitleModelAbout says "Automatic asks each chat’s own provider, on its cheapest model. Any other model is sent the first message of every …"
+// in the language the app shows.
+//
+// Under the title model's pop-up button: what Automatic does, and that
+// another model is sent every new chat's first message.
+func TitleModelAbout() string { return In(i18n.Locale()).TitleModelAbout() }
+
+// TitleModelAbout says "Automatic asks each chat’s own provider, on its cheapest model. Any other model is sent the first message of every …"
+// in the language of msgs.
+//
+// Under the title model's pop-up button: what Automatic does, and that
+// another model is sent every new chat's first message.
+func (msgs Messages) TitleModelAbout() string {
+	return Catalog.Format(msgs.locale, "titleModelAbout", nil)
+}
+
+// TitlesTerms says "Title, Name, Chat title, Rename"
+// in the language the app shows.
+//
+// What finds the chat titles' rows in the settings' field, comma-separated.
+func TitlesTerms() string { return In(i18n.Locale()).TitlesTerms() }
+
+// TitlesTerms says "Title, Name, Chat title, Rename"
+// in the language of msgs.
+//
+// What finds the chat titles' rows in the settings' field, comma-separated.
+func (msgs Messages) TitlesTerms() string {
+	return Catalog.Format(msgs.locale, "titlesTerms", nil)
 }
 
 // NoProviderTitle says "No provider yet"

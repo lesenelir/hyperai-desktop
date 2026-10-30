@@ -31,21 +31,26 @@ const titleTimeout = 30 * time.Second
 // title: a longer one is an answer to the message, not a name for it.
 const titleMaxRunes = 80
 
-// nameChat asks for a title of the chat th, which first was sent first, of
-// the provider p, on the cheap model of its kind (titleModel), else model,
-// the chat's, which it asks again where the cheap one fails. The title
-// lands on the main thread (titled); one that fails leaves the chat as it is.
+// nameChat asks for a title of the chat th, which first was sent first:
+// of the model the Default model page chose (app.titleModel), where it is
+// still offered, else of the chat's provider p, on the cheap model of its
+// kind (titleModel), else model, the chat's; and of the chat's model again
+// where the other fails, which sends first nowhere it had not gone. The
+// title lands on the main thread (titled); one that fails leaves the chat
+// as it is.
 func (a *app) nameChat(th *thread, p provider, model, first string) {
-	cheap := model
-	if kind := a.kindOf(p.ID()); kind != nil && kind.titleModel != "" {
+	tp, cheap := p, model
+	if chosen := a.providerOf(a.titleModel); chosen != nil {
+		tp, cheap = chosen, a.titleModel.Model
+	} else if kind := a.kindOf(p.ID()); kind != nil && kind.titleModel != "" {
 		cheap = kind.titleModel
 	}
 	id, local := th.ID, th.Title
 	a.async(func() func() {
 		ctx, cancel := context.WithTimeout(context.Background(), titleTimeout)
 		defer cancel()
-		name, err := askTitle(ctx, p, cheap, first)
-		if err != nil && cheap != model && !errors.Is(err, context.DeadlineExceeded) {
+		name, err := askTitle(ctx, tp, cheap, first)
+		if err != nil && (tp != p || cheap != model) && !errors.Is(err, context.DeadlineExceeded) {
 			name, err = askTitle(ctx, p, model, first)
 		}
 		return func() {

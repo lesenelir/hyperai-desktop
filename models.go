@@ -98,7 +98,11 @@ func (a *app) modelMenu(m *ui.Menu, checked func(p provider, model string) bool,
 // modelTerms returns what the Default model page holds, as the settings'
 // field finds it.
 func (a *app) modelTerms() []settingsTerm {
-	return []settingsTerm{{locales.DefaultModelRow(), terms(locales.DefaultModelTerms())}}
+	return []settingsTerm{
+		{locales.DefaultModelRow(), terms(locales.DefaultModelTerms())},
+		{locales.TitlesRow(), terms(locales.TitlesTerms())},
+		{locales.TitleModelRow(), terms(locales.TitlesTerms())},
+	}
 }
 
 // modelPage builds the Default model page: the model a new chat asks, of
@@ -133,6 +137,59 @@ func (a *app) modelPage(c *ui.Context) {
 							a.choose(p, model)
 						}
 					})
+			})
+		})
+	})
+	a.titlesCard(c)
+}
+
+// titlesCard builds the card of how new chats are named (titles.go):
+// whether a model names them, and which, Automatic first, each chat's own
+// provider's cheapest, then the models offered, as the default's menu
+// lists them; faded and out of reach while none does.
+func (a *app) titlesCard(c *ui.Context) {
+	if len(a.provs) == 0 {
+		return
+	}
+	a.settingsCard(c, locales.TitlesCard(), func() {
+		a.settingRow(c, locales.TitlesRow(), locales.TitlesAbout(), func() {
+			on := !a.noTitles
+			if ui.Switch(c.Key("titles"), &on).Label(locales.TitlesRow()).Changed() {
+				a.noTitles = !on
+				a.saveConf()
+			}
+		})
+		settingDivider(c)
+		auto := a.providerOf(a.titleModel) == nil
+		shown := locales.TitleModelAuto()
+		if !auto {
+			shown = a.titleModel.Model
+		}
+		a.settingRow(c, locales.TitleModelRow(), locales.TitleModelAbout(), func() {
+			row := ui.Row(c).Disabled(a.noTitles)
+			if a.noTitles {
+				row.Opacity(0.35)
+			}
+			row.Children(func() {
+				titles := func() []string {
+					out := []string{locales.TitleModelAuto()}
+					for _, p := range a.provs {
+						out = append(out, p.Models()...)
+					}
+					return out
+				}
+				a.popUpButton(c, locales.TitleModelRow(), shown, titles, func(m *ui.Menu) {
+					if m.Item(locales.TitleModelAuto()).Checked(auto).Chosen() {
+						a.titleModel = modelRef{}
+						a.saveConf()
+					}
+					m.Separator()
+					a.modelMenu(m, func(p provider, model string) bool { return !auto && a.titleModel == modelRef{p.ID(), model} },
+						func(p provider, model string) {
+							a.titleModel = modelRef{p.ID(), model}
+							a.saveConf()
+						})
+				})
 			})
 		})
 	})

@@ -198,12 +198,15 @@ type modelRef struct {
 }
 
 // providersFile is what providers.json holds, beside the chats: the
-// model a new chat asks, each provider's settings, by its ID, and the
-// providers the user added, in order.
+// model a new chat asks, whether a model names the chats and which, each
+// provider's settings, by its ID, and the providers the user added, in
+// order.
 type providersFile struct {
-	Default   modelRef                 `json:"default,omitzero"`
-	Providers map[string]*providerConf `json:"providers,omitempty"`
-	Custom    []customProvider         `json:"custom,omitempty"`
+	Default    modelRef                 `json:"default,omitzero"`
+	NoTitles   bool                     `json:"noTitles,omitempty"`
+	TitleModel modelRef                 `json:"titleModel,omitzero"`
+	Providers  map[string]*providerConf `json:"providers,omitempty"`
+	Custom     []customProvider         `json:"custom,omitempty"`
 }
 
 // loadConf reads the providers' settings kept in dir, if any.
@@ -218,6 +221,7 @@ func (a *app) loadConf(dir string) {
 		return
 	}
 	a.confs, a.defaultModel = f.Providers, f.Default
+	a.noTitles, a.titleModel = f.NoTitles, f.TitleModel
 	a.copilot.dir = filepath.Join(dir, "copilot")
 	a.custom = nil
 	for _, p := range f.Custom {
@@ -231,7 +235,7 @@ func (a *app) saveConf() {
 	if a.confPath == "" {
 		return
 	}
-	f := providersFile{Default: a.defaultModel, Providers: a.confs}
+	f := providersFile{Default: a.defaultModel, NoTitles: a.noTitles, TitleModel: a.titleModel, Providers: a.confs}
 	for _, kind := range a.custom {
 		f.Custom = append(f.Custom, customProvider{kind.id, kind.name, kind.api})
 	}
@@ -689,6 +693,9 @@ func (a *app) removeProvider(id string) {
 	delete(a.listErrors, id)
 	if a.defaultModel.Provider == id {
 		a.defaultModel = modelRef{}
+	}
+	if a.titleModel.Provider == id {
+		a.titleModel = modelRef{}
 	}
 	a.saveConf()
 	if a.key(id) != "" {

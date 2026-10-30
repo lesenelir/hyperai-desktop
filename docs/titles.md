@@ -45,6 +45,15 @@ service it never chose. The prompt asks for at most six words, no quotes,
 no trailing period, in the language of the message, and not to answer it;
 the message goes in `<message>` tags. What the model reasoned is dropped.
 
+**The user decides, on the Default model page.** Its Chat titles card
+turns the generated titles off (Generate titles, on at first), and
+chooses the Title model: Automatic at first, which is the rule above,
+then any model offered, which every new chat's first message is then sent
+to, as the row says. Where that one fails, the chat's own model is asked,
+which sends the message nowhere new; where its provider is removed,
+Automatic is chosen again. Both are kept in `providers.json`
+(`noTitles`, `titleModel`).
+
 **A user's name always wins.** A title lands only on a chat whose title is
 still the local one it replaces, so that it never overwrites another. When
 chats can be renamed, split the title as Waku does:
