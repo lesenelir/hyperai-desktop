@@ -385,6 +385,14 @@ func (p *anthropicAPI) Stream(ctx context.Context, model string, turns []turn, d
 	}
 	// Room for a long reply, which streaming lets take its time.
 	params := anthropic.BetaMessageNewParams{Model: model, MaxTokens: 64000, Messages: msgs}
+	// The conversation is cached, as far as its last block: the next
+	// question reads it back, its files too, which every question sends
+	// again, at a tenth of the price or less, rather than all of it anew.
+	// For five minutes from each question, as the default, which a reply
+	// within them keeps; a compatible service may not take it.
+	if !p.compatible {
+		params.CacheControl = anthropic.NewBetaCacheControlEphemeralParam()
+	}
 	if !p.compatible && slices.Contains(anthropicFallbacks, model) {
 		params.Betas = []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01}
 		params.Fallbacks = anthropic.BetaFallbacksParamUnion{OfDefault: constant.ValueOf[constant.Default]()}

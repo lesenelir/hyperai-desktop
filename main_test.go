@@ -2842,6 +2842,10 @@ func TestAnthropicStream(t *testing.T) {
 	if body["fallbacks"] != "default" || !strings.Contains(beta, "server-side-fallback-2026-07-01") || body["max_tokens"] != float64(64000) {
 		t.Errorf("fallbacks %v, beta %q, max_tokens %v", body["fallbacks"], beta, body["max_tokens"])
 	}
+	// Cached as far as its end, for the next question to read back.
+	if cache, _ := body["cache_control"].(map[string]any); cache["type"] != "ephemeral" {
+		t.Errorf("cache_control %v", body["cache_control"])
+	}
 	if err := p.Stream(context.Background(), "claude-haiku-5-5", turns, func(chunk) {}); err != nil || body["fallbacks"] != nil {
 		t.Errorf("Haiku: error %v, fallbacks %v", err, body["fallbacks"])
 	}
@@ -3439,8 +3443,8 @@ func TestCustomAnthropicProvider(t *testing.T) {
 	if err := a.prov.Stream(context.Background(), a.model, []turn{{Role: "user", Content: "Hello"}}, delta); err != nil || reply.String() != "Hi" || reasoning.String() != "Greet back." {
 		t.Errorf("replied %q, reasoned %q, %v", reply.String(), reasoning.String(), err)
 	}
-	if key[0] != "" || beta[0] != "" || body["fallbacks"] != nil {
-		t.Errorf("key %q, beta %q, fallbacks %v", key[0], beta[0], body["fallbacks"])
+	if key[0] != "" || beta[0] != "" || body["fallbacks"] != nil || body["cache_control"] != nil {
+		t.Errorf("key %q, beta %q, fallbacks %v, cache_control %v", key[0], beta[0], body["fallbacks"], body["cache_control"])
 	}
 	a.setKey(id, "sk-proxy")
 	if err := a.prov.Stream(context.Background(), a.model, []turn{{Role: "user", Content: "Hello"}}, func(chunk) {}); err != nil || !strings.HasSuffix(key[1], "sk-proxy") {
