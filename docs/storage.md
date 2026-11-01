@@ -69,6 +69,7 @@ between devices; or more than one process writes the same data.
   chats/
     index.json          the chats, for the sidebar
     <id>.jsonl          one chat's log, by its ID
+    <id>.partial        the reply streaming in, while it does
   attachments/          unchanged
   chats.json.migrated   the old file, kept after migrating
 ```
@@ -169,8 +170,9 @@ version switches, then replaying its log, must give the same `Messages`,
 
 - **A reply is logged once, when it ends.** The text that streams in is not
   logged: that would be dozens of lines a second, and replaying a partial
-  reply is not useful in chat. If the app quits during a reply, the
-  question is kept and the reply is lost. Before, both were lost.
+  reply is not useful in chat. What came of it is kept aside instead, in
+  the chat's partial (below), so a crash during a reply loses at most the
+  last second of it. Before, the question and the reply were both lost.
 - **Unknown types are skipped.** A newer build may add types; an older
   build reading the log ignores them. A change to the meaning of an
   existing type bumps `v` in the `chat` line.
@@ -209,8 +211,64 @@ its log deleted. The index is encoded every time.
   repair below fixes the index from the logs, and never brings back a
   chat that was deleted.
 - **On quit, the app waits for the writer**, as it waits for the layout,
-  the settings and the attachments. Nothing calls fsync on each line; a
-  crash of the OS can lose the last lines, as it could lose `chats.json`.
+  the settings and the attachments, then saves once more, for what failed,
+  and waits again. Nothing calls fsync on each line; a crash of the OS can
+  lose the last lines, as it could lose `chats.json`.
+
+### A write that fails
+
+A chat counts its lines as logged as soon as they are queued, so a write
+that fails (a full disk, a folder that takes no files) would otherwise
+never be written again. Waku's store, which notes rows as written only
+once their transaction commits, is where this rule comes from.
+
+- **The writer lists what failed** (`takeFailed`), and the next save
+  starts with it (`retryFailed`).
+- **A log an append to failed is written whole again** (`rewrite`,
+  `wholeLog`), through a `.tmp` file and a rename, from the chat in
+  memory: the same lines a migration writes. A failed append may have
+  left part of a line, which a rewrite replaces, where another append
+  would go after it.
+- **Until then, the appends to that log are skipped** (`broken`), and
+  count as failed too, so no line goes after a broken one.
+- **A delete that failed is asked again:** the chat counts as on disk
+  again, so the next save, not finding it, deletes its log.
+- **The index needs nothing:** every save writes it whole.
+
+### The reply streaming in
+
+While a reply streams, `keepPartial` writes it, as a `message` line, to
+`chats/<id>.partial`, at most once a second (`partialEvery`), in place of
+the last (through a `.tmp` file and a rename). Waku saves a streaming
+reply each second for the same reason, as a row it updates in place. A log
+that is only appended to cannot be updated, so the reply is kept in a
+file of its own, which is deleted once the reply is in the log: the save
+that appends it, as it ends or is stopped, also deletes the partial, after
+the line, in the writer's order.
+
+At launch, a partial whose reply the log lacks is a reply a crash cut
+short (`recoverPartial`). It is added to its chat, on the path shown,
+like a reply stopped there: its text as it came, `Stopped.` where none
+came, and the time it was last kept. The launch then saves, which appends
+it to the log and deletes the partial. A partial whose reply the log
+already holds, or whose question it lacks, is deleted.
+
+### Attachments no log names
+
+A chat deleted takes its attachments with it (`forgetFiles`), but a crash
+between the two can leave them. After loading, a goroutine sweeps
+`attachments/` (`sweepAttachments`): it deletes each file that no log,
+partial, `chats.json` or `chats.json.migrated` names, and that was not
+changed in the last hour (`sweepGrace`). That hour covers a file just
+copied for a question whose line is not written yet.
+
+- **It reads the files on disk, as text,** not the chats as they were
+  read, as Waku's sweep scans its rows: a line skipped as broken still
+  keeps its files.
+- **Where any of them cannot be read, it deletes nothing.**
+- `chats.json` counts for a migration that failed, whose chats are not in
+  logs yet, and `chats.json.migrated` for going back to a build before
+  logs.
 
 ## Loading
 
@@ -283,6 +341,13 @@ Migrating and loading took 14 ms, a later load 3 ms.
 - `TestMigrateChatsJSON`: versions, `next` off the path shown, a failed
   reply, a pin, a draft, and a chat kept before versions.
 - `TestLogsWrittenAtOnce`: two replies ending at once, under `-race`.
+- `TestLogKeepsQuestionBeforeReply` also checks a crash during a reply:
+  the folder copied as the crash leaves it, the reply recovered from its
+  partial, logged, and the partial deleted.
+- `TestLogRetriesFailedWrites`: appends and a delete into a folder that
+  takes no files, then the retry.
+- `TestSweepAttachments`: an old file no log names is deleted; a new one,
+  and an old one a log names, are kept.
 
 ## Later
 

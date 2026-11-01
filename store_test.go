@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -136,8 +137,9 @@ func TestLogKeepsChanges(t *testing.T) {
 	}
 }
 
-// A question is kept as it is sent, before its reply ends; the reply as
-// it ends, stopped too.
+// A question is kept as it is sent, before its reply ends; what came of
+// the reply is kept aside as it streams, which a crash leaves, and the
+// next launch shows as a reply stopped there; the reply, once it ends.
 func TestLogKeepsQuestionBeforeReply(t *testing.T) {
 	dir := t.TempDir()
 	p := &held{gate: map[string]chan struct{}{}}
@@ -156,14 +158,126 @@ func TestLogKeepsQuestionBeforeReply(t *testing.T) {
 			t.Fatal("the stream posted nothing")
 		}
 	}
-	b := restart(t, a, dir)
-	if got := path(b.threads[0]); got != "Held" {
-		t.Errorf("while the reply streams, kept %q", got)
+	// The app crashes here: what it left, read by the next launch.
+	a.logs.wait()
+	crashed := copyChats(t, dir)
+	if got := lines(t, crashed, th.ID); !slices.Equal(got, []string{"chat", "message", "title"}) {
+		t.Errorf("log while the reply streams: %v", got)
 	}
+	b := newApp(p)
+	b.loadFrom(crashed)
+	b.logs.wait()
+	got := b.threads[0]
+	if path(got) != "Held | Reply to Held" || got.Messages[1].Error != "" || got.Messages[1].Time.IsZero() {
+		t.Errorf("after a crash: path %q, error %q", path(got), got.Messages[1].Error)
+	}
+	if want := []string{"chat", "message", "title", "message"}; !slices.Equal(lines(t, crashed, th.ID), want) {
+		t.Errorf("recovered reply not logged: %v", lines(t, crashed, th.ID))
+	}
+	if _, err := os.Stat(filepath.Join(crashed, chatsDir, fmt.Sprint(th.ID)+".partial")); err == nil {
+		t.Error("the partial is still there once logged")
+	}
+	// Recovered once: launching again reads it from the log alone.
+	c := restart(t, b, crashed)
+	if got := path(c.threads[0]); got != "Held | Reply to Held" || len(c.threads[0].all()) != 2 {
+		t.Errorf("launched again: %q, %d messages", got, len(c.threads[0].all()))
+	}
+
 	a.stop(th)
-	b = restart(t, a, dir)
-	if got := path(b.threads[0]); got != "Held | Reply to Held" {
+	d := restart(t, a, dir)
+	if got := path(d.threads[0]); got != "Held | Reply to Held" {
 		t.Errorf("once stopped, kept %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, chatsDir, fmt.Sprint(th.ID)+".partial")); err == nil {
+		t.Error("the partial is still there once the reply ended")
+	}
+}
+
+// copyChats returns a folder with a copy of the chats kept in dir.
+func copyChats(t *testing.T, dir string) string {
+	t.Helper()
+	out := t.TempDir()
+	if err := os.CopyFS(filepath.Join(out, chatsDir), os.DirFS(filepath.Join(dir, chatsDir))); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// A write that fails is written again by the next save: the chat's log
+// whole, and the logs of the chats deleted.
+func TestLogRetriesFailedWrites(t *testing.T) {
+	if os.Getuid() == 0 || runtime.GOOS == "windows" {
+		t.Skip("writes in a folder of mode 0500 succeed")
+	}
+	dir := t.TempDir()
+	cdir := filepath.Join(dir, chatsDir)
+	os.Mkdir(cdir, 0o500)
+	a := newApp(&counter{})
+	a.loadFrom(dir)
+	t.Cleanup(func() { os.Chmod(cdir, 0o700); a.logs.wait() })
+	a.send("Q1")
+	a.logs.wait()
+	if _, err := os.Stat(filepath.Join(cdir, "1.jsonl")); err == nil {
+		t.Fatal("written in a folder that takes no files")
+	}
+	os.Chmod(cdir, 0o700)
+	a.save()
+	b := restart(t, a, dir)
+	if len(b.threads) != 1 || path(b.threads[0]) != "Q1 | Answer 1" {
+		t.Fatalf("after the retry: %d chats", len(b.threads))
+	}
+	if want := []string{"chat", "message", "message", "title", "show"}; !slices.Equal(lines(t, dir, b.threads[0].ID), want) {
+		t.Errorf("rewritten log %v, want %v", lines(t, dir, b.threads[0].ID), want)
+	}
+	// And appends on from there.
+	b.open(fmt.Sprint(b.threads[0].ID))
+	b.send("Q2")
+	c := restart(t, b, dir)
+	if got := path(c.threads[0]); got != "Q1 | Answer 1 | Q2 | Answer 2" {
+		t.Errorf("after appending: %q", got)
+	}
+
+	// A delete that fails is asked again.
+	os.Chmod(cdir, 0o500)
+	c.remove(c.threads[0])
+	c.logs.wait()
+	os.Chmod(cdir, 0o700)
+	c.save()
+	if d := restart(t, c, dir); len(d.threads) != 0 {
+		t.Errorf("the deleted chat came back")
+	}
+}
+
+// The sweep deletes the attachments no log names, once they are old
+// enough not to be a question's whose line is to come.
+func TestSweepAttachments(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&counter{})
+	a.loadFrom(dir)
+	a.files = []*attachment{{Name: "kept.txt", Type: typeText, data: []byte("kept")}}
+	a.send("With a file")
+	a.logs.wait()
+	a.writes.Wait()
+	files := filepath.Join(dir, "attachments")
+	kept := a.threads[0].Messages[0].Files[0].File
+	old := time.Now().Add(-2 * sweepGrace)
+	for name, at := range map[string]time.Time{"orphan.txt": old, "new.txt": time.Now()} {
+		os.WriteFile(filepath.Join(files, name), []byte(name), 0o600)
+		os.Chtimes(filepath.Join(files, name), at, at)
+	}
+	os.Chtimes(filepath.Join(files, kept), old, old)
+
+	b := newApp(&counter{})
+	b.loadFrom(dir)
+	b.writes.Wait()
+	var left []string
+	entries, _ := os.ReadDir(files)
+	for _, e := range entries {
+		left = append(left, e.Name())
+	}
+	slices.Sort(left)
+	if want := []string{kept, "new.txt"}; !slices.Equal(left, slices.Sorted(slices.Values(want))) {
+		t.Errorf("left %v, want %v", left, want)
 	}
 }
 

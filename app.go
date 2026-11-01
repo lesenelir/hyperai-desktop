@@ -124,6 +124,12 @@ type thread struct {
 	logged   map[int]bool
 	logLeaf  int
 	logTitle string
+	// rewrite has the next save write its log whole, an append to it
+	// having failed; partial tells that its reply streaming in, or one a
+	// crash cut short, is kept aside (<id>.partial), as of partialAt.
+	rewrite   bool
+	partial   bool
+	partialAt time.Time
 }
 
 // turns returns the conversation for the provider: the messages with text
@@ -554,6 +560,7 @@ func (a *app) ask(th *thread) {
 			a.tookEfforts(prov.ID(), model, *ch.Efforts)
 		}
 		reply.add(ch)
+		a.keepPartial(th, reply)
 	}
 	if a.post == nil {
 		finish(stream(take))
