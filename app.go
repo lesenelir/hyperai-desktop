@@ -118,6 +118,12 @@ type thread struct {
 	boxes   []ui.Rect
 	listBox ui.Rect
 	seek    int
+	// What its log holds (store.go): the messages written to it, nil
+	// where it has no log yet; the last message of the path replaying it
+	// shows; and its title.
+	logged   map[int]bool
+	logLeaf  int
+	logTitle string
 }
 
 // turns returns the conversation for the provider: the messages with text
@@ -285,8 +291,11 @@ type app struct {
 	renderMath bool
 	// onFinish, when set, runs once as a reply ends (HYPERAI_BENCH).
 	onFinish func()
-	path     string // where the chats are saved, "" in tests
-	saver    saver
+	path     string // the folder the chats are saved in, "" in tests
+	logs     logWriter
+	// onDisk are the chats that have a log, which save deletes as they
+	// are.
+	onDisk map[int]bool
 	// rev counts the changes to the chats that move them in the sidebar:
 	// one made, updated or removed. rows are the sidebar's rows as of
 	// rowsRev, rowsDay and rowsLang, the language their groups are titled
@@ -502,6 +511,8 @@ func (a *app) ask(th *thread) {
 	th.Effort = a.askedEffort()
 	ctx = withEffort(ctx, th.Effort)
 	th.busy, th.cancel = reply, cancel
+	// The question is kept as it is asked, the reply once it ends.
+	a.save()
 
 	// finish ends the reply, on the main thread.
 	finish := func(err error) {
@@ -621,7 +632,7 @@ func (a *app) shownReply() *message {
 }
 
 // errStopped is the Error of a reply stopped before it said anything, as
-// chats.json keeps it, whatever the app's language.
+// the chat's log keeps it, whatever the app's language.
 const errStopped = "Stopped."
 
 // errorText returns what went wrong with m, as it shows: a stopped reply's

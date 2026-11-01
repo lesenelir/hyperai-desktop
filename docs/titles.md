@@ -11,9 +11,9 @@ per-provider plumbing.
 A chat is created by its first message ([`app.send`](../app.go)), and
 [`title`](../app.go) names it from that message: whitespace collapsed to
 single spaces, cut at **48 runes** with an ellipsis; a chat of files alone
-is named by the first. It is stored as `Title` in `chats.json` and shown in
-the sidebar row, the title bar, the search, and the heading of **Copy as
-Markdown**.
+is named by the first. It is stored as `title` in the chats' index and
+log ([storage.md](storage.md)) and shown in the sidebar row, the title
+bar, the search, and the heading of **Copy as Markdown**.
 
 This is a placeholder, not a title: a question like "How do I make the
 composer in my MyGo app send on Enter but…" says what was asked, not what

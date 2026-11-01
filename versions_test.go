@@ -178,10 +178,10 @@ func TestVersionsKept(t *testing.T) {
 	p := &counter{}
 	a := newApp(p)
 	a.loadFrom(dir)
-	t.Cleanup(func() { a.saver.wait() })
+	t.Cleanup(func() { a.logs.wait() })
 	a.send("Q1")
 	a.regenerate(a.current(), 1)
-	a.saver.wait()
+	a.logs.wait()
 
 	again := newApp(p)
 	again.loadFrom(dir)

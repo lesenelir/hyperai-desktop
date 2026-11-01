@@ -207,7 +207,7 @@ A small button that floats over the conversation (scroll to end) rests at
   its corner, 5 past its top and right, clear of a file's name. Files make the composer a box. A question's files show over
   its bubble on the right, its images 120 square, and open in their app
   as clicked. The files sent are copied into `attachments/` beside
-  `chats.json`, which goes with their chat; a draft's stay with its chat
+  `chats/`, which goes with their chat; a draft's stay with its chat
   until the app quits.
 - **Pop-up buttons** (`popUpButton`) choose one of a list, as macOS's:
   the choice over a chevron, on `composer` with a hairline, radius 8,
@@ -258,7 +258,7 @@ A small button that floats over the conversation (scroll to end) rests at
   where it did (Anthropic, those that take OpenAI's API, which are asked
   for it and asked again without where they refuse, and Copilot) — then
   Time to first token, of text or reasoning, Duration, and Output speed,
-  the output over the time past the first token. chats.json keeps them.
+  the output over the time past the first token. The chat's log keeps them.
   No count of model calls: a reply is one.
 - **Export** ([export.go](../export.go)): a chat's menu, in the title bar
   and the sidebar, has Export, and under it PDF…, HTML… and JSON…, which
@@ -462,7 +462,7 @@ what the user and the model wrote.
 - **Typography** is each language's: “” in Chinese, 「」 in Japanese,
   « » and no-break spaces before `:` `?` `;` in French, „“ and a space
   before … in German.
-- What is kept (chats.json) is never a translation: a stopped reply
+- What is kept (the chats' logs) is never a translation: a stopped reply
   keeps `errStopped` and shows it in the language of the moment.
 - **Layout**: try a page in German and French, the longest, and in
   Japanese, the densest; a row's text wraps under its title rather than

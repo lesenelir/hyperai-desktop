@@ -156,7 +156,7 @@ func TestTitleSettings(t *testing.T) {
 	a.loadFrom(dir)
 	// The chats and settings are written on goroutines: done before the
 	// folder goes.
-	t.Cleanup(func() { a.saver.wait(); a.confSaver.wait() })
+	t.Cleanup(func() { a.logs.wait(); a.confSaver.wait() })
 	a.nameChats = true
 	tt := ui.NewTester(a.view, 1120, 760)
 	a.openSettings()

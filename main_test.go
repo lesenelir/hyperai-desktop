@@ -171,7 +171,7 @@ func TestDrafts(t *testing.T) {
 	// A chat's draft is kept with the chats, for the next start.
 	a.open(chatB)
 	tt.Frame()
-	a.saver.wait()
+	a.logs.wait()
 	b := newApp(&demo{})
 	b.loadFrom(dir)
 	if th := b.thread(chatA); th == nil || th.Draft != "Draft of A" {
@@ -1981,7 +1981,7 @@ func TestGeneral(t *testing.T) {
 	}
 
 	// Where the chats are kept: their folder, before any is written.
-	if !tt.HasText(homeRelative(filepath.Join(dir, "chats.json"))) {
+	if !tt.HasText(homeRelative(filepath.Join(dir, "chats"))) {
 		t.Errorf("no path of the chats in %q", tt.Texts())
 	}
 	if err := tt.Click(onMac("Show in Finder", "Show in Folder")); err != nil {
@@ -2037,7 +2037,7 @@ func TestGeneral(t *testing.T) {
 	// The chat shown, again at the next start; a new one where General
 	// says so.
 	a.layoutSaver.wait()
-	a.saver.wait()
+	a.logs.wait()
 	b := newApp(&demo{})
 	b.loadFrom(dir)
 	if b.selected != a.selected || b.sendWith != sendCmdReturn {

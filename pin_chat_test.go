@@ -33,7 +33,7 @@ func TestPinChat(t *testing.T) {
 	dir := t.TempDir()
 	a := newApp(&counter{})
 	a.loadFrom(dir)
-	t.Cleanup(func() { a.saver.wait() })
+	t.Cleanup(func() { a.logs.wait() })
 	tt := ui.NewTester(a.view, 1120, 760)
 	for _, q := range []string{"First", "Second", "Third"} {
 		a.newChat()
@@ -81,7 +81,7 @@ func TestPinChat(t *testing.T) {
 	}
 
 	// Kept with the chats.
-	a.saver.wait()
+	a.logs.wait()
 	again := newApp(&counter{})
 	again.loadFrom(dir)
 	if got := sidebar(again); !slices.Equal(got, []string{pinned, "Second", chats, today, "Third", "First"}) {
@@ -144,7 +144,7 @@ func TestFoldSections(t *testing.T) {
 	dir := t.TempDir()
 	a := newApp(&counter{})
 	a.loadFrom(dir)
-	t.Cleanup(func() { a.saver.wait(); a.layoutSaver.wait() })
+	t.Cleanup(func() { a.logs.wait(); a.layoutSaver.wait() })
 	tt := ui.NewTester(a.view, 1120, 760)
 	for _, q := range []string{"First", "Second"} {
 		a.newChat()

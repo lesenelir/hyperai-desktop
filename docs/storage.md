@@ -1,32 +1,33 @@
 # Chat storage
 
 How HyperAI keeps its chats on disk, and how it moves from one
-`chats.json` to a log per chat. This is a plan: nothing below is built
-yet. The comparison it rests on looked at ChatWise and Alma, which use
-SQLite, and at Codex, DeepSeek Harness and Claude Code, which keep an
-append-only JSONL file per session.
+`chats.json` to a log per chat ([store.go](../store.go)). The comparison
+it rests on looked at ChatWise and Alma, which use SQLite, and at Codex,
+DeepSeek Harness and Claude Code, which keep an append-only JSONL file per
+session.
 
-## Today
+## Before
 
-[store.go](../store.go) keeps every chat in one file, `chats.json`, in the
-user data directory. Every chat and every message is a single JSON array,
+The app used to keep every chat in one file, `chats.json`, in the user
+data directory. Every chat and every message is a single JSON array,
 indented, the `thread` and `message` structs of [app.go](../app.go) as
 their `json` tags write them. Files sent with a question are copied into
 `attachments/`, named with a random hex name (`keepFiles`,
 [attach.go](../attach.go)), and the message keeps only that name.
 
-Each `a.save()` encodes **all** chats on the main thread and writes them
-to `chats.json.tmp`, then renames that over `chats.json`, on a goroutine
-(`saver`). That is safe, and fine at 47 chats and 226 KB, but:
+Each `a.save()` encoded **all** chats on the main thread and writes them
+to `chats.json.tmp`, then renamed that over `chats.json`, on a goroutine
+(`saver`). That was safe, and fine at 47 chats and 226 KB, but:
 
 - **Every change rewrites everything.** A new message, a pin, a rename, a
   draft kept as the user leaves a chat, a version shown: each one encodes
   and writes every chat. The cost grows with the history, not with the
   change.
-- **A question is not kept until its reply ends.** `send` adds the question
-  and `ask` streams the reply, but the first `save` comes when the reply
-  ends (`finish`), when the title arrives, or when the reply is stopped. If
-  the app quits in the middle, the question and the reply are both lost.
+- **A question was not kept until its reply ended.** `send` added the
+  question and `ask` streamed the reply, but the first `save` came when the
+  reply ended (`finish`), when the title arrived, or when the reply was
+  stopped. If the app quit in the middle, the question and the reply were
+  both lost.
 - **It has no room for an agent.** One reply in Agent mode can be dozens of
   tool calls with large outputs. Rewriting the whole history after each one
   costs too much, and a crash loses the whole turn.
@@ -89,7 +90,6 @@ without reading any log:
     {
       "id": 12,
       "title": "…",
-      "created": "2026-11-01T22:40:00Z",
       "updated": "2026-11-01T22:44:00Z",
       "pinned": "2026-11-01T22:45:00Z",
       "model": "…",
@@ -102,15 +102,15 @@ without reading any log:
 ```
 
 - **The fields are the `thread` fields that are not messages:** `Title`,
-  `Updated`, `Pinned`, `Model`, `Provider`, `Effort`, `Draft`, plus
-  `created`. Their `json` names stay the same, and empty ones are left out
-  as today.
+  `Updated`, `Pinned`, `Model`, `Provider`, `Effort` and `Draft`
+  (`indexEntry`). Their `json` names are the ones `thread` had, and empty
+  ones are left out.
 - **`next` is the ID counter.** Chats and messages share one counter
   (`a.next`), which `loadFrom` finds today by reading every message. The
   index keeps it, so the counter is known before any log is read. On load,
   `next` is the larger of the index's value and the IDs seen in the logs.
-- **It is written whole**, encoded on the main thread and written by the
-  `saver` as `chats.json` is now (a `.tmp` file, then a rename). It is
+- **It is written whole**, encoded on the main thread and written on a
+  goroutine through a `.tmp` file and a rename, as `chats.json` was. It is
   small, a few hundred bytes per chat, so a draft, a pin or a rename costs
   that much and no more.
 - **The draft is kept only here**, not in the log. It changes too often
@@ -119,24 +119,25 @@ without reading any log:
 ## The log
 
 `chats/<id>.jsonl` is one JSON object per line, in the order things
-happened, and is only ever appended to. Every line has a type `t` and a
-time `at` (RFC 3339, UTC):
+happened, and is only ever appended to. Every line has a type `t` and,
+except in logs moved from `chats.json`, a time `at` (RFC 3339, UTC). A
+message with no `parent` is a version of the first question:
 
 ```jsonl
 {"t":"chat","at":"…","v":1,"id":12}
 {"t":"message","at":"…","id":13,"role":"user","text":"…","files":[{"name":"a.pdf","type":"application/pdf","file":"15f99a47b549ec16.pdf"}],"time":"…"}
 {"t":"title","at":"…","title":"…"}
 {"t":"message","at":"…","id":14,"parent":13,"role":"assistant","text":"…","reasoning":"…","reasoned":3.2,"usage":{"input":1200,"output":800},"firstToken":0.8,"elapsed":12.5,"time":"…"}
-{"t":"message","at":"…","id":15,"parent":12,"role":"user","text":"…","time":"…"}
+{"t":"message","at":"…","id":15,"role":"user","text":"… edited","time":"…"}
 {"t":"show","at":"…","leaf":14}
 ```
 
 | Type | Written when | Fields |
 | --- | --- | --- |
 | `chat` | The chat is created: the first line, and only the first | `v`, the log format version; `id`, the chat's ID |
-| `message` | A question is sent, edited or sent again (`send`, `resend`), as soon as it is created. A reply has ended, failed or been stopped (`finish`, `stop`) | The `message` struct as its `json` tags write it: `id`, `parent`, `role`, `text`, `files`, `error`, `elapsed`, `time`, `reasoning`, `reasoned`, `usage`, `firstToken` |
+| `message` | A question is asked (`ask`, as `send`, `resend` and `regenerate` call it), as the reply starts. A reply has ended, failed or been stopped (`finish`, `stop`) | The `message` struct as its `json` tags write it, but `next`, which the replay makes: `id`, `parent`, `role`, `text`, `files`, `error`, `elapsed`, `time`, `reasoning`, `reasoned`, `usage`, `firstToken` |
 | `title` | The chat is renamed by the user or named by a model (`renameEnd`, `titled`) | `title` |
-| `show` | The user shows another version (`showVersion`) | `leaf`, the last message of the path now shown |
+| `show` | The path shown is not the one replaying the log would show: the user showed another version (`showVersion`), or a reply was asked for again | `leaf`, the last message of the path now shown |
 
 ### Replaying a log into a chat
 
@@ -169,7 +170,7 @@ version switches, then replaying its log, must give the same `Messages`,
 - **A reply is logged once, when it ends.** The text that streams in is not
   logged: that would be dozens of lines a second, and replaying a partial
   reply is not useful in chat. If the app quits during a reply, the
-  question is kept and the reply is lost. Today both are lost.
+  question is kept and the reply is lost. Before, both were lost.
 - **Unknown types are skipped.** A newer build may add types; an older
   build reading the log ignores them. A change to the meaning of an
   existing type bumps `v` in the `chat` line.
@@ -180,36 +181,41 @@ version switches, then replaying its log, must give the same `Messages`,
 
 ## Writing
 
-- **Appends are queued.** They go through an ordered queue per chat on one
-  writer goroutine, like the `saver`, so the main thread never waits for
-  the disk and the lines of one chat stay in order. The event is encoded
-  on the main thread, where the message is safe to read.
-- **One line, one write.** Each event is encoded to a single line ending in
-  `\n` and written with one `Write` to a file opened with `O_APPEND`.
-- **The log is written before the index.** When a change touches both (a
-  new message also updates `updated`), the log line is queued first. If
-  the app crashes between the two, the load below repairs the index from
-  the log.
-- **On quit, the app waits for the queue**, as it waits for the `saver` and
-  for attachments (`writes`) today. Nothing calls fsync on each line; a
-  crash of the OS can lose the last lines, as it can lose `chats.json`
-  today.
+**`a.save()` keeps what changed**, and the call sites stayed as they were:
+`ask`, `finish`, `stop`, `showVersion`, `renameEnd`, `titled`,
+`togglePin`, `keepDraft`, `remove` and `removeAll` call it. Each chat
+remembers what its log holds (`logged`, `logLeaf`, `logTitle`), and
+`logChanges` returns only the lines it lacks:
 
-What the current `a.save()` calls become:
+- a `chat` line, where the chat has no log yet;
+- a `message` line for each message that is not in the log and not
+  streaming, in ID order;
+- a `show` line, where the last message of the path shown, not counting a
+  reply streaming in, is not where replaying the log would end;
+- a `title` line, where the title changed.
 
-| Today | Then |
-| --- | --- |
-| `send`, `resend` (no save today) | append the question's `message`; save the index |
-| `finish`, `stop` | append the reply's `message`; save the index |
-| `showVersion` | append `show` |
-| `renameEnd`, `titled` | append `title`; save the index |
-| `togglePin`, `keepDraft` | save the index |
-| `remove`, `removeAll` | save the index, then delete the logs (and the attachments, as now) |
+A chat with nothing new costs a few comparisons. A chat that is gone has
+its log deleted. The index is encoded every time.
+
+- **Writing happens on a goroutine, in order** (`logWriter`). The lines are
+  encoded on the main thread, where the messages are safe to read. The
+  writer applies every change in the order asked, then writes the latest
+  index, so the main thread never waits for the disk.
+- **One write per save.** A chat's new lines are joined and written with
+  one `Write` to its log, opened with `O_APPEND`.
+- **The logs come before the index.** A new message is appended before the
+  index that dates it is written, and a deleted chat's log is removed
+  before the index that drops it. If the app crashes between the two, the
+  repair below fixes the index from the logs, and never brings back a
+  chat that was deleted.
+- **On quit, the app waits for the writer**, as it waits for the layout,
+  the settings and the attachments. Nothing calls fsync on each line; a
+  crash of the OS can lose the last lines, as it could lose `chats.json`.
 
 ## Loading
 
 1. **Read `index.json`.** The sidebar can show from it alone.
-2. **Read every log**, as `loadFrom` reads every chat today, since the
+2. **Read every log**, as `loadFrom` read every chat before, since the
    search, the outline and Copy as Markdown need the messages. Later, if
    measurement shows launch is slow (see
    [performance.md](performance.md)), logs can be read lazily, and the
@@ -220,10 +226,10 @@ What the current `a.save()` calls become:
    would be glued to the broken one. A broken line anywhere else is
    skipped and logged.
 4. **Repair the index against the logs.**
-   - A log with no entry in the index gets one: `created` from the `chat`
-     line, `updated` from the last question's `time`, the title from the
-     last `title` event, or else `title()` of the first question, as
-     `send` makes it.
+   - A log with no entry in the index gets one, after the chats the index
+     lists: `updated` from the last question's `time`, else the `chat`
+     line's; the title from the last `title` event, else `title()` of the
+     first question, as `send` makes it.
    - An entry whose log is missing is dropped.
    - If `index.json` is missing or cannot be read, it is rebuilt from the
      logs this way. Pins and drafts are lost in that case.
@@ -232,15 +238,18 @@ What the current `a.save()` calls become:
 
 At launch, if `chats/index.json` does not exist and `chats.json` does:
 
-1. Read `chats.json` as `loadFrom` does now, including `link()` for chats
-   kept before versions existed.
+1. Read `chats.json` as `loadFrom` used to, including `link()` for chats
+   kept before versions existed. If it cannot be read, nothing is moved
+   and it is left where it is.
 2. For each chat, write `chats/<id>.jsonl`: the `chat` line, then every
-   message from `all()` **in ID order**, written as it is with its `next`
-   included, then one `title` line, then a `show` line whose `leaf` is the
-   last message of `Messages`. Parents always have smaller IDs than their
-   children, because both come from the same increasing counter, so ID
-   order adds every message after its parent. Writing `next` as it was
-   keeps the version each message showed last.
+   message in **replay order** (`replayOrder`), then one `title` line,
+   then a `show` line whose `leaf` is the last message of `Messages`.
+   Replay order is depth first from the first questions. Of the versions
+   of one message, the one it showed last (its `next`) comes after the
+   others, with everything that followed each. So every message comes
+   after its parent, and the last line in a message's subtree runs down
+   the version it showed last. Replaying the log then gives every message
+   the `next` it had, even on paths not shown, without writing `next`.
 3. Write `index.json`, with `next` set to the counter.
 4. Rename `chats.json` to `chats.json.migrated`. It is kept, not deleted.
    Nothing reads it again, and the user can delete it.
@@ -248,22 +257,32 @@ At launch, if `chats/index.json` does not exist and `chats.json` does:
 Each log and the index are first written to `.tmp` files, then renamed.
 The migration counts as done only once `index.json` exists. If it is
 interrupted, it runs again at the next launch and overwrites what it
-wrote. A test checks that a `chats.json` read the old way and the same
-chats after migrating are the same.
+wrote.
+
+On a copy of a development data folder (47 chats, 151 messages, 226 KB),
+every chat came back the same as `chats.json` read the old way: path,
+versions, `next`, text, reasoning, files, errors, usage and times.
+Migrating and loading took 14 ms, a later load 3 ms.
 
 ## Tests
 
-- Round trip: chats changed in every way listed above, saved, then
-  loaded, equal the chats in memory.
-- Version replay, as described in "Replaying a log into a chat".
-- A log with a broken last line loads, and the next append starts on a
-  new line.
-- The index is rebuilt and repaired: missing, corrupt, a log with no entry,
-  an entry with no log.
-- Migration from `chats.json`, including chats from before versions and
-  replies that failed or were stopped.
-- Concurrency (`go test -race`): two chats streaming and finishing at once
-  append to their own logs in order, as `TestChatsStreamAtOnce` does.
+[store_test.go](../store_test.go):
+
+- `TestLogReplaysVersions`: a chat sent, asked again, edited and taken
+  through its versions replays to the same path, other versions and
+  `next` of every message, and IDs continue past it.
+- `TestLogKeepsChanges`: title, pin, draft and provider come back; saving
+  twice appends nothing; HTML is not escaped.
+- `TestLogKeepsQuestionBeforeReply`: the question is on disk while its
+  reply streams, and the reply once it is stopped.
+- `TestLogBrokenLines`: a broken last line is cut and the next append
+  starts a line of its own; a broken line in the middle is skipped.
+- `TestIndexRepaired`: a log with no entry, an entry with no log, and no
+  index at all.
+- `TestLogDeleted`: deleting one chat, then all, deletes their logs.
+- `TestMigrateChatsJSON`: versions, `next` off the path shown, a failed
+  reply, a pin, a draft, and a chat kept before versions.
+- `TestLogsWrittenAtOnce`: two replies ending at once, under `-race`.
 
 ## Later
 
