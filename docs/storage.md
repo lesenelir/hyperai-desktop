@@ -4,7 +4,7 @@ How HyperAI keeps its chats on disk, and how it moves from one
 `chats.json` to a log per chat ([store.go](../store.go)). The comparison
 it rests on looked at ChatWise and Alma, which use SQLite, and at Codex,
 DeepSeek Harness and Claude Code, which keep an append-only JSONL file per
-session.
+session ([What other apps do](#what-other-apps-do)).
 
 ## Before
 
@@ -61,6 +61,45 @@ SQLite becomes worth it when one of these is true: the app needs queries
 across chats that memory can't serve fast (folders, tags, filters,
 statistics, full-text search over tens of thousands of chats); chats sync
 between devices; or more than one process writes the same data.
+
+## What other apps do
+
+How six apps on one Mac kept their chats in November 2026, read from their
+data folders and, for Waku, its source. These are internals, not specs,
+and may change. They are the evidence for the decision above, not a
+description to keep current.
+
+| App | Source of truth | Listing and queries | Large payloads | Undoing an agent's file edits |
+| --- | --- | --- | --- | --- |
+| ChatWise | SQLite (`app.db`): a row per chat and per message, text as is; tool calls in a JSON `meta` column | SQL | `files/` | — |
+| Alma | SQLite (`chat_threads.db`): a message as AI SDK `parts` (`text`, `reasoning`, `tool-*`) in one JSON column; a Markdown copy of each chat | SQL, FTS5, vector memory | `artifacts/` | — |
+| Waku | SQLite (`app.db`, WAL): narrow `sessions` rows for the list, a row per message, the rest as JSON; a daemon owns it | SQL; a session's messages read only once it is opened | `blobs/`, by content hash, swept against the rows | Hidden git refs per turn |
+| DeepSeek Harness | A JSONL event log per session, zstd-compressed, under a folder per working directory (`~/.dsh/sessions/`) | A JSON cache per session | — | — |
+| Codex | A JSONL rollout per session (`~/.codex/sessions/<date>/`), zstd once finished | SQLite projected from the rollouts, which notes the byte each was read to | Inline | — |
+| Claude Code | A JSONL log per session, under a folder per working directory (`~/.claude/projects/`); no database at all | Reads the files | `tool-results/` beside the log, which keeps a reference | `file-history/`: each file backed up before each edit, by version |
+
+The pattern: **apps that drive their own agent loop keep an append-only
+log per session**, as Codex, Claude Code and DeepSeek Harness do. **Apps
+that hold mutable state over it use SQLite**: a chat app updating rows in
+place (ChatWise, Alma), or a control plane over other agents, whose
+transcripts those agents keep themselves (Waku). HyperAI is to run its own
+agent loop, which puts it in the first group.
+
+What HyperAI takes from them:
+
+- **A log per chat, only appended to,** from Codex, Claude Code and
+  DeepSeek Harness. Like Claude Code, no database until it is needed; like
+  Codex, a database can be added later as an index derived from the logs
+  ([Later](#later)).
+- **Messages as a tree**, as Claude Code's `parentUuid`: an edit or a
+  reply asked for again is a branch, and nothing is rewritten. HyperAI's
+  `parent` and versions were already this.
+- **A narrow list apart from the transcripts,** as Waku's `sessions` rows
+  and Codex's `threads` table: `index.json`.
+- **Writing again what failed**, a streaming reply kept each second, and
+  sweeping files no chat names, from Waku's store ([Writing](#writing)).
+- **Payloads out of the log** and **backups before edits**, for Agent mode
+  ([Later](#later)).
 
 ## Layout
 
@@ -418,3 +457,13 @@ chat came back the same, with UUIDs.
 - **Rewriting a log** to drop what was replaced, if logs ever grow large
   from edits. No current feature needs it: chats are deleted whole and
   messages never are.
+- **For Agent mode, large payloads out of the log**: a long tool output or
+  a screenshot written to a file beside it (`<id>/`, or a store by
+  content hash, as Waku's `blobs/`), the log keeping a reference, as
+  Claude Code's `tool-results/` does. The log stays small and quick to
+  replay.
+- **For Agent mode, a backup of each file before the agent edits it**, as
+  Claude Code's `file-history/`, so that asking for a turn again, or
+  going back to a version, can put the files back as they were before the
+  turn. It works outside git, unlike Waku's refs; in a git repository,
+  refs are the cheaper record of a whole tree.
