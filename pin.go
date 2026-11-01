@@ -17,7 +17,7 @@ const (
 // shrinks as the reply fills it. Once the reply outgrows the room, the pin
 // lets go and the list follows the reply's end again.
 type pin struct {
-	id   int     // the question's message ID, 0 for none
+	id   ID      // the question's message ID, "" for none
 	room float32 // the room after the last row; -1 until measured
 	y    float32 // where the list is scrolled with the question at its top; -1 until measured
 }
@@ -30,7 +30,7 @@ func (th *thread) pinTop(i int) {
 
 // row returns the row of the question pinned in msgs, -1 for none.
 func (p *pin) row(msgs []*message) int {
-	if p.id == 0 {
+	if p.id == "" {
 		return -1
 	}
 	for i, m := range msgs {
@@ -38,14 +38,14 @@ func (p *pin) row(msgs []*message) int {
 			return i
 		}
 	}
-	p.id = 0 // the question is gone
+	p.id = "" // the question is gone
 	return -1
 }
 
 // held reports whether the list shows the question at the top where the
 // pin put it, scrolled y: the end of the list, as far as the user sees.
 func (p *pin) held(y float32) bool {
-	return p.id != 0 && (p.y < 0 || y >= p.y-1 && y <= p.y+1)
+	return p.id != "" && (p.y < 0 || y >= p.y-1 && y <= p.y+1)
 }
 
 // measure returns the room the list leaves after its last row this frame,

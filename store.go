@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,7 +24,10 @@ import (
 const (
 	chatsDir   = "chats"
 	indexFile  = "index.json"
-	logVersion = 1
+	logVersion = 2 // 1 had numbers for IDs
+	// oldLogs is where the logs of version 1 are kept, once their IDs are
+	// UUIDs.
+	oldLogs = "chats.v1"
 	// oldChats is where every chat was kept before, in one file, which
 	// the first launch since moves into logs, renaming it oldChats +
 	// ".migrated".
@@ -38,18 +41,17 @@ const (
 	sweepGrace = time.Hour
 )
 
-// chatIndex is what index.json holds: the counter of the IDs, and of each
-// chat what the sidebar shows and what changes often.
+// chatIndex is what index.json holds: of each chat, what the sidebar shows
+// and what changes often.
 type chatIndex struct {
 	Version int          `json:"version"`
-	Next    int          `json:"next"`
 	Chats   []indexEntry `json:"chats"`
 }
 
 // indexEntry is a chat as the index keeps it: a thread's fields but its
 // messages.
 type indexEntry struct {
-	ID       int       `json:"id"`
+	ID       ID        `json:"id"`
 	Title    string    `json:"title"`
 	Updated  time.Time `json:"updated"`
 	Pinned   time.Time `json:"pinned,omitzero"`
@@ -67,9 +69,9 @@ type event struct {
 	T     string    `json:"t"`
 	At    time.Time `json:"at,omitzero"`
 	V     int       `json:"v,omitempty"`
-	ID    int       `json:"id,omitempty"`
+	ID    ID        `json:"id,omitempty"`
 	Title string    `json:"title,omitempty"`
-	Leaf  int       `json:"leaf,omitempty"`
+	Leaf  ID        `json:"leaf,omitempty"`
 }
 
 // messageEvent is a line of the type "message": the message as its json
@@ -90,8 +92,9 @@ func (a *app) load() {
 }
 
 // loadFrom reads the layout and the chats kept in dir, moving them out of
-// chats.json the first time, and shows the chat shown last, where General
-// says to and it is still there.
+// chats.json the first time, and the logs of version 1, whose IDs are
+// numbers, into logs whose IDs are UUIDs; and shows the chat shown last,
+// where General says to and it is still there.
 func (a *app) loadFrom(dir string) {
 	a.loadLayout(dir)
 	a.loadConf(dir)
@@ -102,11 +105,24 @@ func (a *app) loadFrom(dir string) {
 	}()
 	a.path = filepath.Join(dir, chatsDir)
 	a.filesDir = filepath.Join(dir, "attachments")
+	finishSwap(a.path)
 	if err := migrate(dir); err != nil {
 		log.Printf("moving the chats out of %s: %v", oldChats, err)
 	}
-	a.threads, a.next = readChats(a.path)
-	a.onDisk = map[int]bool{}
+	a.threads = readChats(a.path)
+	if to := upgradeIDs(a.threads); to != nil {
+		if err := writeChats(a.path, a.threads, filepath.Join(dir, oldLogs)); err != nil {
+			// Saving on would put logs of new IDs beside those of the old.
+			log.Printf("giving the chats new IDs: %v; nothing is saved until the app starts again", err)
+			a.path = ""
+		} else {
+			a.threads = readChats(a.path)
+		}
+		if id, ok := to[ID(a.keptChat)]; ok {
+			a.keptChat = string(id)
+		}
+	}
+	a.onDisk = map[ID]bool{}
 	recovered := false
 	for _, th := range a.threads {
 		a.onDisk[th.ID] = true
@@ -137,13 +153,12 @@ func (a *app) save() {
 	}
 	a.retryFailed()
 	var ops []logOp
-	live := make(map[int]bool, len(a.threads))
-	idx := chatIndex{Version: logVersion, Next: a.next, Chats: make([]indexEntry, 0, len(a.threads))}
+	live := make(map[ID]bool, len(a.threads))
+	idx := chatIndex{Version: logVersion, Chats: make([]indexEntry, 0, len(a.threads))}
 	for _, th := range a.threads {
 		live[th.ID] = true
 		ops = append(ops, a.logChanges(th)...)
-		idx.Chats = append(idx.Chats, indexEntry{ID: th.ID, Title: th.Title, Updated: th.Updated, Pinned: th.Pinned,
-			Model: th.Model, Effort: th.Effort, Provider: th.Provider, Draft: th.Draft})
+		idx.Chats = append(idx.Chats, entryOf(th))
 	}
 	// The logs go before the index, so that the index never holds a chat
 	// that a crash left without a log.
@@ -161,10 +176,13 @@ func (a *app) save() {
 	a.logs.write(ops, filepath.Join(a.path, indexFile), b)
 }
 
-func (a *app) logPath(id int) string { return filepath.Join(a.path, strconv.Itoa(id)+".jsonl") }
+func (a *app) logPath(id ID) string     { return filepath.Join(a.path, string(id)+".jsonl") }
+func (a *app) partialPath(id ID) string { return filepath.Join(a.path, string(id)+".partial") }
 
-func (a *app) partialPath(id int) string {
-	return filepath.Join(a.path, strconv.Itoa(id)+".partial")
+// entryOf returns th as the index keeps it.
+func entryOf(th *thread) indexEntry {
+	return indexEntry{ID: th.ID, Title: th.Title, Updated: th.Updated, Pinned: th.Pinned,
+		Model: th.Model, Effort: th.Effort, Provider: th.Provider, Draft: th.Draft}
 }
 
 // retryFailed has the next save write again what the writer could not:
@@ -174,7 +192,7 @@ func (a *app) retryFailed() {
 	for _, op := range a.logs.takeFailed() {
 		switch op.kind {
 		case opRemove:
-			if op.id != 0 {
+			if op.id != "" {
 				a.onDisk[op.id] = true
 			}
 		default:
@@ -185,7 +203,7 @@ func (a *app) retryFailed() {
 	}
 }
 
-func (a *app) threadByID(id int) *thread {
+func (a *app) threadByID(id ID) *thread {
 	for _, th := range a.threads {
 		if th.ID == id {
 			return th
@@ -217,7 +235,7 @@ func (a *app) logChanges(th *thread) []logOp {
 // all of it: its first line, the messages that are not streaming in, in
 // replay order, its title, and the path shown.
 func wholeLog(th *thread) []byte {
-	th.logged = map[int]bool{}
+	th.logged = map[ID]bool{}
 	out := appendLine(nil, event{T: "chat", At: time.Now().UTC(), V: logVersion, ID: th.ID})
 	for _, m := range replayOrder(th) {
 		if m.streaming {
@@ -231,7 +249,7 @@ func wholeLog(th *thread) []byte {
 		out = appendLine(out, event{T: "title", Title: th.Title})
 	}
 	th.logLeaf = shownLeaf(th)
-	if th.logLeaf != 0 {
+	if th.logLeaf != "" {
 		out = appendLine(out, event{T: "show", Leaf: th.logLeaf})
 	}
 	return out
@@ -256,13 +274,13 @@ func (a *app) newLines(th *thread) []byte {
 	var out []byte
 	now := time.Now().UTC()
 	if th.logged == nil {
-		th.logged = map[int]bool{}
+		th.logged = map[ID]bool{}
 		a.onDisk[th.ID] = true
 		out = appendLine(out, event{T: "chat", At: now, V: logVersion, ID: th.ID})
 	}
 	if len(th.logged) < len(th.Messages)+len(th.Others) {
 		msgs := th.all()
-		slices.SortFunc(msgs, func(x, y *message) int { return x.ID - y.ID })
+		slices.SortFunc(msgs, func(x, y *message) int { return cmp.Compare(x.ID, y.ID) })
 		for _, m := range msgs {
 			if m.streaming || th.logged[m.ID] {
 				continue
@@ -272,7 +290,7 @@ func (a *app) newLines(th *thread) []byte {
 			th.logLeaf = m.ID
 		}
 	}
-	if leaf := shownLeaf(th); leaf != 0 && leaf != th.logLeaf {
+	if leaf := shownLeaf(th); leaf != "" && leaf != th.logLeaf {
 		out = appendLine(out, event{T: "show", At: now, Leaf: leaf})
 		th.logLeaf = leaf
 	}
@@ -284,14 +302,14 @@ func (a *app) newLines(th *thread) []byte {
 }
 
 // shownLeaf returns the last message of th's path that is not streaming
-// in, 0 for none.
-func shownLeaf(th *thread) int {
+// in, "" for none.
+func shownLeaf(th *thread) ID {
 	for i := len(th.Messages) - 1; i >= 0; i-- {
 		if !th.Messages[i].streaming {
 			return th.Messages[i].ID
 		}
 	}
-	return 0
+	return ""
 }
 
 // appendLine appends v to b as a line of JSON, its HTML as it is.
@@ -310,14 +328,14 @@ func appendLine(b []byte, v any) []byte {
 // which replaying the log makes.
 func appendMessage(b []byte, m *message, at time.Time) []byte {
 	c := *m
-	c.Next = 0
+	c.Next = ""
 	return appendLine(b, messageEvent{T: "message", At: at, message: &c})
 }
 
-// readChats returns the chats kept in dir, and the next ID to give: those
-// the index lists, in its order, whose logs are there, then those of the
-// logs it lacks, by ID, named and dated by their logs.
-func readChats(dir string) ([]*thread, int) {
+// readChats returns the chats kept in dir: those the index lists, in its
+// order, whose logs are there, then those of the logs it lacks, by ID,
+// named and dated by their logs.
+func readChats(dir string) []*thread {
 	var idx chatIndex
 	if b, err := os.ReadFile(filepath.Join(dir, indexFile)); err == nil {
 		if err := json.Unmarshal(b, &idx); err != nil {
@@ -328,12 +346,12 @@ func readChats(dir string) ([]*thread, int) {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		log.Printf("reading the chats: %v", err)
 	}
-	logs := map[int]*thread{}
-	var ids []int
+	logs := map[ID]*thread{}
+	var ids []ID
 	for _, e := range entries {
 		name, ok := strings.CutSuffix(e.Name(), ".jsonl")
-		id, err := strconv.Atoi(name)
-		if !ok || err != nil || id <= 0 || e.IsDir() {
+		id := ID(name)
+		if !ok || name == "" || e.IsDir() {
 			continue
 		}
 		if th := readLog(filepath.Join(dir, e.Name()), id); th != nil {
@@ -342,7 +360,6 @@ func readChats(dir string) ([]*thread, int) {
 			ids = append(ids, id)
 		}
 	}
-	next := idx.Next
 	threads := make([]*thread, 0, len(logs))
 	for _, e := range idx.Chats {
 		th := logs[e.ID]
@@ -364,13 +381,7 @@ func readChats(dir string) ([]*thread, int) {
 			threads = append(threads, th)
 		}
 	}
-	for _, th := range threads {
-		next = max(next, th.ID)
-		for m := range th.logged {
-			next = max(next, m)
-		}
-	}
-	return threads, next
+	return threads
 }
 
 // firstTitle returns the title send gives th: of its first question, or
@@ -392,7 +403,7 @@ func firstTitle(th *thread) string {
 // message. A last line a crash broke is cut from the file, for the next
 // to begin a line of its own; any other line that is not an event is
 // skipped.
-func readLog(path string, id int) *thread {
+func readLog(path string, id ID) *thread {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		log.Printf("reading a chat's log: %v", err)
@@ -406,8 +417,8 @@ func readLog(path string, id int) *thread {
 		}
 		b = b[:keep]
 	}
-	th := &thread{ID: id, logged: map[int]bool{}}
-	byID := map[int]*message{}
+	th := &thread{ID: id, logged: map[ID]bool{}}
+	byID := map[ID]*message{}
 	var msgs []*message
 	var created time.Time
 	for line := range bytes.Lines(b) {
@@ -421,11 +432,11 @@ func readLog(path string, id int) *thread {
 			created = e.At
 		case "message":
 			m := &message{}
-			if err := json.Unmarshal(line, &messageEvent{message: m}); err != nil || m.ID <= 0 || byID[m.ID] != nil {
+			if err := json.Unmarshal(line, &messageEvent{message: m}); err != nil || m.ID == "" || byID[m.ID] != nil {
 				log.Printf("%s: skipping a message", path)
 				continue
 			}
-			m.Next = 0
+			m.Next = ""
 			byID[m.ID] = m
 			msgs = append(msgs, m)
 			th.logged[m.ID] = true
@@ -472,19 +483,19 @@ func recoverPartial(path string, th *thread) {
 	}
 	m := &message{}
 	ev := messageEvent{message: m}
-	if err := json.Unmarshal(bytes.TrimSpace(b), &ev); err != nil || m.ID <= 0 || th.logged[m.ID] {
+	if err := json.Unmarshal(bytes.TrimSpace(b), &ev); err != nil || m.ID == "" || th.logged[m.ID] {
 		os.Remove(path)
 		return
 	}
-	byID := map[int]*message{m.ID: m}
+	byID := map[ID]*message{m.ID: m}
 	for _, o := range th.all() {
 		byID[o.ID] = o
 	}
-	if m.Parent != 0 && byID[m.Parent] == nil {
+	if m.Parent != "" && byID[m.Parent] == nil {
 		os.Remove(path)
 		return
 	}
-	m.Next, m.Time = 0, ev.At
+	m.Next, m.Time = "", ev.At
 	if m.Text == "" {
 		m.Error = errStopped
 	}
@@ -545,9 +556,9 @@ func sweepAttachments(chats, files string, before time.Time) {
 
 // showPath makes th's path the messages leaf follows, of byID, and leaf,
 // marking it, as replaying a line of its log does.
-func (th *thread) showPath(byID map[int]*message, leaf int) {
+func (th *thread) showPath(byID map[ID]*message, leaf ID) {
 	var path []*message
-	for id := leaf; id != 0 && len(path) <= len(byID); {
+	for id := leaf; id != "" && len(path) <= len(byID); {
 		m := byID[id]
 		if m == nil {
 			break
@@ -582,31 +593,71 @@ func migrate(dir string) error {
 	if err := json.Unmarshal(b, &threads); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(cdir, 0o700); err != nil {
+	for _, th := range threads {
+		th.link()
+	}
+	upgradeIDs(threads)
+	if err := writeChats(cdir, threads, filepath.Join(dir, oldLogs)); err != nil {
+		return err
+	}
+	return os.Rename(old, old+".migrated")
+}
+
+// writeChats writes threads as the chats' folder cdir, at once: into a
+// folder beside it, which is renamed over it once whole, cdir, where it
+// is there, kept as backup. A crash at any point leaves either the old
+// folder or the new one whole, which finishSwap tells.
+func writeChats(cdir string, threads []*thread, backup string) error {
+	tmp := cdir + ".new"
+	if err := os.RemoveAll(tmp); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(tmp, 0o700); err != nil {
 		return err
 	}
 	idx := chatIndex{Version: logVersion, Chats: []indexEntry{}}
 	for _, th := range threads {
-		th.link()
-		idx.Next = max(idx.Next, th.ID)
-		for _, m := range th.all() {
-			idx.Next = max(idx.Next, m.ID)
-		}
-		out := wholeLog(th)
-		if err := replace(filepath.Join(cdir, strconv.Itoa(th.ID)+".jsonl"), out); err != nil {
+		if err := os.WriteFile(filepath.Join(tmp, string(th.ID)+".jsonl"), wholeLog(th), 0o600); err != nil {
 			return err
 		}
-		idx.Chats = append(idx.Chats, indexEntry{ID: th.ID, Title: th.Title, Updated: th.Updated, Pinned: th.Pinned,
-			Model: th.Model, Effort: th.Effort, Provider: th.Provider, Draft: th.Draft})
+		idx.Chats = append(idx.Chats, entryOf(th))
 	}
-	ib, err := json.MarshalIndent(idx, "", "  ")
+	b, err := json.MarshalIndent(idx, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := replace(filepath.Join(cdir, indexFile), ib); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, indexFile), b, 0o600); err != nil {
 		return err
 	}
-	return os.Rename(old, old+".migrated")
+	if _, err := os.Stat(cdir); err == nil {
+		if err := os.RemoveAll(backup); err != nil {
+			return err
+		}
+		if err := os.Rename(cdir, backup); err != nil {
+			return err
+		}
+	}
+	return os.Rename(tmp, cdir)
+}
+
+// finishSwap ends what a crash cut short of writeChats: where the new
+// folder is there and the old one is not, it was renamed away, the new one
+// being whole, which takes its place; where both are, the new one may not
+// be whole, and is deleted, for writeChats to write again.
+func finishSwap(cdir string) {
+	tmp := cdir + ".new"
+	if _, err := os.Stat(tmp); err != nil {
+		return
+	}
+	var err error
+	if _, serr := os.Stat(cdir); serr == nil {
+		err = os.RemoveAll(tmp)
+	} else {
+		err = os.Rename(tmp, cdir)
+	}
+	if err != nil {
+		log.Printf("finishing writing the chats: %v", err)
+	}
 }
 
 // replayOrder returns th's messages in an order whose replay leaves each
@@ -615,23 +666,23 @@ func migrate(dir string) error {
 // A message whose parent is not there begins a tree of its own.
 func replayOrder(th *thread) []*message {
 	all := th.all()
-	byID := make(map[int]*message, len(all))
+	byID := make(map[ID]*message, len(all))
 	for _, m := range all {
 		byID[m.ID] = m
 	}
-	kids := map[int][]*message{}
+	kids := map[ID][]*message{}
 	for _, m := range all {
 		p := m.Parent
 		if byID[p] == nil {
-			p = 0
+			p = ""
 		}
 		kids[p] = append(kids[p], m)
 	}
 	out := make([]*message, 0, len(all))
-	var walk func(id, next int)
-	walk = func(id, next int) {
+	var walk func(id, next ID)
+	walk = func(id, next ID) {
 		ks := kids[id]
-		slices.SortFunc(ks, func(x, y *message) int { return x.ID - y.ID })
+		slices.SortFunc(ks, func(x, y *message) int { return cmp.Compare(x.ID, y.ID) })
 		if i := slices.IndexFunc(ks, func(k *message) bool { return k.ID == next }); i >= 0 {
 			ks = append(slices.Delete(slices.Clone(ks), i, i+1), ks[i])
 		}
@@ -640,11 +691,11 @@ func replayOrder(th *thread) []*message {
 			walk(k.ID, k.Next)
 		}
 	}
-	first := 0
+	var first ID
 	if len(th.Messages) > 0 {
 		first = th.Messages[0].ID
 	}
-	walk(0, first)
+	walk("", first)
 	return out
 }
 
@@ -657,10 +708,10 @@ const (
 	opRemove                // deletes the file
 )
 
-// logOp is a change to a file of the chats: a log, of the chat id (0 for
+// logOp is a change to a file of the chats: a log, of the chat id ("" for
 // none), or a partial.
 type logOp struct {
-	id   int
+	id   ID
 	path string
 	data []byte
 	kind opKind

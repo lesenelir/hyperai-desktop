@@ -2,33 +2,74 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
 // shape returns th's tree as replaying its log must leave it: the path
-// shown, the other versions, and the version each message shows after it.
+// shown, the other versions, and the version each message shows after it;
+// each message by its place in the order of IDs, 1 first, 0 for none, so
+// that a chat whose IDs were made anew has the same shape.
 func shape(th *thread) string {
-	var shown, others, next []string
-	for _, m := range th.Messages {
-		shown = append(shown, fmt.Sprint(m.ID))
-	}
 	all := th.all()
-	slices.SortFunc(all, func(x, y *message) int { return x.ID - y.ID })
+	slices.SortFunc(all, func(x, y *message) int { return compareIDs(x.ID, y.ID) })
+	nth := map[ID]int{}
+	for i, m := range all {
+		nth[m.ID] = i + 1
+	}
+	var shown, others, next []int
+	for _, m := range th.Messages {
+		shown = append(shown, nth[m.ID])
+	}
 	for _, m := range all {
 		if !slices.Contains(th.Messages, m) {
-			others = append(others, fmt.Sprint(m.ID))
+			others = append(others, nth[m.ID])
 		}
-		next = append(next, fmt.Sprintf("%d→%d", m.ID, m.Next))
+		next = append(next, nth[m.Next])
 	}
 	return fmt.Sprintf("shown %v, others %v, next %v", shown, others, next)
+}
+
+// compareIDs orders IDs as they were made: those that are numbers, of the
+// chats kept before UUIDs, by their numbers.
+func compareIDs(x, y ID) int {
+	if x.legacy() && y.legacy() {
+		a, _ := strconv.Atoi(string(x))
+		b, _ := strconv.Atoi(string(y))
+		return cmp.Compare(a, b)
+	}
+	return cmp.Compare(x, y)
+}
+
+// legacyJSON returns threads as chats.json kept them before IDs were
+// UUIDs: their IDs numbers, in the order the IDs were made.
+func legacyJSON(t *testing.T, threads []*thread) []byte {
+	t.Helper()
+	b, err := json.MarshalIndent(threads, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []ID
+	for _, th := range threads {
+		ids = append(ids, th.ID)
+		for _, m := range th.all() {
+			ids = append(ids, m.ID)
+		}
+	}
+	slices.SortFunc(ids, compareIDs)
+	for i, id := range ids {
+		b = bytes.ReplaceAll(b, []byte(`"`+string(id)+`"`), []byte(strconv.Itoa(i+1)))
+	}
+	return b
 }
 
 // restart returns an app that loads what a kept in dir, once it is written.
@@ -42,9 +83,9 @@ func restart(t *testing.T, a *app, dir string) *app {
 }
 
 // lines returns the events of the log of the chat id in dir, by type.
-func lines(t *testing.T, dir string, id int) []string {
+func lines(t *testing.T, dir string, id ID) []string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(dir, chatsDir, fmt.Sprint(id)+".jsonl"))
+	b, err := os.ReadFile(filepath.Join(dir, chatsDir, string(id)+".jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,14 +138,14 @@ func TestLogReplaysVersions(t *testing.T) {
 	if got, want := path(b.threads[0]), path(th); got != want {
 		t.Errorf("path %q, want %q", got, want)
 	}
-	if b.next != a.next {
-		t.Errorf("next %d, want %d", b.next, a.next)
-	}
 	// Chats and messages to come take IDs past them.
-	b.open(fmt.Sprint(th.ID))
+	b.open(string(th.ID))
 	b.send("Q3")
-	if m := b.threads[0].Messages; m[len(m)-2].Text != "Q3" || m[len(m)-2].ID <= a.next {
-		t.Errorf("a new message took ID %d", m[len(m)-2].ID)
+	q := b.threads[0].Messages[len(b.threads[0].Messages)-2]
+	for _, m := range th.all() {
+		if q.Text != "Q3" || q.ID <= m.ID || q.ID <= th.ID {
+			t.Fatalf("a new message took ID %s, after %s", q.ID, m.ID)
+		}
 	}
 }
 
@@ -131,7 +172,7 @@ func TestLogKeepsChanges(t *testing.T) {
 	if want := []string{"chat", "message", "title", "message", "title"}; !slices.Equal(lines(t, dir, th.ID), want) {
 		t.Errorf("log %v, want %v", lines(t, dir, th.ID), want)
 	}
-	raw, _ := os.ReadFile(filepath.Join(dir, chatsDir, fmt.Sprint(th.ID)+".jsonl"))
+	raw, _ := os.ReadFile(filepath.Join(dir, chatsDir, string(th.ID)+".jsonl"))
 	if !bytes.Contains(raw, []byte("<b>First</b> & more")) {
 		t.Errorf("the log escapes HTML: %s", raw)
 	}
@@ -174,7 +215,7 @@ func TestLogKeepsQuestionBeforeReply(t *testing.T) {
 	if want := []string{"chat", "message", "title", "message"}; !slices.Equal(lines(t, crashed, th.ID), want) {
 		t.Errorf("recovered reply not logged: %v", lines(t, crashed, th.ID))
 	}
-	if _, err := os.Stat(filepath.Join(crashed, chatsDir, fmt.Sprint(th.ID)+".partial")); err == nil {
+	if _, err := os.Stat(filepath.Join(crashed, chatsDir, string(th.ID)+".partial")); err == nil {
 		t.Error("the partial is still there once logged")
 	}
 	// Recovered once: launching again reads it from the log alone.
@@ -188,7 +229,7 @@ func TestLogKeepsQuestionBeforeReply(t *testing.T) {
 	if got := path(d.threads[0]); got != "Held | Reply to Held" {
 		t.Errorf("once stopped, kept %q", got)
 	}
-	if _, err := os.Stat(filepath.Join(dir, chatsDir, fmt.Sprint(th.ID)+".partial")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, chatsDir, string(th.ID)+".partial")); err == nil {
 		t.Error("the partial is still there once the reply ended")
 	}
 }
@@ -217,7 +258,7 @@ func TestLogRetriesFailedWrites(t *testing.T) {
 	t.Cleanup(func() { os.Chmod(cdir, 0o700); a.logs.wait() })
 	a.send("Q1")
 	a.logs.wait()
-	if _, err := os.Stat(filepath.Join(cdir, "1.jsonl")); err == nil {
+	if _, err := os.Stat(filepath.Join(cdir, string(a.threads[0].ID)+".jsonl")); err == nil {
 		t.Fatal("written in a folder that takes no files")
 	}
 	os.Chmod(cdir, 0o700)
@@ -230,7 +271,7 @@ func TestLogRetriesFailedWrites(t *testing.T) {
 		t.Errorf("rewritten log %v, want %v", lines(t, dir, b.threads[0].ID), want)
 	}
 	// And appends on from there.
-	b.open(fmt.Sprint(b.threads[0].ID))
+	b.open(string(b.threads[0].ID))
 	b.send("Q2")
 	c := restart(t, b, dir)
 	if got := path(c.threads[0]); got != "Q1 | Answer 1 | Q2 | Answer 2" {
@@ -334,7 +375,7 @@ func TestIndexRepaired(t *testing.T) {
 	idx.Chats = slices.Delete(idx.Chats, 1, 2)
 	b, _ = json.Marshal(idx)
 	os.WriteFile(filepath.Join(cdir, indexFile), b, 0o600)
-	os.Remove(filepath.Join(cdir, fmt.Sprint(a.threads[2].ID)+".jsonl"))
+	os.Remove(filepath.Join(cdir, string(a.threads[2].ID)+".jsonl"))
 
 	c := newApp(&counter{})
 	c.loadFrom(dir)
@@ -352,8 +393,8 @@ func TestIndexRepaired(t *testing.T) {
 	os.Remove(filepath.Join(cdir, indexFile))
 	c = newApp(&counter{})
 	c.loadFrom(dir)
-	if len(c.threads) != 2 || c.threads[0].Title != "Named" || c.next < a.threads[1].Messages[1].ID {
-		t.Errorf("with no index: %d chats, next %d", len(c.threads), c.next)
+	if len(c.threads) != 2 || c.threads[0].Title != "Named" {
+		t.Errorf("with no index: %d chats", len(c.threads))
 	}
 }
 
@@ -371,7 +412,7 @@ func TestLogDeleted(t *testing.T) {
 	if len(b.threads) != 1 || b.threads[0].Title != "Stays" {
 		t.Errorf("after deleting: %d chats", len(b.threads))
 	}
-	if _, err := os.Stat(filepath.Join(dir, chatsDir, fmt.Sprint(gone.ID)+".jsonl")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, chatsDir, string(gone.ID)+".jsonl")); err == nil {
 		t.Error("the deleted chat's log is still there")
 	}
 	b.removeAll()
@@ -402,10 +443,7 @@ func TestMigrateChatsJSON(t *testing.T) {
 	th.Pinned, th.Draft = time.Now().UTC().Truncate(time.Second), "Draft"
 	a.newChat()
 	a.send("Other")
-	b, err := json.MarshalIndent(a.threads, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
+	b := legacyJSON(t, a.threads)
 	// One kept before versions, whose messages follow none.
 	b = append(b[:len(b)-1], []byte(`,{"id":900,"title":"Old","updated":"2025-01-02T03:04:05Z","messages":[`+
 		`{"id":901,"role":"user","text":"Q"},{"id":902,"role":"assistant","text":"A"}]}]`)...)
@@ -426,17 +464,25 @@ func TestMigrateChatsJSON(t *testing.T) {
 	}
 	for i, th := range c.threads {
 		if got := shape(th); got != want[i] {
-			t.Errorf("chat %d:\n %s\nwant\n %s", th.ID, got, want[i])
+			t.Errorf("chat %s:\n %s\nwant\n %s", th.ID, got, want[i])
 		}
 		if th.Title != old[i].Title || !th.Updated.Equal(old[i].Updated) || !th.Pinned.Equal(old[i].Pinned) || th.Draft != old[i].Draft {
-			t.Errorf("chat %d: %+v", th.ID, th)
+			t.Errorf("chat %s: %+v", th.ID, th)
 		}
 	}
 	if m := c.threads[0].Messages; m[len(m)-1].Error != "overloaded" {
 		t.Errorf("a reply's error is gone")
 	}
-	if c.next != 902 {
-		t.Errorf("next %d", c.next)
+	// New IDs, in the order of the old.
+	for _, th := range c.threads {
+		for _, m := range append(th.all(), &message{ID: th.ID}) {
+			if m.ID.legacy() || len(m.ID) != 36 {
+				t.Errorf("chat %s: ID %q", th.ID, m.ID)
+			}
+		}
+	}
+	if c.threads[0].ID >= c.threads[1].ID || c.threads[1].ID >= c.threads[2].ID {
+		t.Errorf("chats out of order: %s, %s, %s", c.threads[0].ID, c.threads[1].ID, c.threads[2].ID)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "chats.json")); err == nil {
 		t.Error("chats.json is still there")
@@ -451,8 +497,8 @@ func TestMigrateChatsJSON(t *testing.T) {
 	if d.threads[1].Title != "Changed" || shape(d.threads[0]) != want[0] {
 		t.Errorf("after moving: %q, %s", d.threads[1].Title, shape(d.threads[0]))
 	}
-	if strings.Contains(strings.Join(lines(t, dir, 900), " "), "show show") {
-		t.Errorf("log %v", lines(t, dir, 900))
+	if strings.Contains(strings.Join(lines(t, dir, d.threads[2].ID), " "), "show show") {
+		t.Errorf("log %v", lines(t, dir, d.threads[2].ID))
 	}
 }
 

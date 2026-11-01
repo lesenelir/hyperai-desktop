@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -62,7 +61,7 @@ func (a *app) nameChat(th *thread, p provider, model, first string, explicit boo
 			name, err = askTitle(ctx, p, model, first)
 		}
 		return func() {
-			if th := a.thread(strconv.Itoa(id)); th != nil {
+			if th := a.thread(string(id)); th != nil {
 				th.naming, th.retitling = false, false
 			}
 			switch {
@@ -113,7 +112,7 @@ func firstQuestion(th *thread) string {
 // lands on the title it was asked to replace alone (titled).
 func (a *app) startRename(th *thread, inSidebar bool) {
 	a.commitRename()
-	a.renaming, a.renameDraft, a.renameInSidebar = strconv.Itoa(th.ID), th.Title, inSidebar
+	a.renaming, a.renameDraft, a.renameInSidebar = string(th.ID), th.Title, inSidebar
 	a.renameSelect, a.renameFocused, a.renameBuilt = true, false, true
 }
 
@@ -212,8 +211,8 @@ func askTitle(ctx context.Context, p provider, model, first string) (string, err
 // local title, local: not where it was deleted meanwhile, or named
 // otherwise. The sidebar and the search show it at once, and the chats are
 // saved, for it to stay.
-func (a *app) titled(id int, local, name string) {
-	th := a.thread(strconv.Itoa(id))
+func (a *app) titled(id ID, local, name string) {
+	th := a.thread(string(id))
 	if th == nil || th.Title != local || name == local {
 		return
 	}

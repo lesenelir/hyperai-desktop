@@ -45,7 +45,7 @@ func (a *app) pane(c *ui.Context, titleLeft float32) {
 			if th != nil {
 				name = th.Title
 			}
-			if th != nil && a.renaming == strconv.Itoa(th.ID) && !a.renameInSidebar {
+			if th != nil && a.renaming == string(th.ID) && !a.renameInSidebar {
 				// Renamed in place, out of the room that drags the window.
 				ui.Row(c).Grow(1).MinWidth(0).Height(titleBarHeight).AlignItems(ui.Center).Children(func() {
 					a.renameField(c, 14, 500).MaxWidth(480)

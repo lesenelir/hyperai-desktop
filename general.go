@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -33,7 +32,7 @@ func (a *app) notifyReply(th *thread, reply *message) {
 	if r := []rune(body); len(r) > 120 {
 		body = string(r[:120]) + "…"
 	}
-	id := strconv.Itoa(th.ID)
+	id := string(th.ID)
 	a.notify(th.Title, body, func() { a.open(id) }, func(err error) {
 		if errors.Is(err, errNotificationsOff) {
 			a.notifyDone, a.notifyError = false, locales.NotifyOff()

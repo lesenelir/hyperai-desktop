@@ -290,7 +290,7 @@ func TestChatsStreamAtOnce(t *testing.T) {
 	}
 
 	// B's Stop stops B's reply, and A streams on.
-	a.open(strconv.Itoa(chatB.ID))
+	a.open(string(chatB.ID))
 	tt.Frame()
 	if err := tt.Click("Stop"); err != nil {
 		t.Fatal(err)
@@ -328,7 +328,7 @@ func TestChatsStreamAtOnce(t *testing.T) {
 	if !chatA.unread || chatB.unread || texts("Replying") != 0 || texts("New reply") != 1 {
 		t.Errorf("A unread %v, B unread %v, marks: %d replying, %d unread", chatA.unread, chatB.unread, texts("Replying"), texts("New reply"))
 	}
-	a.open(strconv.Itoa(chatA.ID))
+	a.open(string(chatA.ID))
 	tt.Frame()
 	if chatA.unread || texts("New reply") != 0 {
 		t.Errorf("A still unread once shown")
@@ -345,14 +345,14 @@ func TestChatsStreamAtOnce(t *testing.T) {
 
 	// Escape stops the chat shown's reply only; deleting a chat stops its own.
 	chatC := ask("C")
-	a.open(strconv.Itoa(chatA.ID))
+	a.open(string(chatA.ID))
 	tt.Frame()
 	tt.Key(0, ui.KeyEscape)
 	if chatA.busy != nil || chatC.busy == nil {
 		t.Errorf("after Escape in A: A streams %v, C streams %v", chatA.busy != nil, chatC.busy != nil)
 	}
 	// A reply that ends in view is read; behind the settings, it is not.
-	a.open(strconv.Itoa(chatC.ID))
+	a.open(string(chatC.ID))
 	tt.Frame()
 	close(p.release("C"))
 	run(func() bool { return chatC.busy == nil })
@@ -424,7 +424,7 @@ func TestReplyShownAgain(t *testing.T) {
 	// first word again.
 	a.newChat()
 	tt.Frame()
-	a.open(strconv.Itoa(th.ID))
+	a.open(string(th.ID))
 	tt.Frame()
 	if n := shown(); n != came {
 		t.Errorf("%d of the reply's %d bytes show as its chat shows again: it comes in again", n, came)
@@ -704,7 +704,7 @@ func TestPinOutgrown(t *testing.T) {
 	tt.Advance(time.Second)
 	// The question lets go, and the list follows the reply's end.
 	th := a.current()
-	if th.pin.id != 0 || !th.list.AtEnd() || !th.list.FollowEnd || tt.HasText("Scroll to end") {
+	if th.pin.id != "" || !th.list.AtEnd() || !th.list.FollowEnd || tt.HasText("Scroll to end") {
 		t.Errorf("pinned %v, at the end %v, following %v, with the button %v",
 			th.pin.id, th.list.AtEnd(), th.list.FollowEnd, tt.HasText("Scroll to end"))
 	}
@@ -732,7 +732,7 @@ func TestPinStreaming(t *testing.T) {
 			t.Fatalf("the button shows with %d of %d bytes: pinned %v, room %v, at the end %v",
 				len(reply.Text), len(full), th.pin.id, th.pin.room, th.list.AtEnd())
 		}
-		if th.pin.id == 0 {
+		if th.pin.id == "" {
 			followed = true
 			if !th.list.AtEnd() {
 				t.Fatalf("not at the end with %d of %d bytes, once the reply outgrew its room", len(reply.Text), len(full))
@@ -793,15 +793,12 @@ func TestOutlineFarTurn(t *testing.T) {
 	// so the glide goes by estimated heights, and the list puts it at the
 	// top as it ends.
 	a := newApp(&demo{})
-	a.next++
-	th := &thread{ID: a.next, Title: "Long"}
+	th := &thread{ID: newID(), Title: "Long"}
 	for i := range 12 {
-		a.next++
-		th.Messages = append(th.Messages, &message{ID: a.next, Role: "user", Text: "Question " + strconv.Itoa(i+1)})
-		a.next++
-		th.Messages = append(th.Messages, &message{ID: a.next, Role: "assistant", Text: demoReplies[i%len(demoReplies)]})
+		th.Messages = append(th.Messages, &message{ID: newID(), Role: "user", Text: "Question " + strconv.Itoa(i+1)})
+		th.Messages = append(th.Messages, &message{ID: newID(), Role: "assistant", Text: demoReplies[i%len(demoReplies)]})
 	}
-	a.threads, a.selected = []*thread{th}, strconv.Itoa(th.ID)
+	a.threads, a.selected = []*thread{th}, string(th.ID)
 	tt := ui.NewTester(a.view, 1120, 520)
 	tt.Advance(time.Second)
 	tick, ok := tt.Find("Message 1: Question 1")
@@ -996,7 +993,7 @@ func TestComposerResizes(t *testing.T) {
 	tt.Key(0, ui.KeyEnter)
 	tt.Advance(time.Second)
 	th = a.current()
-	if th.pin.id == 0 {
+	if th.pin.id == "" {
 		t.Fatal("the question is not pinned")
 	}
 	edit(tt, func(when string) {
@@ -2678,12 +2675,12 @@ func TestSetTeX(t *testing.T) {
 func TestMathInReply(t *testing.T) {
 	a, tt := newTester()
 	tt.SetSize(1120, 1400)
-	a.threads = []*thread{{ID: 1, Title: "Math", Updated: time.Now(), Messages: []*message{
-		{ID: 2, Role: "user", Text: "Explain"},
-		{ID: 3, Role: "assistant", Text: "The loss $x_i^2$ grows, but $\\unknown{q}$ does not.\n\n" +
+	a.threads = []*thread{{ID: "1", Title: "Math", Updated: time.Now(), Messages: []*message{
+		{ID: "2", Role: "user", Text: "Explain"},
+		{ID: "3", Role: "assistant", Text: "The loss $x_i^2$ grows, but $\\unknown{q}$ does not.\n\n" +
 			"$$\n\\frac{a}{b}\n$$\n\n$$\n\\begin{aligned} a &= b \\end{aligned}\n$$\n"},
 	}}}
-	a.next, a.selected, a.rev = 3, "1", 1
+	a.selected, a.rev = "1", 1
 	tt.Frame()
 	if !tt.HasText("The loss \uFFFC grows, but \\unknown{q} does not.") {
 		t.Errorf("the math within text is not set, or the unknown not TeX: %q", tt.Texts())
@@ -2727,12 +2724,12 @@ func TestTeXInReply(t *testing.T) {
 	a, tt := newTester()
 	tt.SetSize(1120, 1400)
 	a.tex = startedTeX(t)
-	a.threads = []*thread{{ID: 1, Title: "Math", Updated: time.Now(), Messages: []*message{
-		{ID: 2, Role: "user", Text: "Explain"},
-		{ID: 3, Role: "assistant", Text: "The loss $x_i^2$ grows, but $\\unknown{q}$ does not.\n\n" +
+	a.threads = []*thread{{ID: "1", Title: "Math", Updated: time.Now(), Messages: []*message{
+		{ID: "2", Role: "user", Text: "Explain"},
+		{ID: "3", Role: "assistant", Text: "The loss $x_i^2$ grows, but $\\unknown{q}$ does not.\n\n" +
 			"$$\n\\begin{aligned} a &= b \\\\ &= \\color{red}{c} \\end{aligned}\n$$\n"},
 	}}}
-	a.next, a.selected, a.rev = 3, "1", 1
+	a.selected, a.rev = "1", 1
 	tt.Frame()
 	if !tt.HasText("The loss \uFFFC grows, but \\unknown{q} does not.") {
 		t.Errorf("the math within text is not set, or the unknown not TeX: %q", tt.Texts())
@@ -2778,11 +2775,11 @@ func TestMathSetting(t *testing.T) {
 	a.tex = startedTeX(t)
 	tt := ui.NewTester(a.view, 1120, 1400)
 	block := `\sum_{i=1}^{n} i = \frac{n(n+1)}{2}`
-	a.threads = []*thread{{ID: 1, Title: "Math", Updated: time.Now(), Messages: []*message{
-		{ID: 2, Role: "user", Text: "Explain"},
-		{ID: 3, Role: "assistant", Text: "The loss $x_i^2$ grows.\n\n$$\n" + block + "\n$$\n"},
+	a.threads = []*thread{{ID: "1", Title: "Math", Updated: time.Now(), Messages: []*message{
+		{ID: "2", Role: "user", Text: "Explain"},
+		{ID: "3", Role: "assistant", Text: "The loss $x_i^2$ grows.\n\n$$\n" + block + "\n$$\n"},
 	}}}
-	a.next, a.selected, a.rev = 3, "1", 1
+	a.selected, a.rev = "1", 1
 	tt.Frame()
 
 	// The block's menu copies its LaTeX.

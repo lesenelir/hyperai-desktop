@@ -20,11 +20,10 @@ func benchFrame(b *testing.B, chats int) {
 	a := newApp(&demo{})
 	now := time.Now()
 	for i := range chats {
-		a.next++
-		th := &thread{ID: a.next, Title: "Chat number " + strconv.Itoa(i), Model: "hyperai-demo", Updated: now.Add(-time.Duration(i) * 3 * time.Hour)}
+		th := &thread{ID: newID(), Title: "Chat number " + strconv.Itoa(i), Model: "hyperai-demo", Updated: now.Add(-time.Duration(i) * 3 * time.Hour)}
 		a.threads = append(a.threads, th)
 	}
-	a.selected = strconv.Itoa(a.threads[0].ID)
+	a.selected = string(a.threads[0].ID)
 	tt := ui.NewTester(a.view, 1120, 760)
 	b.ReportAllocs()
 	b.ResetTimer()

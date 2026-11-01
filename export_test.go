@@ -203,23 +203,29 @@ func TestExportVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got struct {
-		Path     []int
+		Path     []ID
 		Messages []struct {
-			ID, Parent int
+			ID, Parent ID
 			Text       string
 		}
 	}
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
+	// The messages by their order, 1 first, and the one each follows, 0
+	// for none.
+	nth := map[ID]int{}
+	for i, m := range got.Messages {
+		nth[m.ID] = i + 1
+	}
 	var tree []string
 	for _, m := range got.Messages {
-		tree = append(tree, fmt.Sprintf("%d<%d %s", m.ID, m.Parent, m.Text))
+		tree = append(tree, fmt.Sprintf("%d<%d %s", nth[m.ID], nth[m.Parent], m.Text))
 	}
-	if want := "2<0 Q1, 3<2 Answer 1, 4<2 Answer 2, 5<0 Q1 again, 6<5 Answer 3"; strings.Join(tree, ", ") != want {
+	if want := "1<0 Q1, 2<1 Answer 1, 3<1 Answer 2, 4<0 Q1 again, 5<4 Answer 3"; strings.Join(tree, ", ") != want {
 		t.Errorf("tree %q, want %q", strings.Join(tree, ", "), want)
 	}
-	if !slices.Equal(got.Path, []int{5, 6}) {
+	if len(got.Path) != 2 || nth[got.Path[0]] != 4 || nth[got.Path[1]] != 5 {
 		t.Errorf("path %v", got.Path)
 	}
 

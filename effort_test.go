@@ -282,9 +282,9 @@ func TestEffortPicker(t *testing.T) {
 	// Each chat its own, as it is shown again.
 	a.effort = "low"
 	a.send("Lower")
-	a.open(fmt.Sprint(first.ID))
+	a.open(string(first.ID))
 	tt.Frame()
-	a.open(fmt.Sprint(second.ID))
+	a.open(string(second.ID))
 	tt.Frame()
 	if a.effort != "low" || second.Effort != "low" {
 		t.Errorf("shown again, effort %q, kept %q", a.effort, second.Effort)

@@ -72,11 +72,34 @@ between devices; or more than one process writes the same data.
     <id>.partial        the reply streaming in, while it does
   attachments/          unchanged
   chats.json.migrated   the old file, kept after migrating
+  chats.v1/             the logs of version 1, kept after their IDs became UUIDs
 ```
 
 `<user data>` is `~/Library/Application Support/hyperai-desktop/` on macOS
 (`hyperai-desktop Dev/` for `mygo dev`), as today. Every file is written
 with mode 0600, as `chats.json` is.
+
+## IDs
+
+Every chat and message has an `ID` ([ids.go](../ids.go)): a **UUIDv7**,
+as text, such as `01a197e4-20fd-7b13-b046-ef98264f5d3b`. It used to be an
+integer from one counter (`a.next`) that chats and messages shared, which
+two computers would both hand out: their chats could not come together,
+as syncing them would need. A UUID is unique wherever it was made.
+
+- **IDs sort in the order they were made.** A UUIDv7 begins with the time
+  in milliseconds, and `google/uuid` makes the IDs of one process only
+  grow, even within a millisecond. So the code that took the larger ID for
+  the later message still does: the versions of a message, oldest first
+  (`children`), and the order a log appends new messages in.
+- **`""` is none**, where 0 was: the parent of a chat's first question,
+  and no version shown after a message.
+- **Old IDs are read as their digits.** `ID` reads a JSON number too
+  (`UnmarshalJSON`), as `chats.json` and the logs of version 1 hold them,
+  and `legacy` tells such an ID. `upgradeIDs` gives them new UUIDs, in the
+  order of the numbers, so the order of the versions stays as it was, and
+  rewrites each message's `parent` and `next` to match.
+- **Copy as JSON** (export) writes the IDs as text too.
 
 ## The index
 
@@ -85,11 +108,10 @@ without reading any log:
 
 ```json
 {
-  "version": 1,
-  "next": 412,
+  "version": 2,
   "chats": [
     {
-      "id": 12,
+      "id": "01a197e4-20fd-7b13-b046-ef98264f5d3b",
       "title": "…",
       "updated": "2026-11-01T22:44:00Z",
       "pinned": "2026-11-01T22:45:00Z",
@@ -106,10 +128,8 @@ without reading any log:
   `Updated`, `Pinned`, `Model`, `Provider`, `Effort` and `Draft`
   (`indexEntry`). Their `json` names are the ones `thread` had, and empty
   ones are left out.
-- **`next` is the ID counter.** Chats and messages share one counter
-  (`a.next`), which `loadFrom` finds today by reading every message. The
-  index keeps it, so the counter is known before any log is read. On load,
-  `next` is the larger of the index's value and the IDs seen in the logs.
+- **There is no counter.** Version 1 kept `next`, the counter of the
+  integer IDs; UUIDs need none.
 - **It is written whole**, encoded on the main thread and written on a
   goroutine through a `.tmp` file and a rename, as `chats.json` was. It is
   small, a few hundred bytes per chat, so a draft, a pin or a rename costs
@@ -125,17 +145,17 @@ except in logs moved from `chats.json`, a time `at` (RFC 3339, UTC). A
 message with no `parent` is a version of the first question:
 
 ```jsonl
-{"t":"chat","at":"…","v":1,"id":12}
-{"t":"message","at":"…","id":13,"role":"user","text":"…","files":[{"name":"a.pdf","type":"application/pdf","file":"15f99a47b549ec16.pdf"}],"time":"…"}
+{"t":"chat","at":"…","v":2,"id":"01a197e4-…-5d3b"}
+{"t":"message","at":"…","id":"01a197e4-…-2088","role":"user","text":"…","files":[{"name":"a.pdf","type":"application/pdf","file":"15f99a47b549ec16.pdf"}],"time":"…"}
 {"t":"title","at":"…","title":"…"}
-{"t":"message","at":"…","id":14,"parent":13,"role":"assistant","text":"…","reasoning":"…","reasoned":3.2,"usage":{"input":1200,"output":800},"firstToken":0.8,"elapsed":12.5,"time":"…"}
-{"t":"message","at":"…","id":15,"role":"user","text":"… edited","time":"…"}
-{"t":"show","at":"…","leaf":14}
+{"t":"message","at":"…","id":"01a197e4-…-5ccb","parent":"01a197e4-…-2088","role":"assistant","text":"…","reasoning":"…","reasoned":3.2,"usage":{"input":1200,"output":800},"firstToken":0.8,"elapsed":12.5,"time":"…"}
+{"t":"message","at":"…","id":"01a197e4-…-91d0","role":"user","text":"… edited","time":"…"}
+{"t":"show","at":"…","leaf":"01a197e4-…-5ccb"}
 ```
 
 | Type | Written when | Fields |
 | --- | --- | --- |
-| `chat` | The chat is created: the first line, and only the first | `v`, the log format version; `id`, the chat's ID |
+| `chat` | The chat is created: the first line, and only the first | `v`, the log format version (2; 1 had integer IDs); `id`, the chat's ID |
 | `message` | A question is asked (`ask`, as `send`, `resend` and `regenerate` call it), as the reply starts. A reply has ended, failed or been stopped (`finish`, `stop`) | The `message` struct as its `json` tags write it, but `next`, which the replay makes: `id`, `parent`, `role`, `text`, `files`, `error`, `elapsed`, `time`, `reasoning`, `reasoned`, `usage`, `firstToken` |
 | `title` | The chat is renamed by the user or named by a model (`renameEnd`, `titled`) | `title` |
 | `show` | The path shown is not the one replaying the log would show: the user showed another version (`showVersion`), or a reply was asked for again | `leaf`, the last message of the path now shown |
@@ -299,7 +319,9 @@ At launch, if `chats/index.json` does not exist and `chats.json` does:
 1. Read `chats.json` as `loadFrom` used to, including `link()` for chats
    kept before versions existed. If it cannot be read, nothing is moved
    and it is left where it is.
-2. For each chat, write `chats/<id>.jsonl`: the `chat` line, then every
+2. Give the chats and messages UUIDs (`upgradeIDs`).
+3. Write the chats' folder (`writeChats`, below). For each chat,
+   `chats/<id>.jsonl` holds the `chat` line, then every
    message in **replay order** (`replayOrder`), then one `title` line,
    then a `show` line whose `leaf` is the last message of `Messages`.
    Replay order is depth first from the first questions. Of the versions
@@ -308,23 +330,59 @@ At launch, if `chats/index.json` does not exist and `chats.json` does:
    after its parent, and the last line in a message's subtree runs down
    the version it showed last. Replaying the log then gives every message
    the `next` it had, even on paths not shown, without writing `next`.
-3. Write `index.json`, with `next` set to the counter.
+   The folder's `index.json` lists them all.
 4. Rename `chats.json` to `chats.json.migrated`. It is kept, not deleted.
    Nothing reads it again, and the user can delete it.
 
-Each log and the index are first written to `.tmp` files, then renamed.
-The migration counts as done only once `index.json` exists. If it is
-interrupted, it runs again at the next launch and overwrites what it
-wrote.
+The migration counts as done once `chats/index.json` exists. If it is
+interrupted before, it runs again at the next launch, with new UUIDs.
+
+## Upgrading the logs of version 1
+
+The logs written before IDs were UUIDs (version 1) are named by numbers,
+hold numbers for IDs, and their index keeps the counter. At launch,
+`loadFrom` reads them as any logs, their IDs as digits; if any ID is
+legacy, it gives them all UUIDs (`upgradeIDs`), writes the chats' folder
+anew (`writeChats`), keeping the old one as `chats.v1/`, and reads the new
+one. The chat shown last (`layout.json`'s `chat`) takes its new ID. A
+partial of a reply a crash cut short is read first, so it goes in its
+chat's new log.
+
+If writing the new folder fails, the app runs on with the chats in memory,
+but saves nothing until it starts again: saving would put logs named by
+UUIDs beside those named by numbers.
+
+### Writing the folder at once
+
+Both the migration and the upgrade write every log, so both write a whole
+new folder at once (`writeChats`): into `chats.new/`, then the old
+`chats/`, where there is one, is renamed to the backup, then `chats.new/`
+to `chats/`. A crash leaves one of three states, which `finishSwap` sorts
+out at the next launch, before anything is read:
+
+- `chats.new/` beside `chats/`: the new folder may not be whole. It is
+  deleted, and the migration or upgrade runs again.
+- `chats.new/` and no `chats/`: the old folder was renamed away, which
+  happens only once the new one is whole. It takes its place.
+- No `chats.new/`: nothing was cut short.
 
 On a copy of a development data folder (47 chats, 151 messages, 226 KB),
 every chat came back the same as `chats.json` read the old way: path,
 versions, `next`, text, reasoning, files, errors, usage and times.
-Migrating and loading took 14 ms, a later load 3 ms.
+Migrating and loading took 14 ms, a later load 3 ms. Upgrading the same
+folder's logs of version 1 (48 chats, 156 messages) took 17 ms, and every
+chat came back the same, with UUIDs.
 
 ## Tests
 
-[store_test.go](../store_test.go):
+[store_test.go](../store_test.go) and [ids_test.go](../ids_test.go):
+
+- `TestIDs`: new IDs grow and are unique; numbers read as legacy IDs;
+  `upgradeIDs` keeps the order of the numbers (9 before 10) and the links.
+- `TestUpgradeV1Logs`: logs of version 1, made from chats with versions, a
+  pin and a chat shown last, upgrade to the same chats with UUIDs, keep the
+  old folder, and read the same IDs at the next launch.
+- `TestFinishSwap`: the two states a crash can leave the folder in.
 
 - `TestLogReplaysVersions`: a chat sent, asked again, edited and taken
   through its versions replays to the same path, other versions and

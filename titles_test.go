@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -88,18 +87,18 @@ func TestTitleLands(t *testing.T) {
 		t.Errorf("of files alone: title %q, asked %v", th.Title, p.titled)
 	}
 
-	th := &thread{ID: 7, Title: "How do I cache?"}
+	th := &thread{ID: "7", Title: "How do I cache?"}
 	a.threads = append(a.threads, th)
 	rev := a.rev
-	a.titled(7, "How do I cache?", "Caching")
+	a.titled("7", "How do I cache?", "Caching")
 	if th.Title != "Caching" || a.rev == rev {
 		t.Errorf("title %q, rev %d after %d", th.Title, a.rev, rev)
 	}
-	a.titled(7, "How do I cache?", "Something else")
+	a.titled("7", "How do I cache?", "Something else")
 	if th.Title != "Caching" {
 		t.Errorf("named over another title: %q", th.Title)
 	}
-	a.titled(8, "Gone", "Name")
+	a.titled("8", "Gone", "Name")
 }
 
 // What a model says is made a title, or none where it answered the message.
@@ -298,7 +297,7 @@ func TestRenameInSidebar(t *testing.T) {
 		t.Fatalf("%v; menu %q", err, tt.Menu())
 	}
 	tt.Frame()
-	if !a.renameInSidebar || a.renaming != strconv.Itoa(th.ID) {
+	if !a.renameInSidebar || a.renaming != string(th.ID) {
 		t.Fatalf("renaming %q in the sidebar %v", a.renaming, a.renameInSidebar)
 	}
 	tt.Type("LRU cache")
@@ -355,7 +354,7 @@ func TestRegenerateTitle(t *testing.T) {
 	}
 
 	// Of files alone, nothing to name it of.
-	files := &thread{ID: 99, Title: "notes.md", Messages: []*message{{Role: "user", Files: []*attachment{{Name: "notes.md"}}}}}
+	files := &thread{ID: "99", Title: "notes.md", Messages: []*message{{Role: "user", Files: []*attachment{{Name: "notes.md"}}}}}
 	if a.canRetitle(files) {
 		t.Error("regenerates a chat of files alone")
 	}
@@ -424,7 +423,7 @@ func TestRowMoreButton(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.selected != shown || a.renaming != strconv.Itoa(first.ID) || !a.renameInSidebar {
+	if a.selected != shown || a.renaming != string(first.ID) || !a.renameInSidebar {
 		t.Errorf("shown %q (was %q), renaming %q in the sidebar %v", a.selected, shown, a.renaming, a.renameInSidebar)
 	}
 }
