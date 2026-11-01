@@ -57,10 +57,15 @@ Why not SQLite:
   version tree of [versions.go](../versions.go)) stays as it is. Only how
   it is saved and loaded changes.
 
-SQLite becomes worth it when one of these is true: the app needs queries
-across chats that memory can't serve fast (folders, tags, filters,
-statistics, full-text search over tens of thousands of chats); chats sync
-between devices; or more than one process writes the same data.
+**SQLite is not planned.** Claude Code keeps every session as JSONL
+with no database at all ([What other apps do](#what-other-apps-do)), and
+what could outgrow files here has answers in files first
+([Later](#later)). SQLite comes in only if those are measured not to be
+enough: instant full-text search over tens of thousands of chats, or more
+than one process writing the chats at once; and then as an index derived
+from the logs, not in their place. Moving to SQLite for good would take
+features that change messages in place often, editing or deleting any one
+of them, which the version tree and Agent mode do not.
 
 ## What other apps do
 
@@ -88,8 +93,8 @@ agent loop, which puts it in the first group.
 What HyperAI takes from them:
 
 - **A log per chat, only appended to,** from Codex, Claude Code and
-  DeepSeek Harness. Like Claude Code, no database until it is needed; like
-  Codex, a database can be added later as an index derived from the logs
+  DeepSeek Harness; and, like Claude Code, no database. If one is ever
+  needed, it comes as Codex's does: an index derived from the logs
   ([Later](#later)).
 - **Messages as a tree**, as Claude Code's `parentUuid`: an edit or a
   reply asked for again is a branch, and nothing is rewritten. HyperAI's
@@ -448,10 +453,20 @@ chat came back the same, with UUIDs.
 
 ## Later
 
-- **A derived SQLite index**, with `ncruces/go-sqlite3` (wazero) or
-  `modernc.org/sqlite`, and FTS5, for full-text search once memory is not
-  enough. It is rebuilt from the logs, as Codex's `thread_history` is
-  projected from its rollouts.
+- **If loading grows slow, read logs lazily.** Measured as in
+  [performance.md](performance.md) (48 chats load in 3 ms today), and once
+  a launch is felt, around 100 ms: the sidebar from `index.json` alone, a
+  chat's log once it is opened. Claude Code reads a session only to resume
+  it.
+- **If the search grows slow, scan the logs on a goroutine**, showing what
+  it finds as it goes: thousands of chats, tens of megabytes, take well
+  under a second to read. Tags, folders and filters go in `index.json`;
+  statistics are summed from the logs once and cached.
+- **Only if those are not enough, a derived SQLite index**: with
+  `ncruces/go-sqlite3`, on the wazero the app has, without cgo, and FTS5;
+  filled from the logs, noting the byte each was read to, as Codex's
+  `thread_history` is from its rollouts; deleted and rebuilt at will. The
+  logs stay the source, and are written as before.
 - **Compressing old logs** with zstd, as Codex does for sessions it no
   longer writes.
 - **Rewriting a log** to drop what was replaced, if logs ever grow large
