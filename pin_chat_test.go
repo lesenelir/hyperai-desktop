@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"slices"
-	"strconv"
 	"testing"
 	"time"
 
@@ -33,7 +32,7 @@ func TestPinChat(t *testing.T) {
 	dir := t.TempDir()
 	a := newApp(&counter{})
 	a.loadFrom(dir)
-	t.Cleanup(func() { a.saver.wait() })
+	t.Cleanup(func() { a.logs.wait() })
 	tt := ui.NewTester(a.view, 1120, 760)
 	for _, q := range []string{"First", "Second", "Third"} {
 		a.newChat()
@@ -64,7 +63,7 @@ func TestPinChat(t *testing.T) {
 	}
 
 	// The title bar's menu says Unpin for the pinned chat shown.
-	a.open("1") // First
+	a.open(string(a.threads[0].ID)) // First
 	tt.Frame()
 	if err := tt.Click(locales.More()); err != nil {
 		t.Fatal(err)
@@ -81,7 +80,7 @@ func TestPinChat(t *testing.T) {
 	}
 
 	// Kept with the chats.
-	a.saver.wait()
+	a.logs.wait()
 	again := newApp(&counter{})
 	again.loadFrom(dir)
 	if got := sidebar(again); !slices.Equal(got, []string{pinned, "Second", chats, today, "Third", "First"}) {
@@ -130,7 +129,7 @@ func TestPinScrollsToTop(t *testing.T) {
 	a.chatScroll.ScrollTo(0, 600, ui.Animation{})
 	tt.Advance(time.Second)
 	y := a.chatScroll.Y
-	a.togglePin(a.thread(strconv.Itoa(a.threads[9].ID)))
+	a.togglePin(a.thread(string(a.threads[9].ID)))
 	tt.Advance(time.Second)
 	if a.chatScroll.Y == 0 || a.chatScroll.Y < y-100 {
 		t.Errorf("unpinned: the sidebar went from %v to %v", y, a.chatScroll.Y)
@@ -144,13 +143,13 @@ func TestFoldSections(t *testing.T) {
 	dir := t.TempDir()
 	a := newApp(&counter{})
 	a.loadFrom(dir)
-	t.Cleanup(func() { a.saver.wait(); a.layoutSaver.wait() })
+	t.Cleanup(func() { a.logs.wait(); a.layoutSaver.wait() })
 	tt := ui.NewTester(a.view, 1120, 760)
 	for _, q := range []string{"First", "Second"} {
 		a.newChat()
 		a.send(q)
 	}
-	a.togglePin(a.thread("1"))
+	a.togglePin(a.threads[0])
 	tt.Advance(time.Second)
 	pinned, chats, today := "["+locales.GroupPinned()+"]", "["+locales.SidebarChats()+"]", "["+locales.GroupToday()+"]"
 	if got := sidebar(a); !slices.Equal(got, []string{pinned, "First", chats, today, "Second"}) {
@@ -186,14 +185,14 @@ func TestFoldSections(t *testing.T) {
 	}
 
 	// Pinning unfolds Pinned; Chats, of none left, goes.
-	a.togglePin(a.thread("4"))
+	a.togglePin(a.threads[1])
 	tt.Advance(time.Second)
 	if got := sidebar(a); !slices.Equal(got, []string{pinned, "Second", "First"}) {
 		t.Errorf("pinned while folded: rows %q", got)
 	}
 
 	// Pinned folded again, Chats unfolded under it, then Pinned.
-	a.togglePin(a.thread("4"))
+	a.togglePin(a.threads[1])
 	tt.Advance(time.Second)
 	if err := tt.Click(locales.GroupPinned()); err != nil {
 		t.Fatal(err)

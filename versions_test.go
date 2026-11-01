@@ -130,8 +130,8 @@ func TestEditQuestion(t *testing.T) {
 		copyX := r.X - bubblePadX - 6 - actionSize/2
 		tt.ClickAt(copyX-actionSize-barGap, r.Y+r.H/2)
 		tt.Frame()
-		if a.editingMsg == 0 || a.editText != q {
-			t.Fatalf("editing %d, holding %q", a.editingMsg, a.editText)
+		if a.editingMsg == "" || a.editText != q {
+			t.Fatalf("editing %s, holding %q", a.editingMsg, a.editText)
 		}
 	}
 
@@ -139,8 +139,8 @@ func TestEditQuestion(t *testing.T) {
 	edit("Q2")
 	tt.Type(" more")
 	tt.Key(0, ui.KeyEscape)
-	if a.editingMsg != 0 || path(th) != "Q1 | Answer 1 | Q2 | Answer 2" {
-		t.Fatalf("after Escape: editing %d, path %q", a.editingMsg, path(th))
+	if a.editingMsg != "" || path(th) != "Q1 | Answer 1 | Q2 | Answer 2" {
+		t.Fatalf("after Escape: editing %s, path %q", a.editingMsg, path(th))
 	}
 
 	// The first question, edited: a version of it, the rest kept. Scrolled
@@ -178,10 +178,10 @@ func TestVersionsKept(t *testing.T) {
 	p := &counter{}
 	a := newApp(p)
 	a.loadFrom(dir)
-	t.Cleanup(func() { a.saver.wait() })
+	t.Cleanup(func() { a.logs.wait() })
 	a.send("Q1")
 	a.regenerate(a.current(), 1)
-	a.saver.wait()
+	a.logs.wait()
 
 	again := newApp(p)
 	again.loadFrom(dir)
@@ -193,10 +193,6 @@ func TestVersionsKept(t *testing.T) {
 	if got := path(th); got != "Q1 | Answer 1" {
 		t.Errorf("shown: path %q", got)
 	}
-	// IDs past those of every version.
-	if again.next < 3 {
-		t.Errorf("next %d", again.next)
-	}
 
 	old := t.TempDir()
 	os.WriteFile(filepath.Join(old, "chats.json"), []byte(`[{"id":1,"title":"Old","messages":[`+
@@ -206,8 +202,8 @@ func TestVersionsKept(t *testing.T) {
 	b.loadFrom(old)
 	th = b.threads[0]
 	for i, m := range th.Messages {
-		if want := []int{0, 2, 3, 4}[i]; m.Parent != want {
-			t.Errorf("message %d follows %d, want %d", m.ID, m.Parent, want)
+		if want := ID(""); i > 0 && m.Parent != th.Messages[i-1].ID || i == 0 && m.Parent != want {
+			t.Errorf("message %d follows %q", i, m.Parent)
 		}
 	}
 	if vs := th.versions(th.Messages[2]); len(vs) != 1 {

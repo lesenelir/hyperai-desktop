@@ -1,14 +1,86 @@
 package main
 
 import (
+	"bytes"
+	"cmp"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo"
 )
+
+// The chats are kept in a folder of their own, as docs/storage.md says: a
+// log of each, which is only appended to, and an index of them all, for
+// the sidebar, which is written whole.
+const (
+	chatsDir   = "chats"
+	indexFile  = "index.json"
+	logVersion = 2 // 1 had numbers for IDs
+	// oldLogs is where the logs of version 1 are kept, once their IDs are
+	// UUIDs.
+	oldLogs = "chats.v1"
+	// oldChats is where every chat was kept before, in one file, which
+	// the first launch since moves into logs, renaming it oldChats +
+	// ".migrated".
+	oldChats = "chats.json"
+	// partialEvery is how often the reply streaming in a chat is kept
+	// aside, in <id>.partial, for a crash to leave what came of it.
+	partialEvery = time.Second
+	// sweepGrace is how old a file in attachments/ that no log names must
+	// be for the sweep to delete it: younger, it may be a question's whose
+	// line is not written yet.
+	sweepGrace = time.Hour
+)
+
+// chatIndex is what index.json holds: of each chat, what the sidebar shows
+// and what changes often.
+type chatIndex struct {
+	Version int          `json:"version"`
+	Chats   []indexEntry `json:"chats"`
+}
+
+// indexEntry is a chat as the index keeps it: a thread's fields but its
+// messages.
+type indexEntry struct {
+	ID       ID        `json:"id"`
+	Title    string    `json:"title"`
+	Updated  time.Time `json:"updated"`
+	Pinned   time.Time `json:"pinned,omitzero"`
+	Model    string    `json:"model,omitempty"`
+	Effort   string    `json:"effort,omitempty"`
+	Provider string    `json:"provider,omitempty"`
+	Draft    string    `json:"draft,omitempty"`
+}
+
+// event is a line of a chat's log: its type, when it happened, and what
+// the types but "message" carry. Of the log's first line ("chat"), the
+// log's version and the chat's ID; of "title", the chat's title; of
+// "show", the last message of the path shown.
+type event struct {
+	T     string    `json:"t"`
+	At    time.Time `json:"at,omitzero"`
+	V     int       `json:"v,omitempty"`
+	ID    ID        `json:"id,omitempty"`
+	Title string    `json:"title,omitempty"`
+	Leaf  ID        `json:"leaf,omitempty"`
+}
+
+// messageEvent is a line of the type "message": the message as its json
+// tags write it, but Next, which replaying the log makes.
+type messageEvent struct {
+	T  string    `json:"t"`
+	At time.Time `json:"at,omitzero"`
+	*message
+}
 
 // load reads the saved chats from the app's user data directory.
 func (a *app) load() {
@@ -19,8 +91,10 @@ func (a *app) load() {
 	a.loadFrom(dir)
 }
 
-// loadFrom reads the layout and the chats kept in dir, and shows the chat
-// shown last, where General says to and it is still there.
+// loadFrom reads the layout and the chats kept in dir, moving them out of
+// chats.json the first time, and the logs of version 1, whose IDs are
+// numbers, into logs whose IDs are UUIDs; and shows the chat shown last,
+// where General says to and it is still there.
 func (a *app) loadFrom(dir string) {
 	a.loadLayout(dir)
 	a.loadConf(dir)
@@ -29,35 +103,817 @@ func (a *app) loadFrom(dir string) {
 			a.show(a.keptChat)
 		}
 	}()
-	a.path = filepath.Join(dir, "chats.json")
+	a.path = filepath.Join(dir, chatsDir)
 	a.filesDir = filepath.Join(dir, "attachments")
-	b, err := os.ReadFile(a.path)
-	if err != nil || json.Unmarshal(b, &a.threads) != nil {
-		return
-	}
-	for _, th := range a.threads {
-		th.link()
-		a.next = max(a.next, th.ID)
-		for _, m := range th.all() {
-			a.next = max(a.next, m.ID)
+	finishSwap(a.path)
+	old, to, err := migrate(dir)
+	if err != nil {
+		// Saving would write an index, which says the chats were moved:
+		// they would never be. The chats show as chats.json has them,
+		// where it could be read, until a launch moves them.
+		log.Printf("moving the chats out of %s: %v; nothing is saved until they are moved", oldChats, err)
+		a.threads, a.path = old, ""
+	} else {
+		a.threads = readChats(a.path)
+		if to == nil {
+			to = upgradeIDs(a.threads)
+			if to != nil {
+				if err := writeChats(a.path, a.threads, filepath.Join(dir, oldLogs)); err != nil {
+					// Saving on would put logs of new IDs beside those of
+					// the old.
+					log.Printf("giving the chats new IDs: %v; nothing is saved until the app starts again", err)
+					a.path = ""
+				} else {
+					a.threads = readChats(a.path)
+				}
+			}
 		}
 	}
+	// The chat shown last, by its new ID, kept for the launches to come,
+	// where the chats took new ones.
+	if id, ok := to[ID(a.keptChat)]; ok {
+		a.keptChat = string(id)
+		if a.path != "" {
+			a.saveLayout()
+		}
+	}
+	a.onDisk = map[ID]bool{}
+	recovered := false
+	for _, th := range a.threads {
+		a.onDisk[th.ID] = true
+		recovered = recovered || th.partial
+	}
 	a.rev++
+	// A reply a crash cut short goes in its log at once.
+	if recovered {
+		a.save()
+	}
+	chats, files := a.path, a.filesDir
+	if chats == "" {
+		return
+	}
+	a.writes.Add(1)
+	go func() {
+		defer a.writes.Done()
+		sweepAttachments(chats, files, time.Now().Add(-sweepGrace))
+	}()
 }
 
-// save writes the chats, where the app has a place for them (not in
-// tests). It encodes them here, on the main thread, where they are safe
-// to read, and leaves writing them to a goroutine, so that a frame never
-// waits for the disk.
+// save keeps what changed of the chats, where the app has a place for them
+// (not in tests): it appends to each chat's log what it does not hold yet,
+// deletes the logs of the chats deleted, and writes the index. It encodes
+// them here, on the main thread, where they are safe to read, and leaves
+// writing them to a goroutine, so that a frame never waits for the disk.
+// A reply streaming in is not kept until it ends.
 func (a *app) save() {
 	if a.path == "" {
 		return
 	}
-	b, err := json.MarshalIndent(a.threads, "", "  ")
+	a.retryFailed()
+	var ops []logOp
+	live := make(map[ID]bool, len(a.threads))
+	idx := chatIndex{Version: logVersion, Chats: make([]indexEntry, 0, len(a.threads))}
+	for _, th := range a.threads {
+		live[th.ID] = true
+		ops = append(ops, a.logChanges(th)...)
+		idx.Chats = append(idx.Chats, entryOf(th))
+	}
+	// The logs go before the index, so that the index never holds a chat
+	// that a crash left without a log.
+	for id := range a.onDisk {
+		if !live[id] {
+			ops = append(ops, logOp{id: id, path: a.logPath(id), kind: opRemove},
+				logOp{path: a.partialPath(id), kind: opRemove})
+			delete(a.onDisk, id)
+		}
+	}
+	b, err := json.MarshalIndent(idx, "", "  ")
 	if err != nil {
 		return
 	}
-	a.saver.save(a.path, b)
+	a.logs.write(ops, filepath.Join(a.path, indexFile), b)
+}
+
+func (a *app) logPath(id ID) string     { return filepath.Join(a.path, string(id)+".jsonl") }
+func (a *app) partialPath(id ID) string { return filepath.Join(a.path, string(id)+".partial") }
+
+// entryOf returns th as the index keeps it.
+func entryOf(th *thread) indexEntry {
+	return indexEntry{ID: th.ID, Title: th.Title, Updated: th.Updated, Pinned: th.Pinned,
+		Model: th.Model, Effort: th.Effort, Provider: th.Provider, Draft: th.Draft}
+}
+
+// retryFailed has the next save write again what the writer could not:
+// the log of a chat an append to failed, whole, and the delete of a log
+// that failed.
+func (a *app) retryFailed() {
+	for _, op := range a.logs.takeFailed() {
+		switch {
+		case op.kind == opRemove && op.unless != "":
+			// A partial kept, its reply not in the log: deleted once it is.
+			if th := a.threadByID(op.id); th != nil {
+				th.partial = true
+			}
+		case op.kind == opRemove:
+			if op.id != "" {
+				a.onDisk[op.id] = true
+			}
+		default:
+			if th := a.threadByID(op.id); th != nil {
+				th.rewrite = true
+			}
+		}
+	}
+}
+
+func (a *app) threadByID(id ID) *thread {
+	for _, th := range a.threads {
+		if th.ID == id {
+			return th
+		}
+	}
+	return nil
+}
+
+// logChanges returns the changes th's log needs: where an append to it
+// failed, all of it written anew; else the lines it lacks, appended. And,
+// once its reply ended, its partial deleted.
+func (a *app) logChanges(th *thread) []logOp {
+	var ops []logOp
+	if th.rewrite {
+		th.rewrite = false
+		a.onDisk[th.ID] = true
+		ops = append(ops, logOp{id: th.ID, path: a.logPath(th.ID), data: wholeLog(th), kind: opReplace})
+	} else if b := a.newLines(th); len(b) > 0 {
+		ops = append(ops, logOp{id: th.ID, path: a.logPath(th.ID), data: b})
+	}
+	if th.partial && th.busy == nil {
+		th.partial = false
+		// Not before the reply is in the log: kept, where that failed.
+		ops = append(ops, logOp{id: th.ID, path: a.partialPath(th.ID), kind: opRemove, unless: a.logPath(th.ID)})
+	}
+	return ops
+}
+
+// wholeLog returns th's log as replaying it shows th, and notes it holds
+// all of it: its first line, the messages that are not streaming in, in
+// replay order, its title, and the path shown.
+func wholeLog(th *thread) []byte {
+	th.logged = map[ID]bool{}
+	out := appendLine(nil, event{T: "chat", At: time.Now().UTC(), V: logVersion, ID: th.ID})
+	for _, m := range replayOrder(th) {
+		if m.streaming {
+			continue
+		}
+		out = appendMessage(out, m, m.Time)
+		th.logged[m.ID] = true
+	}
+	th.logTitle = th.Title
+	if th.Title != "" {
+		out = appendLine(out, event{T: "title", Title: th.Title})
+	}
+	th.logLeaf = shownLeaf(th)
+	if th.logLeaf != "" {
+		out = appendLine(out, event{T: "show", Leaf: th.logLeaf})
+	}
+	return out
+}
+
+// keepPartial keeps reply, streaming in th, aside in th's partial, at most
+// once every partialEvery: what a crash leaves of it, which the next
+// launch shows as a reply stopped there.
+func (a *app) keepPartial(th *thread, reply *message) {
+	if a.path == "" || !reply.streaming || time.Since(th.partialAt) < partialEvery {
+		return
+	}
+	th.partialAt, th.partial = time.Now(), true
+	b := appendMessage(nil, reply, time.Now().UTC())
+	a.logs.write([]logOp{{path: a.partialPath(th.ID), data: b, kind: opReplace}}, "", nil)
+}
+
+// newLines returns the lines th's log lacks: its first, where it has none
+// yet; the messages that ended since, oldest first; the path shown, where
+// replaying the log would show another; and its title, where it changed.
+func (a *app) newLines(th *thread) []byte {
+	var out []byte
+	now := time.Now().UTC()
+	if th.logged == nil {
+		th.logged = map[ID]bool{}
+		a.onDisk[th.ID] = true
+		out = appendLine(out, event{T: "chat", At: now, V: logVersion, ID: th.ID})
+	}
+	if len(th.logged) < len(th.Messages)+len(th.Others) {
+		msgs := th.all()
+		slices.SortFunc(msgs, func(x, y *message) int { return cmp.Compare(x.ID, y.ID) })
+		for _, m := range msgs {
+			if m.streaming || th.logged[m.ID] {
+				continue
+			}
+			out = appendMessage(out, m, now)
+			th.logged[m.ID] = true
+			th.logLeaf = m.ID
+		}
+	}
+	if leaf := shownLeaf(th); leaf != "" && leaf != th.logLeaf {
+		out = appendLine(out, event{T: "show", At: now, Leaf: leaf})
+		th.logLeaf = leaf
+	}
+	if th.Title != th.logTitle {
+		out = appendLine(out, event{T: "title", At: now, Title: th.Title})
+		th.logTitle = th.Title
+	}
+	return out
+}
+
+// shownLeaf returns the last message of th's path that is not streaming
+// in, "" for none.
+func shownLeaf(th *thread) ID {
+	for i := len(th.Messages) - 1; i >= 0; i-- {
+		if !th.Messages[i].streaming {
+			return th.Messages[i].ID
+		}
+	}
+	return ""
+}
+
+// appendLine appends v to b as a line of JSON, its HTML as it is.
+func appendLine(b []byte, v any) []byte {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		log.Printf("encoding a line of a chat's log: %v", err)
+		return b
+	}
+	return append(b, buf.Bytes()...)
+}
+
+// appendMessage appends m to b as a "message" line: as it is, but Next,
+// which replaying the log makes.
+func appendMessage(b []byte, m *message, at time.Time) []byte {
+	c := *m
+	c.Next = ""
+	return appendLine(b, messageEvent{T: "message", At: at, message: &c})
+}
+
+// readChats returns the chats kept in dir: those the index lists, in its
+// order, whose logs are there, then those of the logs it lacks, by ID,
+// named and dated by their logs.
+func readChats(dir string) []*thread {
+	var idx chatIndex
+	if b, err := os.ReadFile(filepath.Join(dir, indexFile)); err == nil {
+		if err := json.Unmarshal(b, &idx); err != nil {
+			log.Printf("reading the chats' index: %v", err)
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		log.Printf("reading the chats: %v", err)
+	}
+	logs := map[ID]*thread{}
+	var ids []ID
+	for _, e := range entries {
+		name, ok := strings.CutSuffix(e.Name(), ".jsonl")
+		id := ID(name)
+		if !ok || name == "" || e.IsDir() {
+			continue
+		}
+		if th := readLog(filepath.Join(dir, e.Name()), id); th != nil {
+			recoverPartial(filepath.Join(dir, name+".partial"), th)
+			logs[id] = th
+			ids = append(ids, id)
+		}
+	}
+	threads := make([]*thread, 0, len(logs))
+	for _, e := range idx.Chats {
+		th := logs[e.ID]
+		if th == nil {
+			continue
+		}
+		delete(logs, e.ID)
+		// The log's title, and the later date, over the index's: the log
+		// is written first, and a crash between the two leaves the index
+		// behind.
+		th.Title = th.logTitle
+		if th.Title == "" {
+			th.Title = e.Title
+		}
+		th.Updated = e.Updated
+		if t := lastAsked(th); t.After(th.Updated) {
+			th.Updated = t
+		}
+		th.Pinned = e.Pinned
+		th.Model, th.Effort, th.Provider, th.Draft = e.Model, e.Effort, e.Provider, e.Draft
+		threads = append(threads, th)
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		if th := logs[id]; th != nil {
+			th.Title = th.logTitle
+			if th.Title == "" {
+				th.Title = firstTitle(th)
+			}
+			threads = append(threads, th)
+		}
+	}
+	return threads
+}
+
+// lastAsked returns when the last question of th was sent, zero where
+// none says.
+func lastAsked(th *thread) time.Time {
+	var t time.Time
+	for _, m := range th.all() {
+		if m.Role == "user" && m.Time.After(t) {
+			t = m.Time
+		}
+	}
+	return t
+}
+
+// firstTitle returns the title send gives th: of its first question, or
+// its first file, where it is of files alone.
+func firstTitle(th *thread) string {
+	for _, m := range th.all() {
+		if m.Role != "user" {
+			continue
+		}
+		if m.Text == "" && len(m.Files) > 0 {
+			return title(m.Files[0].Name)
+		}
+		return title(m.Text)
+	}
+	return ""
+}
+
+// readLog returns the chat id whose log is at path, nil where it holds no
+// message. A last line a crash broke is cut from the file, for the next
+// to begin a line of its own; any other line that is not an event is
+// skipped.
+func readLog(path string, id ID) *thread {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		log.Printf("reading a chat's log: %v", err)
+		return nil
+	}
+	if n := len(b); n > 0 && b[n-1] != '\n' {
+		keep := bytes.LastIndexByte(b, '\n') + 1
+		log.Printf("%s: cutting a broken last line", path)
+		if err := os.Truncate(path, int64(keep)); err != nil {
+			log.Printf("cutting it: %v", err)
+		}
+		b = b[:keep]
+	}
+	th := &thread{ID: id, logged: map[ID]bool{}}
+	byID := map[ID]*message{}
+	var msgs []*message
+	var created time.Time
+	for line := range bytes.Lines(b) {
+		var e event
+		if err := json.Unmarshal(line, &e); err != nil {
+			log.Printf("%s: skipping a line: %v", path, err)
+			continue
+		}
+		switch e.T {
+		case "chat":
+			created = e.At
+		case "message":
+			m := &message{}
+			if err := json.Unmarshal(line, &messageEvent{message: m}); err != nil || m.ID == "" || byID[m.ID] != nil {
+				log.Printf("%s: skipping a message", path)
+				continue
+			}
+			m.Next = ""
+			byID[m.ID] = m
+			msgs = append(msgs, m)
+			th.logged[m.ID] = true
+			th.showPath(byID, m.ID)
+		case "title":
+			th.logTitle = e.Title
+		case "show":
+			if byID[e.Leaf] != nil {
+				th.showPath(byID, e.Leaf)
+			}
+		}
+	}
+	if len(msgs) == 0 {
+		return nil
+	}
+	on := make(map[*message]bool, len(th.Messages))
+	for _, m := range th.Messages {
+		on[m] = true
+	}
+	for _, m := range msgs {
+		if !on[m] {
+			th.Others = append(th.Others, m)
+		}
+	}
+	// When the user last sent in it, which the index keeps; where it has
+	// no entry, its last question's, else when its log began.
+	th.Updated = created
+	if t := lastAsked(th); t.After(th.Updated) {
+		th.Updated = t
+	}
+	return th
+}
+
+// recoverPartial adds to th the reply its partial at path kept, which a
+// crash left streaming in: as a reply stopped there, on the path shown,
+// which the next save appends to its log, deleting the partial. A partial
+// whose reply the log holds, of a save the crash cut short, is deleted.
+func recoverPartial(path string, th *thread) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	m := &message{}
+	ev := messageEvent{message: m}
+	if err := json.Unmarshal(bytes.TrimSpace(b), &ev); err != nil || m.ID == "" || th.logged[m.ID] {
+		os.Remove(path)
+		return
+	}
+	byID := map[ID]*message{m.ID: m}
+	for _, o := range th.all() {
+		byID[o.ID] = o
+	}
+	if m.Parent != "" && byID[m.Parent] == nil {
+		os.Remove(path)
+		return
+	}
+	m.Next, m.Time = "", ev.At
+	if m.Text == "" {
+		m.Error = errStopped
+	}
+	all, leaf := append(th.all(), m), th.logLeaf
+	th.showPath(byID, m.ID)
+	th.Others = slices.DeleteFunc(all, func(o *message) bool { return slices.Contains(th.Messages, o) })
+	// The log still ends where it did, without the reply.
+	th.logLeaf, th.partial = leaf, true
+}
+
+// sweepAttachments deletes the files in files that no log or partial in
+// chats names, nor chats.json beside it, and that were not changed since before: those of chats a
+// crash cut the deleting of short. It reads the logs as they are on disk,
+// not as they were read, so that a line skipped as broken still keeps its
+// files.
+func sweepAttachments(chats, files string, before time.Time) {
+	entries, err := os.ReadDir(files)
+	if err != nil {
+		return
+	}
+	logs, err := os.ReadDir(chats)
+	if err != nil {
+		return
+	}
+	var named [][]byte
+	// And chats.json, which a migration that failed leaves, or the old one
+	// it kept.
+	for _, n := range []string{oldChats, oldChats + ".migrated"} {
+		if b, err := os.ReadFile(filepath.Join(filepath.Dir(chats), n)); err == nil {
+			named = append(named, b)
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return
+		}
+	}
+	for _, e := range logs {
+		if n := e.Name(); strings.HasSuffix(n, ".jsonl") || strings.HasSuffix(n, ".partial") {
+			b, err := os.ReadFile(filepath.Join(chats, n))
+			if err != nil {
+				// What it names is not known: delete nothing.
+				return
+			}
+			named = append(named, b)
+		}
+	}
+	all := bytes.Join(named, nil)
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil || e.IsDir() || !info.ModTime().Before(before) {
+			continue
+		}
+		if !bytes.Contains(all, []byte(`"`+e.Name()+`"`)) {
+			if err := os.Remove(filepath.Join(files, e.Name())); err != nil {
+				log.Printf("sweeping an attachment: %v", err)
+			}
+		}
+	}
+}
+
+// showPath makes th's path the messages leaf follows, of byID, and leaf,
+// marking it, as replaying a line of its log does.
+func (th *thread) showPath(byID map[ID]*message, leaf ID) {
+	var path []*message
+	for id := leaf; id != "" && len(path) <= len(byID); {
+		m := byID[id]
+		if m == nil {
+			break
+		}
+		path = append(path, m)
+		id = m.Parent
+	}
+	slices.Reverse(path)
+	th.Messages = path
+	th.markPath()
+	th.logLeaf = leaf
+}
+
+// migrate moves the chats out of chats.json in dir into logs and an index,
+// where it is there and they were not moved yet, and renames it. It
+// returns the chats it read, and the new ID of each old one, nil where
+// it moved none; and, where it failed, why, with the chats it read, if
+// any. Each
+// chat's messages go in an order that replays to the versions shown last:
+// every message after the one it follows, and of the versions of one, the
+// one shown last after the others, with all that followed each.
+func migrate(dir string) (threads []*thread, to map[ID]ID, err error) {
+	cdir := filepath.Join(dir, chatsDir)
+	if _, err := os.Stat(filepath.Join(cdir, indexFile)); err == nil {
+		return nil, nil, nil
+	}
+	old := filepath.Join(dir, oldChats)
+	b, err := os.ReadFile(old)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil, nil
+	} else if err != nil {
+		return nil, nil, err
+	}
+	if err := json.Unmarshal(b, &threads); err != nil {
+		return nil, nil, err
+	}
+	for _, th := range threads {
+		th.link()
+	}
+	to = upgradeIDs(threads)
+	if err := writeChats(cdir, threads, filepath.Join(dir, oldLogs)); err != nil {
+		return threads, to, err
+	}
+	return threads, to, os.Rename(old, old+".migrated")
+}
+
+// writeChats writes threads as the chats' folder cdir, at once: into a
+// folder beside it, which is renamed over it once whole, cdir, where it
+// is there, kept as backup. A crash at any point leaves either the old
+// folder or the new one whole, which finishSwap tells.
+func writeChats(cdir string, threads []*thread, backup string) error {
+	tmp := cdir + ".new"
+	if err := os.RemoveAll(tmp); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(tmp, 0o700); err != nil {
+		return err
+	}
+	idx := chatIndex{Version: logVersion, Chats: []indexEntry{}}
+	for _, th := range threads {
+		if err := os.WriteFile(filepath.Join(tmp, string(th.ID)+".jsonl"), wholeLog(th), 0o600); err != nil {
+			return err
+		}
+		idx.Chats = append(idx.Chats, entryOf(th))
+	}
+	b, err := json.MarshalIndent(idx, "", "  ")
+	if err != nil {
+		return err
+	}
+	// Last, and at once: that the new folder holds an index tells it is
+	// whole.
+	if err := replace(filepath.Join(tmp, indexFile), b); err != nil {
+		return err
+	}
+	if _, err := os.Stat(cdir); err == nil {
+		if err := os.RemoveAll(backup); err != nil {
+			return err
+		}
+		if err := os.Rename(cdir, backup); err != nil {
+			return err
+		}
+	}
+	return os.Rename(tmp, cdir)
+}
+
+// finishSwap ends what a crash cut short of writeChats: where the new
+// folder is whole (it holds an index) and the old one is not there, the
+// old one was renamed away, or there was none, and the new one takes its
+// place; else the new one may not be whole, and is deleted, for
+// writeChats to write again.
+func finishSwap(cdir string) {
+	tmp := cdir + ".new"
+	if _, err := os.Stat(tmp); err != nil {
+		return
+	}
+	var err error
+	_, serr := os.Stat(cdir)
+	if _, ierr := os.Stat(filepath.Join(tmp, indexFile)); serr != nil && ierr == nil {
+		err = os.Rename(tmp, cdir)
+	} else {
+		err = os.RemoveAll(tmp)
+	}
+	if err != nil {
+		log.Printf("finishing writing the chats: %v", err)
+	}
+}
+
+// replayOrder returns th's messages in an order whose replay leaves each
+// message's Next as it is: depth first from the first questions, the
+// versions of one oldest first but the one it shows after it (Next) last.
+// A message whose parent is not there begins a tree of its own.
+func replayOrder(th *thread) []*message {
+	all := th.all()
+	byID := make(map[ID]*message, len(all))
+	for _, m := range all {
+		byID[m.ID] = m
+	}
+	kids := map[ID][]*message{}
+	for _, m := range all {
+		p := m.Parent
+		if byID[p] == nil {
+			p = ""
+		}
+		kids[p] = append(kids[p], m)
+	}
+	out := make([]*message, 0, len(all))
+	var walk func(id, next ID)
+	walk = func(id, next ID) {
+		ks := kids[id]
+		slices.SortFunc(ks, func(x, y *message) int { return cmp.Compare(x.ID, y.ID) })
+		if i := slices.IndexFunc(ks, func(k *message) bool { return k.ID == next }); i >= 0 {
+			ks = append(slices.Delete(slices.Clone(ks), i, i+1), ks[i])
+		}
+		for _, k := range ks {
+			out = append(out, k)
+			walk(k.ID, k.Next)
+		}
+	}
+	var first ID
+	if len(th.Messages) > 0 {
+		first = th.Messages[0].ID
+	}
+	walk("", first)
+	return out
+}
+
+// opKind is what a logOp does to its file.
+type opKind int
+
+const (
+	opAppend  opKind = iota // appends data
+	opReplace               // writes data in place of the file, at once
+	opRemove                // deletes the file
+)
+
+// logOp is a change to a file of the chats: a log, of the chat id ("" for
+// none), or a partial.
+type logOp struct {
+	id   ID
+	path string
+	data []byte
+	kind opKind
+	// unless keeps a file from being deleted where the log at unless is
+	// broken: a partial, whose reply did not reach the log.
+	unless string
+}
+
+// logWriter changes the chats' files and writes their index on a
+// goroutine, in the order asked: every change asked while it writes waits,
+// and of the indexes waiting only the latest is written, after the logs.
+// An append that fails leaves its log broken: the appends after it are
+// skipped, until the log is written whole again, and failed lists it for
+// the next save to.
+type logWriter struct {
+	mu      sync.Mutex
+	ops     []logOp
+	path    string // the index's
+	index   []byte // the index to write next, nil when none waits
+	writing bool
+	failed  []logOp
+	broken  map[string]bool // read and written by run alone
+	done    sync.WaitGroup
+}
+
+// write asks for ops, then index written at path, nil for none.
+func (w *logWriter) write(ops []logOp, path string, index []byte) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.ops = append(w.ops, ops...)
+	if index != nil {
+		w.path, w.index = path, index
+	}
+	if !w.writing {
+		w.writing = true
+		w.done.Add(1)
+		go w.run()
+	}
+}
+
+func (w *logWriter) run() {
+	defer w.done.Done()
+	for {
+		w.mu.Lock()
+		ops, path, index := w.ops, w.path, w.index
+		w.ops, w.index = nil, nil
+		if len(ops) == 0 && index == nil {
+			w.writing = false
+			w.mu.Unlock()
+			return
+		}
+		w.mu.Unlock()
+		var failed []logOp
+		for _, op := range ops {
+			if err := w.apply(op); err != nil {
+				log.Printf("saving the chats: %v", err)
+				failed = append(failed, op)
+			}
+		}
+		// Never ahead of the logs, whose titles and dates loading takes
+		// over its own: not written where a change before it failed, as
+		// one that fails is not, the next save writing it whole again.
+		if index != nil && len(failed) == 0 {
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				log.Printf("saving the chats' index: %v", err)
+			}
+			if err := replace(path, index); err != nil {
+				log.Printf("saving the chats' index: %v", err)
+			}
+		}
+		if len(failed) > 0 {
+			w.mu.Lock()
+			w.failed = append(w.failed, failed...)
+			w.mu.Unlock()
+		}
+	}
+}
+
+// apply makes the change op asks. An append to a log broken before is
+// skipped, as failing: its next line would go after a broken one.
+func (w *logWriter) apply(op logOp) error {
+	if w.broken == nil {
+		w.broken = map[string]bool{}
+	}
+	switch op.kind {
+	case opRemove:
+		if op.unless != "" && w.broken[op.unless] {
+			return fmt.Errorf("%s: kept, its log broken", filepath.Base(op.path))
+		}
+		delete(w.broken, op.path)
+		if err := os.Remove(op.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		return nil
+	case opReplace:
+		err := os.MkdirAll(filepath.Dir(op.path), 0o700)
+		if err == nil {
+			err = replace(op.path, op.data)
+		}
+		if err == nil {
+			delete(w.broken, op.path)
+		}
+		return err
+	}
+	if w.broken[op.path] {
+		return fmt.Errorf("%s: skipped, after a failed write", filepath.Base(op.path))
+	}
+	err := os.MkdirAll(filepath.Dir(op.path), 0o700)
+	if err == nil {
+		err = appendTo(op.path, op.data)
+	}
+	if err != nil {
+		w.broken[op.path] = true
+	}
+	return err
+}
+
+// appendTo appends b to the file at path, in one write.
+func appendTo(path string, b []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(b)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return err
+}
+
+// takeFailed returns the changes that failed since it was last called.
+func (w *logWriter) takeFailed() []logOp {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	f := w.failed
+	w.failed = nil
+	return f
+}
+
+// wait returns once what was asked is written, as the app quits.
+func (w *logWriter) wait() { w.done.Wait() }
+
+// replace writes b to path at once, through a file beside it renamed over
+// it, so that a crash leaves the old file whole.
+func replace(path string, b []byte) error {
+	tmp := path + ".tmp"
+	err := os.WriteFile(tmp, b, 0o600)
+	if err == nil {
+		err = os.Rename(tmp, path)
+	}
+	return err
 }
 
 // saver writes files on a goroutine, one at a time: a save asked while one
@@ -93,14 +949,8 @@ func (s *saver) write() {
 			return
 		}
 		s.mu.Unlock()
-		// Replaced at once, so that a crash leaves the old file.
-		tmp := path + ".tmp"
-		err := os.WriteFile(tmp, b, 0o600)
-		if err == nil {
-			err = os.Rename(tmp, path)
-		}
-		if err != nil {
-			log.Printf("saving the chats: %v", err)
+		if err := replace(path, b); err != nil {
+			log.Printf("saving %s: %v", filepath.Base(path), err)
 		}
 	}
 }

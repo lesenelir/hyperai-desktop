@@ -249,9 +249,11 @@ func (a *app) keepFiles(files []*attachment) {
 }
 
 // forgetFiles deletes the copies kept of the files of threads, which are
-// deleted.
+// deleted. Not where the chats are not saved (a.path is ""), as after a
+// migration that failed: chats deleted then come back at the next launch,
+// and their files must still be there.
 func (a *app) forgetFiles(threads ...*thread) {
-	if a.filesDir == "" {
+	if a.filesDir == "" || a.path == "" {
 		return
 	}
 	var paths []string

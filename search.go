@@ -126,7 +126,7 @@ func (a *app) searchSections() []searchSection {
 		items := make([]searchItem, 0, min(n, len(hits)))
 		for i := range hits[:min(n, len(hits))] {
 			h := &hits[i]
-			id := strconv.Itoa(h.th.ID)
+			id := string(h.th.ID)
 			items = append(items, searchItem{key: "chat " + id, icon: messageIcon, title: h.th.Title, hit: h,
 				run: func() { a.open(id) }})
 		}

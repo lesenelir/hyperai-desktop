@@ -38,13 +38,13 @@ const (
 // message is one of a chat's: the user's, or the assistant's reply, which
 // streams in while streaming is true.
 type message struct {
-	ID   int    `json:"id"`
+	ID   ID     `json:"id"`
 	Role string `json:"role"` // "user" or "assistant"
 	Text string `json:"text"`
-	// Parent is the message it follows, 0 for a chat's first, and Next the
+	// Parent is the message it follows, "" for a chat's first, and Next the
 	// one shown after it last, of its versions (versions.go).
-	Parent int `json:"parent,omitempty"`
-	Next   int `json:"next,omitempty"`
+	Parent ID `json:"parent,omitempty"`
+	Next   ID `json:"next,omitempty"`
 	// Files are the files sent with a question.
 	Files []*attachment `json:"files,omitempty"`
 	// Error is what went wrong, as the provider said it, or errStopped,
@@ -81,7 +81,7 @@ type message struct {
 
 // thread is a chat: its messages, and where its list is scrolled.
 type thread struct {
-	ID       int       `json:"id"`
+	ID       ID        `json:"id"`
 	Title    string    `json:"title"`
 	Updated  time.Time `json:"updated"`            // when the user last sent in it, which orders the sidebar
 	Model    string    `json:"model,omitempty"`    // the model asked last
@@ -118,6 +118,18 @@ type thread struct {
 	boxes   []ui.Rect
 	listBox ui.Rect
 	seek    int
+	// What its log holds (store.go): the messages written to it, nil
+	// where it has no log yet; the last message of the path replaying it
+	// shows; and its title.
+	logged   map[ID]bool
+	logLeaf  ID
+	logTitle string
+	// rewrite has the next save write its log whole, an append to it
+	// having failed; partial tells that its reply streaming in, or one a
+	// crash cut short, is kept aside (<id>.partial), as of partialAt.
+	rewrite   bool
+	partial   bool
+	partialAt time.Time
 }
 
 // turns returns the conversation for the provider: the messages with text
@@ -226,12 +238,12 @@ type app struct {
 	exportError string
 	// usageFor is the reply whose usage shows in a card, while usageOpen
 	// (usage.go).
-	usageFor  int
+	usageFor  ID
 	usageOpen bool
-	// editingMsg is the question being edited, by its ID, 0 for none,
+	// editingMsg is the question being edited, by its ID, "" for none,
 	// whose field holds editText, and gives the caret its end where
 	// editStart (versions.go).
-	editingMsg int
+	editingMsg ID
 	editText   string
 	editStart  bool
 	// renaming is the chat whose title is a field that renames it, "" for
@@ -273,7 +285,7 @@ type app struct {
 	measuredWidth        float32
 	// copied is the message last copied, which shows a check until
 	// copiedUntil.
-	copied      int
+	copied      ID
 	copiedUntil time.Time
 	pal         *palette // the frame's colors
 	md          markdown.Options
@@ -285,8 +297,11 @@ type app struct {
 	renderMath bool
 	// onFinish, when set, runs once as a reply ends (HYPERAI_BENCH).
 	onFinish func()
-	path     string // where the chats are saved, "" in tests
-	saver    saver
+	path     string // the folder the chats are saved in, "" in tests
+	logs     logWriter
+	// onDisk are the chats that have a log, which save deletes as they
+	// are.
+	onDisk map[ID]bool
 	// rev counts the changes to the chats that move them in the sidebar:
 	// one made, updated or removed. rows are the sidebar's rows as of
 	// rowsRev, rowsDay and rowsLang, the language their groups are titled
@@ -428,7 +443,7 @@ func (a *app) current() *thread { return a.thread(a.selected) }
 // thread returns the chat of id, nil for none.
 func (a *app) thread(id string) *thread {
 	for _, th := range a.threads {
-		if strconv.Itoa(th.ID) == id {
+		if string(th.ID) == id {
 			return th
 		}
 	}
@@ -453,26 +468,24 @@ func (a *app) send(text string) {
 	}
 	started := th == nil
 	if th == nil {
-		a.next++
 		name := text
 		if name == "" {
 			name = files[0].Name
 		}
-		th = &thread{ID: a.next, Title: title(name)}
+		th = &thread{ID: newID(), Title: title(name)}
 		a.threads = append(a.threads, th)
 		// The chat asks the model chosen for it while it was new, and the
 		// new chat's draft is what was sent.
-		a.selected = strconv.Itoa(th.ID)
+		a.selected = string(th.ID)
 		a.modelFor, a.newDraft, a.newFiles = a.selected, "", nil
 	}
 	a.keepFiles(files)
 	a.files, th.files = nil, nil
-	a.next++
-	parent := 0
+	var parent ID
 	if n := len(th.Messages); n > 0 {
 		parent = th.Messages[n-1].ID
 	}
-	th.Messages = append(th.Messages, &message{ID: a.next, Parent: parent, Role: "user", Text: text, Files: files, Time: time.Now()})
+	th.Messages = append(th.Messages, &message{ID: newID(), Parent: parent, Role: "user", Text: text, Files: files, Time: time.Now()})
 	a.draft, th.Draft = "", ""
 	// A chat just started is named by a model, beside its reply; of files
 	// alone, it keeps the first's name.
@@ -491,8 +504,7 @@ func (a *app) ask(th *thread) {
 	// in under it.
 	q := len(th.Messages) - 1
 	th.pinTop(q)
-	a.next++
-	reply := &message{ID: a.next, Parent: th.Messages[q].ID, Role: "assistant", streaming: true, started: time.Now()}
+	reply := &message{ID: newID(), Parent: th.Messages[q].ID, Role: "assistant", streaming: true, started: time.Now()}
 	th.Messages = append(th.Messages, reply)
 	th.markPath()
 	th.Updated, th.Model, th.Provider = time.Now(), a.model, a.prov.ID()
@@ -502,6 +514,8 @@ func (a *app) ask(th *thread) {
 	th.Effort = a.askedEffort()
 	ctx = withEffort(ctx, th.Effort)
 	th.busy, th.cancel = reply, cancel
+	// The question is kept as it is asked, the reply once it ends.
+	a.save()
 
 	// finish ends the reply, on the main thread.
 	finish := func(err error) {
@@ -511,7 +525,7 @@ func (a *app) ask(th *thread) {
 			reply.Error = err.Error()
 		}
 		th.busy, th.cancel = nil, nil
-		if strconv.Itoa(th.ID) != a.selected || a.settings {
+		if string(th.ID) != a.selected || a.settings {
 			th.unread = true
 		}
 		// The chat stays where it is in the sidebar, as of when it was
@@ -543,6 +557,7 @@ func (a *app) ask(th *thread) {
 			a.tookEfforts(prov.ID(), model, *ch.Efforts)
 		}
 		reply.add(ch)
+		a.keepPartial(th, reply)
 	}
 	if a.post == nil {
 		finish(stream(take))
@@ -621,7 +636,7 @@ func (a *app) shownReply() *message {
 }
 
 // errStopped is the Error of a reply stopped before it said anything, as
-// chats.json keeps it, whatever the app's language.
+// the chat's log keeps it, whatever the app's language.
 const errStopped = "Stopped."
 
 // errorText returns what went wrong with m, as it shows: a stopped reply's
@@ -716,7 +731,7 @@ func (a *app) remove(th *thread) {
 	a.forgetFiles(th)
 	a.threads = slices.DeleteFunc(a.threads, func(t *thread) bool { return t == th })
 	a.rev++
-	id := strconv.Itoa(th.ID)
+	id := string(th.ID)
 	if a.selected == id {
 		// Its draft goes with it.
 		a.selected, a.draft, a.files = "", a.newDraft, a.newFiles
@@ -782,7 +797,7 @@ func (a *app) view(c *ui.Context) {
 		// Escape is the alert's, which it cancels.
 	case a.renaming != "":
 		// Escape is the field's, which ends the renaming.
-	case a.editingMsg != 0:
+	case a.editingMsg != "":
 		// Escape is the edited question's, which cancels it.
 	case a.settings && !a.searching && c.Shortcut(0, ui.KeyEscape):
 		a.closeSettings()
@@ -1006,7 +1021,7 @@ func (a *app) navRow(c *ui.Context, key string, svg *ui.SVG, label, shortcut str
 // as the settings' pages are: the wash says it, without the accent too.
 func (a *app) threadRow(c *ui.Context, th *thread, now time.Time) {
 	t := c.Theme()
-	id := strconv.Itoa(th.ID)
+	id := string(th.ID)
 	selected := id == a.selected
 	// Renamed in place: a row, not a button, that the field takes clicks in.
 	if a.renaming == id && a.renameInSidebar {

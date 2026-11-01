@@ -165,7 +165,7 @@ func TestKeepFiles(t *testing.T) {
 	tt := ui.NewTester(a.view, 1120, 760)
 	a.attach([]string{text})
 	a.send("Summarize")
-	a.saver.wait()
+	a.logs.wait()
 	a.writes.Wait()
 	f := a.current().Messages[0].Files[0]
 	kept := filepath.Join(dir, "attachments", f.File)

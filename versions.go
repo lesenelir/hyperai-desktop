@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
 	"strings"
@@ -37,7 +38,7 @@ func (th *thread) all() []*message {
 // follow, each the one before it, and marks the path shown.
 func (th *thread) link() {
 	for i := 1; i < len(th.Messages); i++ {
-		if th.Messages[i].Parent == 0 {
+		if th.Messages[i].Parent == "" {
 			th.Messages[i].Parent = th.Messages[i-1].ID
 		}
 	}
@@ -53,14 +54,14 @@ func (th *thread) markPath() {
 
 // children returns the messages that follow the message id, 0 for the
 // first, oldest first.
-func (th *thread) children(id int) []*message {
+func (th *thread) children(id ID) []*message {
 	var out []*message
 	for _, m := range th.all() {
 		if m.Parent == id {
 			out = append(out, m)
 		}
 	}
-	slices.SortFunc(out, func(x, y *message) int { return x.ID - y.ID })
+	slices.SortFunc(out, func(x, y *message) int { return cmp.Compare(x.ID, y.ID) })
 	return out
 }
 
@@ -139,8 +140,7 @@ func (a *app) resend(th *thread, i int, text string) {
 	}
 	a.endEdit()
 	th.cut(i)
-	a.next++
-	th.Messages = append(th.Messages, &message{ID: a.next, Parent: old.Parent, Role: "user", Text: text, Files: old.Files, Time: time.Now()})
+	th.Messages = append(th.Messages, &message{ID: newID(), Parent: old.Parent, Role: "user", Text: text, Files: old.Files, Time: time.Now()})
 	a.ask(th)
 }
 
@@ -244,7 +244,7 @@ func (a *app) editButton(c *ui.Context, th *thread, m *message) {
 }
 
 // endEdit ends the editing of a question, keeping nothing of it.
-func (a *app) endEdit() { a.editingMsg, a.editText = 0, "" }
+func (a *app) endEdit() { a.editingMsg, a.editText = "", "" }
 
 // editQuestion builds th's question at i as it is edited: its bubble across
 // the column, the field in it holding its text, the caret at its end, and
@@ -255,7 +255,7 @@ func (a *app) editQuestion(c *ui.Context, th *thread, i int) {
 	ready := strings.TrimSpace(a.editText) != "" || len(m.Files) > 0
 	ui.Column(c).Padding(bubblePadY, bubblePadX).Radius(14).Background(a.pal.raised).Gap(10).AlignItems(ui.Stretch).
 		Children(func() {
-			field := ui.TextAreaBase(c.Key("edit "+strconv.Itoa(m.ID)), &a.editText).WidthPercent(100).Lines(1, 12).
+			field := ui.TextAreaBase(c.Key("edit "+string(m.ID)), &a.editText).WidthPercent(100).Lines(1, 12).
 				FontSize(a.body).LineHeight(bodyLineHeight).Label(locales.EditMessage()).AutoFocus().
 				OnTextKey(func(k ui.TextKey) bool {
 					switch {

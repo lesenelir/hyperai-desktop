@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -56,14 +57,14 @@ type exportFile struct {
 	path string
 }
 
-// exportMsg is a message as exported: its ID and the one it follows, 0
+// exportMsg is a message as exported: its ID and the one it follows, ""
 // for a chat's first, by which the JSON's tree holds together. body is a
 // reply's Markdown as HTML, its math drawn (exportDoc), thought what the
 // fold over its reasoning says, and version which of its versions it is,
 // where it has others.
 type exportMsg struct {
-	ID         int          `json:"id"`
-	Parent     int          `json:"parent"`
+	ID         ID           `json:"id"`
+	Parent     ID           `json:"parent"`
 	Role       string       `json:"role"`
 	Text       string       `json:"text"`
 	Time       time.Time    `json:"time,omitzero"`
@@ -88,7 +89,7 @@ type exportDoc struct {
 	Provider string      `json:"provider,omitempty"`
 	Updated  time.Time   `json:"updated,omitzero"`
 	Exported time.Time   `json:"exported"`
-	Path     []int       `json:"path"`
+	Path     []ID        `json:"path"`
 	Messages []exportMsg `json:"messages"`
 	lang     string
 	meta     string
@@ -116,7 +117,7 @@ func (a *app) exportDoc(th *thread, page bool) *exportDoc {
 	msgs := th.Messages
 	if !page {
 		msgs = th.all()
-		slices.SortFunc(msgs, func(x, y *message) int { return x.ID - y.ID })
+		slices.SortFunc(msgs, func(x, y *message) int { return cmp.Compare(x.ID, y.ID) })
 	}
 	for _, m := range th.Messages {
 		if !m.streaming {

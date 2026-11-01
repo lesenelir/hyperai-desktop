@@ -146,7 +146,10 @@ func main() {
 		mygo.App.OnQuit(func() {
 			// The draft of the chat shown, kept with it.
 			a.keepDraft()
-			a.saver.wait()
+			a.logs.wait()
+			// What failed, written again, once.
+			a.save()
+			a.logs.wait()
 			a.layoutSaver.wait()
 			a.confSaver.wait()
 			a.writes.Wait()
