@@ -12,6 +12,16 @@ import (
 //go:embed resources/logo.svg
 var logoSVG string
 
+// iconLightPNG and iconDarkPNG are the app's icon, light, as the app is
+// bundled with (resources/icon.png is it), and dark: the icons the Dock
+// shows the app by, as Appearance chooses.
+var (
+	//go:embed resources/icon-light.png
+	iconLightPNG []byte
+	//go:embed resources/icon-dark.png
+	iconDarkPNG []byte
+)
+
 // markIcon is the mark in the text color, as hyperai-next fills its Logo
 // with the accent: the light theme's red, the dark one's pink.
 var markIcon = ui.MustParseSVG([]byte(strings.Replace(logoSVG, `fill="#FF6096"`, `fill="currentColor"`, 1)))

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"runtime"
 	"time"
 
 	"github.com/egoist/mygo/i18n"
@@ -31,6 +32,22 @@ func textSizeTitles() []string {
 
 const defaultTextSize = 1 // bodySize, of textSizes
 
+// dockIcons are the icons the settings choose of for the Dock (macOS):
+// the light one first, the app's own, which the Dock shows until another
+// is chosen, then the dark one.
+var dockIcons = [...]struct {
+	name string
+	png  []byte
+}{{"light", iconLightPNG}, {"dark", iconDarkPNG}}
+
+// dockIconTitles name dockIcons, in the app's language.
+func dockIconTitles() []string {
+	return []string{locales.DockIconLight(), locales.DockIconDark()}
+}
+
+// hasDock reports whether the desktop shows the app in a Dock: macOS's.
+const hasDock = runtime.GOOS == "darwin"
+
 // motionSettle is how long the app keeps moving after Reduce motion is
 // switched: for the switch's knob, which slides for 140 ms as every
 // switch's, to slide too, rather than jump as the motion it turns off.
@@ -45,15 +62,42 @@ func (a *app) appearanceTerms() []settingsTerm {
 	for _, ct := range codeThemes {
 		codes = append(codes, ct.name())
 	}
-	return []settingsTerm{
+	out := []settingsTerm{
 		{locales.Theme(), append(terms(locales.ThemeTerms()), themeTitles()...)},
 		{locales.Font(), terms(locales.FontTerms())},
 		{locales.CodeFont(), terms(locales.CodeFontTerms())},
 		{locales.CodeTheme(), codes},
 		{locales.TextSize(), textSizeTitles()},
 		{locales.TranslucentSidebar(), terms(locales.TranslucentSidebarTerms())},
-		{locales.ReduceMotion(), terms(locales.ReduceMotionTerms())},
 	}
+	if hasDock {
+		out = append(out, settingsTerm{locales.ShowInDock(), terms(locales.ShowInDockTerms())},
+			settingsTerm{locales.DockIcon(), append(terms(locales.DockIconTerms()), dockIconTitles()...)})
+	}
+	return append(out, settingsTerm{locales.ReduceMotion(), terms(locales.ReduceMotionTerms())})
+}
+
+// setDockIcon shows the app in the Dock by the icon named name, of
+// dockIcons, as the app does from then on.
+func (a *app) setDockIcon(name string) {
+	if name == a.dockIcon {
+		return
+	}
+	a.dockIcon = name
+	if a.applyDockIcon != nil {
+		a.applyDockIcon(dockIconPNG(name))
+	}
+	a.saveLayout()
+}
+
+// dockIconPNG returns the PNG of the icon named name, of dockIcons.
+func dockIconPNG(name string) []byte {
+	for _, d := range dockIcons {
+		if d.name == name {
+			return d.png
+		}
+	}
+	return nil
 }
 
 // setTheme shows the app in theme, as the app does from then on.
@@ -166,6 +210,24 @@ func (a *app) appearancePage(c *ui.Context) {
 			}
 		})
 		settingDivider(c)
+		if hasDock {
+			a.settingRow(c, locales.ShowInDock(), locales.ShowInDockAbout(), func() {
+				show := a.showDock
+				if ui.Switch(c.Key("show in dock"), &show).Label(locales.ShowInDock()).Changed() {
+					a.setShowDock(show)
+				}
+			})
+			settingDivider(c)
+			a.settingRow(c, locales.DockIcon(), locales.DockIconAbout(), func() {
+				ui.Row(c).Gap(8).Children(func() {
+					titles := dockIconTitles()
+					for i, d := range dockIcons {
+						a.dockIconButton(c, i, d.name, titles[i])
+					}
+				})
+			})
+			settingDivider(c)
+		}
 		a.settingRow(c, locales.ReduceMotion(), locales.ReduceMotionAbout(), func() {
 			// On, and still, while the system reduces it.
 			system := c.Preferences().ReduceMotion
@@ -223,6 +285,34 @@ func (a *app) themeCard(c *ui.Context, theme, title string) {
 	})
 	if card.Clicked() {
 		a.setTheme(theme)
+	}
+}
+
+// dockIconButton builds the button that chooses the Dock icon named name,
+// the i-th of dockIcons, titled title: the icon, small, ringed in the
+// accent while chosen, as a theme's card.
+func (a *app) dockIconButton(c *ui.Context, i int, name, title string) {
+	if a.dockBitmaps == nil {
+		a.dockBitmaps = make([]*ui.Bitmap, len(dockIcons))
+	}
+	if a.dockBitmaps[i] == nil {
+		a.dockBitmaps[i], _ = ui.DecodeBitmap(dockIcons[i].png)
+	}
+	on := a.dockIcon == name
+	btn := ui.ButtonBase(c.Key("dock icon "+name)).Padding(2).Radius(12).Border(2, ui.Transparent).Label(title)
+	switch {
+	case on:
+		btn.Border(2, a.pal.ac)
+	case btn.Hovered():
+		btn.Border(2, a.pal.fg.Alpha(0.15))
+	}
+	btn.Children(func() {
+		if b := a.dockBitmaps[i]; b != nil {
+			ui.Image(c, b).Size(40, 40)
+		}
+	})
+	if btn.Clicked() {
+		a.setDockIcon(name)
 	}
 }
 

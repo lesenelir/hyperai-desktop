@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1694,7 +1695,7 @@ func TestAppearance(t *testing.T) {
 	var applied []string
 	a.applyTheme = func(theme string) { applied = append(applied, theme) }
 	// Tall enough for the whole page, which the switches are at the foot of.
-	tt := ui.NewTester(a.view, 1120, 1200)
+	tt := ui.NewTester(a.view, 1120, 1400)
 	tt.Type("How do I cache?")
 	tt.Key(0, ui.KeyEnter)
 	tt.Advance(time.Second)
@@ -1754,6 +1755,54 @@ func TestAppearance(t *testing.T) {
 	b.loadLayout(dir)
 	if b.theme != "dark" || textSizes[b.textSize] != 17 || b.translucent || !b.reduceMotion {
 		t.Errorf("after a restart: theme %q, text %v, translucent %v, still %v", b.theme, textSizes[b.textSize], b.translucent, b.reduceMotion)
+	}
+}
+
+func TestDockIcon(t *testing.T) {
+	if !hasDock {
+		t.Skip("no Dock here")
+	}
+	dir := t.TempDir()
+	a := newApp(&demo{})
+	a.loadLayout(dir)
+	var applied [][]byte
+	a.applyDockIcon = func(png []byte) { applied = append(applied, png) }
+	tt := ui.NewTester(a.view, 1120, 1400)
+	a.openSettings()
+	a.settingsPage = "appearance"
+	tt.Frame()
+
+	// The app's own at first; a button chooses the other, which the Dock
+	// takes.
+	if a.dockIcon != "light" {
+		t.Errorf("Dock icon %q at first, want light", a.dockIcon)
+	}
+	if err := tt.Click("Dark icon"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if a.dockIcon != "dark" || len(applied) != 1 || !bytes.Equal(applied[0], iconDarkPNG) {
+		t.Errorf("Dock icon %q, applied %d", a.dockIcon, len(applied))
+	}
+
+	// The app out of the Dock, in the menu bar alone.
+	var shown []bool
+	a.applyShowDock = func(show bool) { shown = append(shown, show) }
+	if !a.showDock {
+		t.Errorf("the Dock does not show the app at first")
+	}
+	toggle(t, tt, "Show in Dock", "Off, HyperAI shows in the menu bar only.")
+	tt.Advance(time.Second)
+	if a.showDock || !slices.Equal(shown, []bool{false}) {
+		t.Errorf("show in Dock %v, applied %v", a.showDock, shown)
+	}
+
+	// Kept for the next start.
+	a.layoutSaver.wait()
+	b := newApp(&demo{})
+	b.loadLayout(dir)
+	if b.dockIcon != "dark" || b.showDock {
+		t.Errorf("after a restart: Dock icon %q, show in Dock %v", b.dockIcon, b.showDock)
 	}
 }
 

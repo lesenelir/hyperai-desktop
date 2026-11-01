@@ -316,8 +316,8 @@ A small button that floats over the conversation (scroll to end) rests at
   composer's text, 14 at `fg/70`; the pointer brings the text to `fg` and
   the icon to the accent. A click writes it in the composer, the caret at
   its end, to send as it is or changed. No grid of cards.
-- **Settings**: a row at the sidebar's foot (⌘,) turns the sidebar into
-  theirs, as Codex's: "Back to app" (muted, as Escape), a field of its
+- **Settings**: a row at the sidebar's foot (⌘,), or Settings… in the app's
+  menu (macOS), turns the sidebar into theirs, as Codex's: "Back to app" (muted, as Escape), a field of its
   own — 34 tall, radius 8, on `composer` with a hairline, since the
   sidebar is no box — and the pages by group, in the chat rows' look,
   the one shown on the 7% wash with its label at 500. The field finds a
@@ -344,7 +344,13 @@ A small button that floats over the conversation (scroll to end) rests at
   app follows it, window controls too (`mygo.Theme.SetSource`); the
   font and the conversation's text, 14, 15 or 17, over a question and a
   reply in them, since the settings hide the conversation; the translucent
-  sidebar; and reduce motion. No accent picker: there is one accent.
+  sidebar; Show in Dock (macOS), off leaving HyperAI in the menu bar
+  alone, where its mark always is, a template image the menu bar tints,
+  whose menu opens the window, starts a new chat or quits; the Dock icon
+  (macOS), light, the app's own, or dark, each small, ringed in the
+  accent while chosen, as the Dock shows it from then on
+  (`mygo.App.Dock.SetIcon`); and reduce motion. No accent picker: there
+  is one accent.
   The font and code's are rows of the Text card, over the size: each a
   pop-up button showing the family, which opens the system's own menu,
   as macOS's font settings — System, a separator, then every family

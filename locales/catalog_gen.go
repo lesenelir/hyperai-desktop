@@ -3286,6 +3286,164 @@ func (msgs Messages) TranslucentSidebarTerms() string {
 	return Catalog.Format(msgs.locale, "translucentSidebarTerms", nil)
 }
 
+// ShowInDock says "Show in Dock"
+// in the language the app shows.
+//
+// The Appearance page's switch that shows the app in the macOS Dock; off,
+// the app is in the menu bar only.
+func ShowInDock() string { return In(i18n.Locale()).ShowInDock() }
+
+// ShowInDock says "Show in Dock"
+// in the language of msgs.
+//
+// The Appearance page's switch that shows the app in the macOS Dock; off,
+// the app is in the menu bar only.
+func (msgs Messages) ShowInDock() string {
+	return Catalog.Format(msgs.locale, "showInDock", nil)
+}
+
+// ShowInDockAbout says "Off, HyperAI shows in the menu bar only."
+// in the language the app shows.
+//
+// Under the switch that shows the app in the Dock.
+func ShowInDockAbout() string { return In(i18n.Locale()).ShowInDockAbout() }
+
+// ShowInDockAbout says "Off, HyperAI shows in the menu bar only."
+// in the language of msgs.
+//
+// Under the switch that shows the app in the Dock.
+func (msgs Messages) ShowInDockAbout() string {
+	return Catalog.Format(msgs.locale, "showInDockAbout", nil)
+}
+
+// ShowInDockTerms says "Menu bar, Hide, Status bar"
+// in the language the app shows.
+//
+// Words the settings' field finds the switch of the Dock by, separated by
+// commas.
+func ShowInDockTerms() string { return In(i18n.Locale()).ShowInDockTerms() }
+
+// ShowInDockTerms says "Menu bar, Hide, Status bar"
+// in the language of msgs.
+//
+// Words the settings' field finds the switch of the Dock by, separated by
+// commas.
+func (msgs Messages) ShowInDockTerms() string {
+	return Catalog.Format(msgs.locale, "showInDockTerms", nil)
+}
+
+// MenuBarOpen says "Open HyperAI"
+// in the language the app shows.
+//
+// The menu bar icon's menu item that brings the app's window to the front.
+func MenuBarOpen() string { return In(i18n.Locale()).MenuBarOpen() }
+
+// MenuBarOpen says "Open HyperAI"
+// in the language of msgs.
+//
+// The menu bar icon's menu item that brings the app's window to the front.
+func (msgs Messages) MenuBarOpen() string {
+	return Catalog.Format(msgs.locale, "menuBarOpen", nil)
+}
+
+// MenuBarQuit says "Quit HyperAI"
+// in the language the app shows.
+//
+// The menu bar icon's menu item that quits the app.
+func MenuBarQuit() string { return In(i18n.Locale()).MenuBarQuit() }
+
+// MenuBarQuit says "Quit HyperAI"
+// in the language of msgs.
+//
+// The menu bar icon's menu item that quits the app.
+func (msgs Messages) MenuBarQuit() string {
+	return Catalog.Format(msgs.locale, "menuBarQuit", nil)
+}
+
+// HelpWebsite says "HyperAI Website"
+// in the language the app shows.
+//
+// The Help menu's item that opens HyperAI's website, hyper.ai.
+func HelpWebsite() string { return In(i18n.Locale()).HelpWebsite() }
+
+// HelpWebsite says "HyperAI Website"
+// in the language of msgs.
+//
+// The Help menu's item that opens HyperAI's website, hyper.ai.
+func (msgs Messages) HelpWebsite() string {
+	return Catalog.Format(msgs.locale, "helpWebsite", nil)
+}
+
+// DockIcon says "Dock icon"
+// in the language the app shows.
+//
+// The Appearance page's row that chooses the app's icon in the macOS Dock.
+func DockIcon() string { return In(i18n.Locale()).DockIcon() }
+
+// DockIcon says "Dock icon"
+// in the language of msgs.
+//
+// The Appearance page's row that chooses the app's icon in the macOS Dock.
+func (msgs Messages) DockIcon() string {
+	return Catalog.Format(msgs.locale, "dockIcon", nil)
+}
+
+// DockIconAbout says "Choose the icon the app will use in the Dock."
+// in the language the app shows.
+//
+// Under the row of the Dock icon.
+func DockIconAbout() string { return In(i18n.Locale()).DockIconAbout() }
+
+// DockIconAbout says "Choose the icon the app will use in the Dock."
+// in the language of msgs.
+//
+// Under the row of the Dock icon.
+func (msgs Messages) DockIconAbout() string {
+	return Catalog.Format(msgs.locale, "dockIconAbout", nil)
+}
+
+// DockIconLight says "Light icon"
+// in the language the app shows.
+//
+// The light Dock icon, as assistive technology names its button.
+func DockIconLight() string { return In(i18n.Locale()).DockIconLight() }
+
+// DockIconLight says "Light icon"
+// in the language of msgs.
+//
+// The light Dock icon, as assistive technology names its button.
+func (msgs Messages) DockIconLight() string {
+	return Catalog.Format(msgs.locale, "dockIconLight", nil)
+}
+
+// DockIconDark says "Dark icon"
+// in the language the app shows.
+//
+// The dark Dock icon, as assistive technology names its button.
+func DockIconDark() string { return In(i18n.Locale()).DockIconDark() }
+
+// DockIconDark says "Dark icon"
+// in the language of msgs.
+//
+// The dark Dock icon, as assistive technology names its button.
+func (msgs Messages) DockIconDark() string {
+	return Catalog.Format(msgs.locale, "dockIconDark", nil)
+}
+
+// DockIconTerms says "App icon, Icon"
+// in the language the app shows.
+//
+// Words the settings' field finds the Dock icon by, separated by commas.
+func DockIconTerms() string { return In(i18n.Locale()).DockIconTerms() }
+
+// DockIconTerms says "App icon, Icon"
+// in the language of msgs.
+//
+// Words the settings' field finds the Dock icon by, separated by commas.
+func (msgs Messages) DockIconTerms() string {
+	return Catalog.Format(msgs.locale, "dockIconTerms", nil)
+}
+
 // ReduceMotion says "Reduce motion"
 // in the language the app shows.
 //

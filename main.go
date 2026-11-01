@@ -42,6 +42,16 @@ func main() {
 			// The theme chosen, before the window opens in another.
 			a.applyTheme = func(theme string) { mygo.Theme.SetSource(mygo.ThemeSource(theme)) }
 			a.applyTheme(a.theme)
+			// The Dock's icon chosen, where it is not the app's own, which
+			// the Dock shows already.
+			a.applyDockIcon = func(png []byte) {
+				if err := mygo.App.Dock.SetIcon(png); err != nil {
+					log.Printf("setting the Dock icon: %v", err)
+				}
+			}
+			if a.dockIcon != dockIcons[0].name {
+				a.applyDockIcon(dockIconPNG(a.dockIcon))
+			}
 			// The language chosen MyGo keeps itself, and shows from the
 			// start: the app only changes it.
 			a.applyLanguage = mygo.App.SetLocale
@@ -101,6 +111,27 @@ func main() {
 		} else {
 			a.focused = a.win.IsFocused
 			a.nameChats = true
+			// The menu bar's menus, with Settings…, and HyperAI's icon in
+			// it, both speaking the app's language; and the app out of the
+			// Dock, where the settings say.
+			if hasDock {
+				mygo.App.SetMenu(appMenu(a))
+			}
+			tray := newMenuBar(a)
+			a.applyShowDock = func(show bool) { applyDock(a, tray, show) }
+			if !a.showDock {
+				a.applyShowDock(false)
+			}
+			setLocale := a.applyLanguage
+			a.applyLanguage = func(tag string) {
+				setLocale(tag)
+				if hasDock {
+					mygo.App.SetMenu(appMenu(a))
+				}
+				if tray != nil {
+					tray.SetMenu(menuBarMenu(a))
+				}
+			}
 			// The models of the providers that listed none yet, as they
 			// have them now, and whom Copilot asks as.
 			a.listUnlisted()

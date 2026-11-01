@@ -95,6 +95,16 @@ func (a *app) showProviders() {
 	a.settingsPage = "providers"
 }
 
+// toggleSettings opens the settings, or closes them where they show, as
+// settingsKeys do.
+func (a *app) toggleSettings() {
+	if a.settings {
+		a.closeSettings()
+	} else {
+		a.openSettings()
+	}
+}
+
 // closeSettings goes back to the chat shown before them.
 func (a *app) closeSettings() {
 	a.settings, a.focusDraft = false, true

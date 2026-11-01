@@ -32,6 +32,10 @@ type layout struct {
 	Font          string  `json:"font,omitempty"`
 	CodeFont      string  `json:"codeFont,omitempty"`
 	CodeTheme     string  `json:"codeTheme,omitempty"`
+	// DockIcon is the name of the Dock's icon, of dockIcons.
+	DockIcon string `json:"dockIcon,omitempty"`
+	// HideDock shows the app in the menu bar alone (macOS).
+	HideDock bool `json:"hideDock,omitempty"`
 	// OnLaunch is "last" to show Chat, the last chat shown, as the app
 	// opens; SendWith "cmd" to send with Cmd+Return.
 	OnLaunch string `json:"onLaunch,omitempty"`
@@ -77,6 +81,10 @@ func (a *app) loadLayout(dir string) {
 	if codeThemeNamed(l.CodeTheme) != nil {
 		a.codeTheme = l.CodeTheme
 	}
+	a.showDock = !l.HideDock
+	if dockIconPNG(l.DockIcon) != nil {
+		a.dockIcon = l.DockIcon
+	}
 	if l.OnLaunch == "last" {
 		a.onLaunch = launchLast
 	}
@@ -100,7 +108,7 @@ func (a *app) saveLayout() {
 	}
 	l := layout{SidebarWidth: a.sideWidth, Theme: a.theme, TextSize: textSizes[a.textSize],
 		OpaqueSidebar: !a.translucent, ReduceMotion: a.reduceMotion,
-		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme, Chat: a.keptChat, Notify: a.notifyDone, Language: a.language,
+		Font: a.font, CodeFont: a.codeFont, CodeTheme: a.codeTheme, DockIcon: a.dockIcon, HideDock: !a.showDock, Chat: a.keptChat, Notify: a.notifyDone, Language: a.language,
 		MathSource: !a.renderMath, FoldPinned: a.foldPinned, FoldChats: a.foldChats, Instructions: a.instructions, Effort: a.lastEffort}
 	if a.onLaunch == launchLast {
 		l.OnLaunch = "last"

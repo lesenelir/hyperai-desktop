@@ -339,8 +339,18 @@ type app struct {
 	// code's, "" for the system's monospaced font; fonts are those
 	// installed, which the settings choose of. codeTheme is the key of the
 	// code blocks' theme, of codeThemes, as mdTheme has mdCodeTheme.
+	// dockIcon is the name of the Dock's icon, of dockIcons, which
+	// applyDockIcon gives the Dock (nil in tests), and dockBitmaps them,
+	// as the settings show them, decoded as they first do; showDock
+	// whether the Dock shows the app at all, or the menu bar alone, which
+	// applyShowDock gives the app (nil in tests).
 	theme          string
 	applyTheme     func(theme string)
+	dockIcon       string
+	applyDockIcon  func(png []byte)
+	showDock       bool
+	applyShowDock  func(show bool)
+	dockBitmaps    []*ui.Bitmap
 	textSize       int
 	body           float32
 	mdTheme        *markdown.Theme
@@ -401,7 +411,7 @@ type app struct {
 // newApp returns the app, which asks p until a provider can be asked
 // (loadKeys): nothing, for nil, until then.
 func newApp(p provider) *app {
-	a := &app{fallback: p, sideWidth: sidebarWidth, theme: "system",
+	a := &app{fallback: p, sideWidth: sidebarWidth, theme: "system", dockIcon: dockIcons[0].name, showDock: true,
 		textSize: defaultTextSize, body: bodySize, translucent: true, renderMath: true}
 	a.copilot.newRuntime = newCopilotSDK
 	a.setProviders()
@@ -756,11 +766,7 @@ func (a *app) view(c *ui.Context) {
 		a.toggleSearch()
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyComma) {
-		if a.settings {
-			a.closeSettings()
-		} else {
-			a.openSettings()
-		}
+		a.toggleSettings()
 	}
 	a.historyKeys(c)
 	// The chat shown, kept for the next start (General's On launch).
