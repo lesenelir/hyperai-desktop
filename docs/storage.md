@@ -401,7 +401,9 @@ folder cannot be written, **nothing is saved until a launch moves the
 chats**. A save would write `chats/index.json`, which says the chats were
 moved: later launches would never move them, and they would not show
 again. Until then, the chats show as `chats.json` has them, where it could
-be read, and `chats.json` stays where it is.
+be read, and `chats.json` stays where it is. Deleting a chat then deletes
+none of its attachments (`forgetFiles`): it comes back at the next launch,
+and its files must still be there.
 
 ## Upgrading the logs of version 1
 
@@ -457,7 +459,8 @@ chat came back the same, with UUIDs.
 - `TestFinishSwap`: the states a crash can leave the folder in,
   including a new folder cut short with no old one beside it.
 - `TestMigrateFails`: a `chats.json` that cannot be read, or a folder that
-  takes no files, saves nothing, and the next launch moves the chats.
+  takes no files, saves nothing; a chat deleted then keeps its files; and
+  the next launch moves the chats, with them.
 - `TestMigrateKeepsChatShown`: the chat shown last shows after the
   migration, and at the launch after.
 - `TestPartialKeptUntilLogged`: a partial whose reply fails to reach the

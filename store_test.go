@@ -559,15 +559,26 @@ func TestMigrateFails(t *testing.T) {
 		t.Fatal("an index was written, which says the chats were moved")
 	}
 
-	os.WriteFile(old, []byte(`[{"id":1,"title":"Old","messages":[{"id":2,"role":"user","text":"Q"}]}]`), 0o600)
+	os.WriteFile(old, []byte(`[{"id":1,"title":"Old","messages":[{"id":2,"role":"user","text":"Q",`+
+		`"files":[{"name":"a.txt","type":"text/plain","file":"0123456789abcdef.txt"}]}]}]`), 0o600)
+	file := filepath.Join(dir, "attachments", "0123456789abcdef.txt")
+	os.MkdirAll(filepath.Dir(file), 0o700)
+	os.WriteFile(file, []byte("kept"), 0o600)
 	if os.Getuid() != 0 && runtime.GOOS != "windows" {
 		// A folder that takes no files: the chats are read, not moved.
 		os.Chmod(dir, 0o500)
 		b := newApp(&counter{})
 		b.loadFrom(dir)
-		os.Chmod(dir, 0o700)
 		if len(b.threads) != 1 || b.threads[0].Title != "Old" || b.path != "" {
 			t.Errorf("unwritable folder: %d chats, saving to %q", len(b.threads), b.path)
+		}
+		// A chat deleted then comes back at the next launch, with its
+		// files: attachments/, which still takes changes, keeps them.
+		b.remove(b.threads[0])
+		b.writes.Wait()
+		os.Chmod(dir, 0o700)
+		if _, err := os.Stat(file); err != nil {
+			t.Errorf("the deleted chat's file is gone: %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(dir, chatsDir+".new")); err == nil {
 			finishSwap(filepath.Join(dir, chatsDir))
@@ -576,8 +587,11 @@ func TestMigrateFails(t *testing.T) {
 	c := newApp(&counter{})
 	c.loadFrom(dir)
 	t.Cleanup(func() { c.logs.wait() })
-	if len(c.threads) != 1 || c.threads[0].Title != "Old" || c.path == "" {
+	if len(c.threads) != 1 || c.threads[0].Title != "Old" || c.path == "" || len(c.threads[0].Messages[0].Files) != 1 {
 		t.Errorf("once it can be: %d chats, saving to %q", len(c.threads), c.path)
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Errorf("the moved chat's file is gone: %v", err)
 	}
 	if _, err := os.Stat(old + ".migrated"); err != nil {
 		t.Errorf("not moved: %v", err)
