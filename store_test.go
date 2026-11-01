@@ -539,3 +539,157 @@ func TestLogsWrittenAtOnce(t *testing.T) {
 		}
 	}
 }
+
+// A migration that fails saves nothing, for an index would say the chats
+// were moved: they show as chats.json has them, where it can be read, and
+// the next launch moves them.
+func TestMigrateFails(t *testing.T) {
+	dir := t.TempDir()
+	old := filepath.Join(dir, "chats.json")
+	os.WriteFile(old, []byte(`[{"id":1,"title":"Old","messages":[`), 0o600)
+	a := newApp(&counter{})
+	a.loadFrom(dir)
+	a.send("New")
+	a.save()
+	a.logs.wait()
+	if len(a.threads) != 1 || a.path != "" {
+		t.Errorf("unreadable chats.json: %d chats, saving to %q", len(a.threads), a.path)
+	}
+	if _, err := os.Stat(filepath.Join(dir, chatsDir, indexFile)); err == nil {
+		t.Fatal("an index was written, which says the chats were moved")
+	}
+
+	os.WriteFile(old, []byte(`[{"id":1,"title":"Old","messages":[{"id":2,"role":"user","text":"Q"}]}]`), 0o600)
+	if os.Getuid() != 0 && runtime.GOOS != "windows" {
+		// A folder that takes no files: the chats are read, not moved.
+		os.Chmod(dir, 0o500)
+		b := newApp(&counter{})
+		b.loadFrom(dir)
+		os.Chmod(dir, 0o700)
+		if len(b.threads) != 1 || b.threads[0].Title != "Old" || b.path != "" {
+			t.Errorf("unwritable folder: %d chats, saving to %q", len(b.threads), b.path)
+		}
+		if _, err := os.Stat(filepath.Join(dir, chatsDir+".new")); err == nil {
+			finishSwap(filepath.Join(dir, chatsDir))
+		}
+	}
+	c := newApp(&counter{})
+	c.loadFrom(dir)
+	t.Cleanup(func() { c.logs.wait() })
+	if len(c.threads) != 1 || c.threads[0].Title != "Old" || c.path == "" {
+		t.Errorf("once it can be: %d chats, saving to %q", len(c.threads), c.path)
+	}
+	if _, err := os.Stat(old + ".migrated"); err != nil {
+		t.Errorf("not moved: %v", err)
+	}
+}
+
+// The chat shown last, by its number in layout.json, shows again once
+// chats.json is moved, and at every launch after.
+func TestMigrateKeepsChatShown(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "chats.json"), []byte(`[`+
+		`{"id":1,"title":"First","messages":[{"id":2,"role":"user","text":"Q"}]},`+
+		`{"id":3,"title":"Shown","messages":[{"id":4,"role":"user","text":"Q"}]}]`), 0o600)
+	os.WriteFile(filepath.Join(dir, "layout.json"), []byte(`{"onLaunch":"last","chat":"3"}`), 0o600)
+	a := newApp(&counter{})
+	a.loadFrom(dir)
+	if th := a.current(); th == nil || th.Title != "Shown" {
+		t.Fatalf("shown %q", a.selected)
+	}
+	a.layoutSaver.wait()
+	b := restart(t, a, dir)
+	if th := b.current(); th == nil || th.Title != "Shown" {
+		t.Errorf("launched again: shown %q", b.selected)
+	}
+}
+
+// A reply's partial is deleted only once the reply is in the log: where
+// the append fails, it stays, for a crash to leave the reply, until the
+// log is written again.
+func TestPartialKeptUntilLogged(t *testing.T) {
+	if os.Getuid() == 0 || runtime.GOOS == "windows" {
+		t.Skip("writes to a file of mode 0400 succeed")
+	}
+	dir := t.TempDir()
+	p := &held{gate: map[string]chan struct{}{}}
+	a := newApp(p)
+	a.loadFrom(dir)
+	t.Cleanup(func() { a.logs.wait() })
+	posts := make(chan func(), 100)
+	a.post = func(f func()) { posts <- f }
+	a.send("Held")
+	th := a.current()
+	run := func(until func() bool) {
+		t.Helper()
+		deadline := time.After(5 * time.Second)
+		for !until() {
+			select {
+			case f := <-posts:
+				f()
+			case <-deadline:
+				t.Fatal("the stream posted nothing")
+			}
+		}
+	}
+	run(func() bool { return th.busy.Text != "" })
+	a.logs.wait()
+	logFile, partial := filepath.Join(dir, chatsDir, string(th.ID)+".jsonl"), filepath.Join(dir, chatsDir, string(th.ID)+".partial")
+	if _, err := os.Stat(partial); err != nil {
+		t.Fatalf("no partial while the reply streams: %v", err)
+	}
+	os.Chmod(logFile, 0o400)
+	close(p.release("Held"))
+	run(func() bool { return th.busy == nil })
+	a.logs.wait()
+	if _, err := os.Stat(partial); err != nil {
+		t.Fatal("the partial was deleted, its reply not in the log")
+	}
+	// A crash here leaves the reply, in its partial.
+	if b := newApp(p); true {
+		b.loadFrom(copyChats(t, dir))
+		b.logs.wait()
+		if got := path(b.threads[0]); got != "Held | Reply to Held" {
+			t.Errorf("after a crash: %q", got)
+		}
+	}
+	os.Chmod(logFile, 0o600)
+	a.save()
+	c := restart(t, a, dir)
+	if got := path(c.threads[0]); got != "Held | Reply to Held, done." {
+		t.Errorf("written again: %q", got)
+	}
+	if _, err := os.Stat(partial); err == nil {
+		t.Error("the partial stays once its reply is in the log")
+	}
+}
+
+// A crash between a log and the index leaves the index behind: the log's
+// title and latest question win, and the next save writes no title back.
+func TestIndexBehindLog(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp(&counter{})
+	a.loadFrom(dir)
+	a.send("Q1")
+	th := a.current()
+	a.logs.wait()
+	behind, _ := os.ReadFile(filepath.Join(dir, chatsDir, indexFile))
+	th.Title = "Renamed"
+	a.send("Q2")
+	a.logs.wait()
+	before := lines(t, dir, th.ID)
+	os.WriteFile(filepath.Join(dir, chatsDir, indexFile), behind, 0o600)
+
+	b := newApp(&counter{})
+	b.loadFrom(dir)
+	t.Cleanup(func() { b.logs.wait() })
+	got := b.threads[0]
+	if got.Title != "Renamed" || got.Updated.Before(got.Messages[2].Time) {
+		t.Errorf("title %q, updated %v, last question %v", got.Title, got.Updated, got.Messages[2].Time)
+	}
+	b.save()
+	b.logs.wait()
+	if after := lines(t, dir, th.ID); !slices.Equal(after, before) {
+		t.Errorf("log %v, was %v", after, before)
+	}
+}

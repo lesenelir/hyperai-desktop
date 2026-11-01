@@ -297,7 +297,10 @@ once their transaction commits, is where this rule comes from.
   count as failed too, so no line goes after a broken one.
 - **A delete that failed is asked again:** the chat counts as on disk
   again, so the next save, not finding it, deletes its log.
-- **The index needs nothing:** every save writes it whole.
+- **The index waits for the logs:** where any change before it failed, it
+  is not written, and the next save writes it whole. So the index is never
+  ahead of a log, which lets loading take a log's title over the index's
+  (below).
 
 ### The reply streaming in
 
@@ -308,7 +311,10 @@ reply each second for the same reason, as a row it updates in place. A log
 that is only appended to cannot be updated, so the reply is kept in a
 file of its own, which is deleted once the reply is in the log: the save
 that appends it, as it ends or is stopped, also deletes the partial, after
-the line, in the writer's order.
+the line, in the writer's order. Where that append failed, the log is
+broken and the partial is kept (`unless`): a crash before the log is
+written again still leaves the reply, and the save that writes it again
+deletes the partial.
 
 At launch, a partial whose reply the log lacks is a reply a crash cut
 short (`recoverPartial`). It is added to its chat, on the path shown,
@@ -348,6 +354,12 @@ copied for a question whose line is not written yet.
    would be glued to the broken one. A broken line anywhere else is
    skipped and logged.
 4. **Repair the index against the logs.**
+   - A chat takes its title from its log's last `title` event, where there
+     is one, and its date from the index or its last question, whichever
+     is later. A crash between a log and the index leaves the index
+     behind, and its title would otherwise come back, and be appended to
+     the log again by the next save. Pins, drafts and models are in the
+     index alone.
    - A log with no entry in the index gets one, after the chats the index
      lists: `updated` from the last question's `time`, else the `chat`
      line's; the title from the last `title` event, else `title()` of the
@@ -361,8 +373,7 @@ copied for a question whose line is not written yet.
 At launch, if `chats/index.json` does not exist and `chats.json` does:
 
 1. Read `chats.json` as `loadFrom` used to, including `link()` for chats
-   kept before versions existed. If it cannot be read, nothing is moved
-   and it is left where it is.
+   kept before versions existed.
 2. Give the chats and messages UUIDs (`upgradeIDs`).
 3. Write the chats' folder (`writeChats`, below). For each chat,
    `chats/<id>.jsonl` holds the `chat` line, then every
@@ -381,6 +392,17 @@ At launch, if `chats/index.json` does not exist and `chats.json` does:
 The migration counts as done once `chats/index.json` exists. If it is
 interrupted before, it runs again at the next launch, with new UUIDs.
 
+The chat shown last (`layout.json`'s `chat`) takes its new ID, and
+`layout.json` is saved with it, so that it shows at this launch and the
+ones after.
+
+If the migration fails, as where `chats.json` cannot be read or the new
+folder cannot be written, **nothing is saved until a launch moves the
+chats**. A save would write `chats/index.json`, which says the chats were
+moved: later launches would never move them, and they would not show
+again. Until then, the chats show as `chats.json` has them, where it could
+be read, and `chats.json` stays where it is.
+
 ## Upgrading the logs of version 1
 
 The logs written before IDs were UUIDs (version 1) are named by numbers,
@@ -388,7 +410,8 @@ hold numbers for IDs, and their index keeps the counter. At launch,
 `loadFrom` reads them as any logs, their IDs as digits; if any ID is
 legacy, it gives them all UUIDs (`upgradeIDs`), writes the chats' folder
 anew (`writeChats`), keeping the old one as `chats.v1/`, and reads the new
-one. The chat shown last (`layout.json`'s `chat`) takes its new ID. A
+one. The chat shown last (`layout.json`'s `chat`) takes its new ID, as in
+the migration. A
 partial of a reply a crash cut short is read first, so it goes in its
 chat's new log.
 
@@ -404,10 +427,15 @@ new folder at once (`writeChats`): into `chats.new/`, then the old
 to `chats/`. A crash leaves one of three states, which `finishSwap` sorts
 out at the next launch, before anything is read:
 
-- `chats.new/` beside `chats/`: the new folder may not be whole. It is
-  deleted, and the migration or upgrade runs again.
-- `chats.new/` and no `chats/`: the old folder was renamed away, which
-  happens only once the new one is whole. It takes its place.
+The new folder's `index.json` is written last, through a `.tmp` file and
+a rename, so a new folder that holds one is whole.
+
+- `chats.new/` with an index, and no `chats/`: the old folder was renamed
+  away, which happens only once the new one is whole, or there was none,
+  as for a migration. It takes its place.
+- Any other `chats.new/`: it may not be whole (no index), or the old
+  folder is still there. It is deleted, and the migration or upgrade runs
+  again.
 - No `chats.new/`: nothing was cut short.
 
 On a copy of a development data folder (47 chats, 151 messages, 226 KB),
@@ -426,7 +454,16 @@ chat came back the same, with UUIDs.
 - `TestUpgradeV1Logs`: logs of version 1, made from chats with versions, a
   pin and a chat shown last, upgrade to the same chats with UUIDs, keep the
   old folder, and read the same IDs at the next launch.
-- `TestFinishSwap`: the two states a crash can leave the folder in.
+- `TestFinishSwap`: the states a crash can leave the folder in,
+  including a new folder cut short with no old one beside it.
+- `TestMigrateFails`: a `chats.json` that cannot be read, or a folder that
+  takes no files, saves nothing, and the next launch moves the chats.
+- `TestMigrateKeepsChatShown`: the chat shown last shows after the
+  migration, and at the launch after.
+- `TestPartialKeptUntilLogged`: a partial whose reply fails to reach the
+  log is kept, and a crash then leaves the reply.
+- `TestIndexBehindLog`: an index a crash left behind its log takes the
+  log's title and the later date, and no title is appended again.
 
 - `TestLogReplaysVersions`: a chat sent, asked again, edited and taken
   through its versions replays to the same path, other versions and

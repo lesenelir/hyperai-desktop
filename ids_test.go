@@ -152,6 +152,10 @@ func TestUpgradeV1Logs(t *testing.T) {
 	if c.threads[0].ID != b.threads[0].ID || path(c.threads[0]) != path(b.threads[0]) {
 		t.Errorf("launched again: %s %q", c.threads[0].ID, path(c.threads[0]))
 	}
+	// layout.json keeps the chat shown last by its new ID.
+	if c.keptChat != string(b.threads[0].ID) {
+		t.Errorf("launched again, the chat shown last is %q", c.keptChat)
+	}
 }
 
 // A crash while the chats' folder is written anew leaves the old folder
@@ -171,7 +175,19 @@ func TestFinishSwap(t *testing.T) {
 		t.Error("the old folder is gone")
 	}
 
+	// A new folder with no index was cut short as it was written: with no
+	// old one beside it, as moving chats.json leaves it, it is dropped too.
 	os.Rename(cdir, filepath.Join(dir, oldLogs))
+	os.MkdirAll(cdir+".new", 0o700)
+	os.WriteFile(filepath.Join(cdir+".new", "half.jsonl"), nil, 0o600)
+	finishSwap(cdir)
+	if _, err := os.Stat(cdir + ".new"); err == nil {
+		t.Error("a new folder with no index is kept")
+	}
+	if _, err := os.Stat(cdir); err == nil {
+		t.Error("a new folder with no index took the old one's place")
+	}
+
 	os.MkdirAll(cdir+".new", 0o700)
 	os.WriteFile(filepath.Join(cdir+".new", indexFile), []byte(`{"version":2,"chats":[]}`), 0o600)
 	finishSwap(cdir)

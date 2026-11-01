@@ -106,20 +106,35 @@ func (a *app) loadFrom(dir string) {
 	a.path = filepath.Join(dir, chatsDir)
 	a.filesDir = filepath.Join(dir, "attachments")
 	finishSwap(a.path)
-	if err := migrate(dir); err != nil {
-		log.Printf("moving the chats out of %s: %v", oldChats, err)
-	}
-	a.threads = readChats(a.path)
-	if to := upgradeIDs(a.threads); to != nil {
-		if err := writeChats(a.path, a.threads, filepath.Join(dir, oldLogs)); err != nil {
-			// Saving on would put logs of new IDs beside those of the old.
-			log.Printf("giving the chats new IDs: %v; nothing is saved until the app starts again", err)
-			a.path = ""
-		} else {
-			a.threads = readChats(a.path)
+	old, to, err := migrate(dir)
+	if err != nil {
+		// Saving would write an index, which says the chats were moved:
+		// they would never be. The chats show as chats.json has them,
+		// where it could be read, until a launch moves them.
+		log.Printf("moving the chats out of %s: %v; nothing is saved until they are moved", oldChats, err)
+		a.threads, a.path = old, ""
+	} else {
+		a.threads = readChats(a.path)
+		if to == nil {
+			to = upgradeIDs(a.threads)
+			if to != nil {
+				if err := writeChats(a.path, a.threads, filepath.Join(dir, oldLogs)); err != nil {
+					// Saving on would put logs of new IDs beside those of
+					// the old.
+					log.Printf("giving the chats new IDs: %v; nothing is saved until the app starts again", err)
+					a.path = ""
+				} else {
+					a.threads = readChats(a.path)
+				}
+			}
 		}
-		if id, ok := to[ID(a.keptChat)]; ok {
-			a.keptChat = string(id)
+	}
+	// The chat shown last, by its new ID, kept for the launches to come,
+	// where the chats took new ones.
+	if id, ok := to[ID(a.keptChat)]; ok {
+		a.keptChat = string(id)
+		if a.path != "" {
+			a.saveLayout()
 		}
 	}
 	a.onDisk = map[ID]bool{}
@@ -134,6 +149,9 @@ func (a *app) loadFrom(dir string) {
 		a.save()
 	}
 	chats, files := a.path, a.filesDir
+	if chats == "" {
+		return
+	}
 	a.writes.Add(1)
 	go func() {
 		defer a.writes.Done()
@@ -190,8 +208,13 @@ func entryOf(th *thread) indexEntry {
 // that failed.
 func (a *app) retryFailed() {
 	for _, op := range a.logs.takeFailed() {
-		switch op.kind {
-		case opRemove:
+		switch {
+		case op.kind == opRemove && op.unless != "":
+			// A partial kept, its reply not in the log: deleted once it is.
+			if th := a.threadByID(op.id); th != nil {
+				th.partial = true
+			}
+		case op.kind == opRemove:
 			if op.id != "" {
 				a.onDisk[op.id] = true
 			}
@@ -226,7 +249,8 @@ func (a *app) logChanges(th *thread) []logOp {
 	}
 	if th.partial && th.busy == nil {
 		th.partial = false
-		ops = append(ops, logOp{path: a.partialPath(th.ID), kind: opRemove})
+		// Not before the reply is in the log: kept, where that failed.
+		ops = append(ops, logOp{id: th.ID, path: a.partialPath(th.ID), kind: opRemove, unless: a.logPath(th.ID)})
 	}
 	return ops
 }
@@ -367,7 +391,18 @@ func readChats(dir string) []*thread {
 			continue
 		}
 		delete(logs, e.ID)
-		th.Title, th.Updated, th.Pinned = e.Title, e.Updated, e.Pinned
+		// The log's title, and the later date, over the index's: the log
+		// is written first, and a crash between the two leaves the index
+		// behind.
+		th.Title = th.logTitle
+		if th.Title == "" {
+			th.Title = e.Title
+		}
+		th.Updated = e.Updated
+		if t := lastAsked(th); t.After(th.Updated) {
+			th.Updated = t
+		}
+		th.Pinned = e.Pinned
 		th.Model, th.Effort, th.Provider, th.Draft = e.Model, e.Effort, e.Provider, e.Draft
 		threads = append(threads, th)
 	}
@@ -382,6 +417,18 @@ func readChats(dir string) []*thread {
 		}
 	}
 	return threads
+}
+
+// lastAsked returns when the last question of th was sent, zero where
+// none says.
+func lastAsked(th *thread) time.Time {
+	var t time.Time
+	for _, m := range th.all() {
+		if m.Role == "user" && m.Time.After(t) {
+			t = m.Time
+		}
+	}
+	return t
 }
 
 // firstTitle returns the title send gives th: of its first question, or
@@ -462,12 +509,10 @@ func readLog(path string, id ID) *thread {
 		}
 	}
 	// When the user last sent in it, which the index keeps; where it has
-	// no entry, its last question's, else when it began.
+	// no entry, its last question's, else when its log began.
 	th.Updated = created
-	for _, m := range msgs {
-		if m.Role == "user" && m.Time.After(th.Updated) {
-			th.Updated = m.Time
-		}
+	if t := lastAsked(th); t.After(th.Updated) {
+		th.Updated = t
 	}
 	return th
 }
@@ -573,34 +618,36 @@ func (th *thread) showPath(byID map[ID]*message, leaf ID) {
 }
 
 // migrate moves the chats out of chats.json in dir into logs and an index,
-// where it is there and they were not moved yet, and renames it. Each
+// where it is there and they were not moved yet, and renames it. It
+// returns the chats it read, and the new ID of each old one, nil where
+// it moved none; and, where it failed, why, with the chats it read, if
+// any. Each
 // chat's messages go in an order that replays to the versions shown last:
 // every message after the one it follows, and of the versions of one, the
 // one shown last after the others, with all that followed each.
-func migrate(dir string) error {
+func migrate(dir string) (threads []*thread, to map[ID]ID, err error) {
 	cdir := filepath.Join(dir, chatsDir)
 	if _, err := os.Stat(filepath.Join(cdir, indexFile)); err == nil {
-		return nil
+		return nil, nil, nil
 	}
 	old := filepath.Join(dir, oldChats)
 	b, err := os.ReadFile(old)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil
+		return nil, nil, nil
 	} else if err != nil {
-		return err
+		return nil, nil, err
 	}
-	var threads []*thread
 	if err := json.Unmarshal(b, &threads); err != nil {
-		return err
+		return nil, nil, err
 	}
 	for _, th := range threads {
 		th.link()
 	}
-	upgradeIDs(threads)
+	to = upgradeIDs(threads)
 	if err := writeChats(cdir, threads, filepath.Join(dir, oldLogs)); err != nil {
-		return err
+		return threads, to, err
 	}
-	return os.Rename(old, old+".migrated")
+	return threads, to, os.Rename(old, old+".migrated")
 }
 
 // writeChats writes threads as the chats' folder cdir, at once: into a
@@ -626,7 +673,9 @@ func writeChats(cdir string, threads []*thread, backup string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(tmp, indexFile), b, 0o600); err != nil {
+	// Last, and at once: that the new folder holds an index tells it is
+	// whole.
+	if err := replace(filepath.Join(tmp, indexFile), b); err != nil {
 		return err
 	}
 	if _, err := os.Stat(cdir); err == nil {
@@ -641,19 +690,21 @@ func writeChats(cdir string, threads []*thread, backup string) error {
 }
 
 // finishSwap ends what a crash cut short of writeChats: where the new
-// folder is there and the old one is not, it was renamed away, the new one
-// being whole, which takes its place; where both are, the new one may not
-// be whole, and is deleted, for writeChats to write again.
+// folder is whole (it holds an index) and the old one is not there, the
+// old one was renamed away, or there was none, and the new one takes its
+// place; else the new one may not be whole, and is deleted, for
+// writeChats to write again.
 func finishSwap(cdir string) {
 	tmp := cdir + ".new"
 	if _, err := os.Stat(tmp); err != nil {
 		return
 	}
 	var err error
-	if _, serr := os.Stat(cdir); serr == nil {
-		err = os.RemoveAll(tmp)
-	} else {
+	_, serr := os.Stat(cdir)
+	if _, ierr := os.Stat(filepath.Join(tmp, indexFile)); serr != nil && ierr == nil {
 		err = os.Rename(tmp, cdir)
+	} else {
+		err = os.RemoveAll(tmp)
 	}
 	if err != nil {
 		log.Printf("finishing writing the chats: %v", err)
@@ -715,6 +766,9 @@ type logOp struct {
 	path string
 	data []byte
 	kind opKind
+	// unless keeps a file from being deleted where the log at unless is
+	// broken: a partial, whose reply did not reach the log.
+	unless string
 }
 
 // logWriter changes the chats' files and writes their index on a
@@ -768,12 +822,13 @@ func (w *logWriter) run() {
 				failed = append(failed, op)
 			}
 		}
-		if index != nil {
+		// Never ahead of the logs, whose titles and dates loading takes
+		// over its own: not written where a change before it failed, as
+		// one that fails is not, the next save writing it whole again.
+		if index != nil && len(failed) == 0 {
 			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 				log.Printf("saving the chats' index: %v", err)
 			}
-			// One that fails is written again by the next save, which
-			// writes it whole each time.
 			if err := replace(path, index); err != nil {
 				log.Printf("saving the chats' index: %v", err)
 			}
@@ -794,6 +849,9 @@ func (w *logWriter) apply(op logOp) error {
 	}
 	switch op.kind {
 	case opRemove:
+		if op.unless != "" && w.broken[op.unless] {
+			return fmt.Errorf("%s: kept, its log broken", filepath.Base(op.path))
+		}
 		delete(w.broken, op.path)
 		if err := os.Remove(op.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
