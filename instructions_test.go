@@ -121,9 +121,11 @@ func TestInstructionsPage(t *testing.T) {
 			t.Fatalf("no %q in %q", s, tt.Texts())
 		}
 	}
-	if err := tt.Click(locales.InstructionsPlaceholder()); err != nil {
-		t.Fatal(err)
-	}
+	// The placeholder lets clicks through to the field under it, so
+	// Click, which wants the element it names to take the click, refuses
+	// it: the click is sent where the placeholder shows.
+	r, _ := tt.Find(locales.InstructionsPlaceholder())
+	tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
 	tt.Type("Reply in Chinese.")
 	tt.Advance(time.Second)
 	if a.instructions != "Reply in Chinese." || tt.HasText(locales.InstructionsPlaceholder()) {
